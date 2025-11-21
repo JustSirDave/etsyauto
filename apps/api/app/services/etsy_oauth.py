@@ -1,0 +1,164 @@
+"""
+Etsy OAuth 2.0 Service
+Handles authorization flow and token management
+"""
+import httpx
+import secrets
+import hashlib
+import base64
+from typing import Dict, Optional
+from datetime import datetime, timedelta
+from urllib.parse import urlencode
+
+from app.core.config import settings
+
+
+class EtsyOAuthService:
+    """Handle Etsy OAuth 2.0 flow"""
+    
+    BASE_URL = "https://openapi.etsy.com/v3"
+    AUTH_URL = "https://www.etsy.com/oauth/connect"
+    TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token"
+    
+    # Standard Etsy OAuth 2.0 scopes for listings
+    SCOPES = [
+        "listings_r",      # Read listings
+        "listings_w",      # Write/create listings
+        "listings_d",      # Delete listings
+        "transactions_r",  # Read orders/transactions
+        "shops_r",         # Read shop information
+        "profile_r",       # Read user profile
+    ]
+    
+    def __init__(self):
+        self.client_id = settings.ETSY_CLIENT_ID
+        self.client_secret = settings.ETSY_CLIENT_SECRET
+        self.redirect_uri = settings.ETSY_REDIRECT_URI
+    
+    def get_authorization_url(self, state: str = None) -> Dict[str, str]:
+        """
+        Generate Etsy authorization URL with PKCE
+
+        Args:
+            state: Random state for CSRF protection (generated if not provided)
+
+        Returns:
+            Dict with 'auth_url', 'state', and 'code_verifier'
+        """
+        if not state:
+            state = secrets.token_urlsafe(32)
+
+        # Generate PKCE code verifier and challenge
+        code_verifier = secrets.token_urlsafe(32)
+
+        # Create SHA256 hash of code_verifier
+        code_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(code_verifier.encode('utf-8')).digest()
+        ).decode('utf-8').rstrip('=')
+
+        params = {
+            "response_type": "code",
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "scope": " ".join(self.SCOPES),
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+
+        auth_url = f"{self.AUTH_URL}?{urlencode(params)}"
+
+        return {
+            "auth_url": auth_url,
+            "state": state,
+            "code_verifier": code_verifier
+        }
+
+    async def exchange_code_for_token(self, code: str, code_verifier: str = None) -> Dict:
+        """
+        Exchange authorization code for access token
+
+        Args:
+            code: Authorization code from Etsy callback
+            code_verifier: PKCE verifier (if used)
+
+        Returns:
+            Dict with access_token, refresh_token, expires_in
+        """
+        data = {
+            "grant_type": "authorization_code",
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "code": code,
+        }
+
+        if code_verifier:
+            data["code_verifier"] = code_verifier
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.TOKEN_URL,
+                data=data,
+                auth=(self.client_id, self.client_secret)
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def refresh_access_token(self, refresh_token: str) -> Dict:
+        """
+        Refresh an expired access token
+
+        Args:
+            refresh_token: Refresh token from initial OAuth flow
+
+        Returns:
+            Dict with new access_token, refresh_token, expires_in
+        """
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": self.client_id,
+            "refresh_token": refresh_token,
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                self.TOKEN_URL,
+                data=data,
+                auth=(self.client_id, self.client_secret)
+            )
+            response.raise_for_status()
+            return response.json()
+
+    async def get_shop_info(self, access_token: str) -> Dict:
+        """
+        Get authenticated user's shop information
+
+        Args:
+            access_token: Valid Etsy access token
+
+        Returns:
+            Shop information dict
+        """
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "x-api-key": self.client_id
+        }
+
+        async with httpx.AsyncClient() as client:
+            # Get user's shops
+            response = await client.get(
+                f"{self.BASE_URL}/application/shops",
+                headers=headers
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Return first shop (most users have one)
+            if data.get("results"):
+                return data["results"][0]
+
+            raise Exception("No shops found for this user")
+
+
+# Global instance
+etsy_oauth = EtsyOAuthService()

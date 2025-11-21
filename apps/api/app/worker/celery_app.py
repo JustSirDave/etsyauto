@@ -1,0 +1,48 @@
+"""
+Celery Application Configuration
+Background task worker for async operations
+"""
+from celery import Celery
+from app.core.config import settings
+
+# Create Celery app
+celery_app = Celery(
+    "etsy_automation",
+    broker=settings.CELERY_BROKER_URL,
+    backend=settings.CELERY_RESULT_BACKEND,
+    include=[
+        "app.worker.tasks.listing_tasks",
+        "app.worker.tasks.order_tasks",
+        "app.worker.tasks.schedule_tasks",
+        "app.worker.tasks.token_tasks",
+    ]
+)
+
+# Celery configuration
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+    task_track_started=True,
+    task_time_limit=300,  # 5 minutes max per task
+    task_soft_time_limit=240,  # Soft limit at 4 minutes
+    worker_prefetch_multiplier=1,  # One task at a time for rate limiting
+    worker_max_tasks_per_child=1000,  # Restart worker after 1000 tasks
+    task_acks_late=True,  # Acknowledge task after completion
+    task_reject_on_worker_lost=True,
+    result_expires=3600,  # Results expire after 1 hour
+)
+
+# Periodic tasks (Celery Beat schedule)
+celery_app.conf.beat_schedule = {
+    "refresh-tokens-every-hour": {
+        "task": "app.worker.tasks.token_tasks.refresh_expiring_tokens",
+        "schedule": 3600.0,  # Every hour
+    },
+    "run-scheduled-listings-every-5-minutes": {
+        "task": "app.worker.tasks.schedule_tasks.process_scheduled_listings",
+        "schedule": 300.0,  # Every 5 minutes
+    },
+}

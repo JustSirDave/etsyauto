@@ -1,0 +1,53 @@
+"""
+Product Schemas - Request/Response models
+"""
+from pydantic import BaseModel
+from typing import Optional, List, Dict
+from datetime import datetime
+
+
+class ProductImportRequest(BaseModel):
+    """Single product import"""
+    title_raw: str
+    description_raw: Optional[str] = None
+    tags_raw: Optional[List[str]] = None
+    images: Optional[List[str]] = None
+    variants: Optional[Dict] = None
+
+
+class ProductImportBatchRequest(BaseModel):
+    """Batch product import"""
+    products: List[ProductImportRequest]
+    batch_id: Optional[str] = None
+
+
+class ProductResponse(BaseModel):
+    """Product response"""
+    id: int
+    title_raw: Optional[str]
+    description_raw: Optional[str]
+    tags_raw: Optional[List[str]]
+    images: Optional[List[str]]
+    source: str
+    ingest_batch_id: Optional[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class AIGenerationRequest(BaseModel):
+    """Request AI content generation"""
+    model: str = "gpt-4o-mini"
+    style: Optional[str] = "friendly"
+    tone: Optional[str] = "helpful"
+
+
+class AIGenerationResponse(BaseModel):
+    """AI generated content"""
+    ai_generation_id: int
+    title: str
+    description: str
+    tags: List[str]
+    policy_flags: Dict
+    cost: Dict[str, int]
