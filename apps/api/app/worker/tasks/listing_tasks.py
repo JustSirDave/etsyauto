@@ -2,6 +2,7 @@
 Celery Tasks for Etsy Listing Publication
 Handles background processing of listing jobs
 """
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any
@@ -104,11 +105,11 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         logger.info(f"Creating draft listing for product {product.id}")
 
         # Create draft listing on Etsy
-        listing_response = await etsy_client.create_draft_listing(
+        listing_response = asyncio.run(etsy_client.create_draft_listing(
             shop_id=shop.id,
             etsy_shop_id=shop.etsy_shop_id,
             listing_data=listing_data
-        )
+        ))
 
         listing_id = str(listing_response["listing_id"])
         logger.info(f"Created draft listing {listing_id}")
@@ -125,10 +126,10 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
 
         # Publish the listing (activate it)
         logger.info(f"Publishing listing {listing_id}")
-        await etsy_client.publish_listing(
+        asyncio.run(etsy_client.publish_listing(
             shop_id=shop.id,
             listing_id=listing_id
-        )
+        ))
 
         # Update job as completed
         job.status = "completed"
