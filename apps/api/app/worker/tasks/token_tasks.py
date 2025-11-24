@@ -2,6 +2,7 @@
 Celery Tasks for OAuth Token Management
 Handles automatic token refresh before expiry
 """
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any
@@ -57,7 +58,7 @@ def refresh_expiring_tokens() -> Dict[str, Any]:
 
                 # Create Etsy client and refresh token
                 etsy_client = EtsyClient(db)
-                new_token_data = await etsy_client.refresh_access_token(refresh_token)
+                new_token_data = asyncio.run(etsy_client.refresh_access_token(refresh_token))
 
                 # Encrypt new tokens
                 encrypted_access = token_encryptor.encrypt(new_token_data["access_token"])
@@ -148,7 +149,7 @@ def refresh_token_for_shop(shop_id: int) -> Dict[str, Any]:
 
         # Create Etsy client and refresh token
         etsy_client = EtsyClient(db)
-        new_token_data = await etsy_client.refresh_access_token(refresh_token)
+        new_token_data = asyncio.run(etsy_client.refresh_access_token(refresh_token))
 
         # Encrypt new tokens
         encrypted_access = token_encryptor.encrypt(new_token_data["access_token"])

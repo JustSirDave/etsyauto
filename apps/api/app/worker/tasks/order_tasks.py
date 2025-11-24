@@ -2,6 +2,7 @@
 Celery Tasks for Order Synchronization
 Handles syncing orders from Etsy to local database
 """
+import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any, List
@@ -56,7 +57,7 @@ def sync_orders(shop_id: int = None) -> Dict[str, Any]:
 
         for shop in shops:
             try:
-                shop_result = await _sync_shop_orders(db, etsy_client, shop)
+                shop_result = asyncio.run(_sync_shop_orders(db, etsy_client, shop))
 
                 results["shops_processed"] += 1
                 results["orders_synced"] += shop_result["orders_synced"]
@@ -237,11 +238,11 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
         etsy_client = EtsyClient(db, rate_limiter)
 
         # Fetch specific receipt
-        receipt = await etsy_client.get_receipt(
+        receipt = asyncio.run(etsy_client.get_receipt(
             shop_id=shop.id,
             etsy_shop_id=shop.etsy_shop_id,
             receipt_id=receipt_id
-        )
+        ))
 
         # Check if order exists
         existing_order = (
