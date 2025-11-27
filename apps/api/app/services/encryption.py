@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.backends import default_backend
 import os
 import base64
+from app.core.config import settings
 
 
 class TokenEncryption:
@@ -14,13 +15,16 @@ class TokenEncryption:
     def __init__(self, encryption_key: str = None):
         """
         Initialize with encryption key
-        If no key provided, generates one (should use from env in production)
+        Uses ENCRYPTION_KEY from environment if not provided
         """
         if encryption_key:
             self.key = base64.b64decode(encryption_key)
+        elif settings.ENCRYPTION_KEY:
+            self.key = base64.b64decode(settings.ENCRYPTION_KEY)
         else:
-            # Generate a random 32-byte key for development
+            # Generate a random 32-byte key for development (NOT RECOMMENDED for production)
             self.key = AESGCM.generate_key(bit_length=256)
+            print("WARNING: Using randomly generated encryption key. Set ENCRYPTION_KEY in .env for production!")
 
         self.aesgcm = AESGCM(self.key)
 

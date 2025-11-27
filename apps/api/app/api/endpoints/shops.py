@@ -3,21 +3,26 @@ Shops API Endpoints - Etsy OAuth Integration
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
+import redis
+import json
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
 from app.models.tenancy import Shop, OAuthToken
 from app.services.etsy_oauth import etsy_oauth
 from app.services.encryption import token_encryptor
+from app.core.config import settings
+
+# Redis client for PKCE state storage
+redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 router = APIRouter()
 
 
 class ConnectShopResponse(BaseModel):
-    auth_url: str
-    state: str
+    authorization_url: str
 
 
 class OAuthCallbackRequest(BaseModel):
@@ -29,14 +34,24 @@ class OAuthCallbackRequest(BaseModel):
 async def connect_etsy_shop(current_user = Depends(get_current_user)):
     """
     Step 1: Get Etsy authorization URL
-    
+
     Returns URL to redirect user to Etsy for authorization
     """
     auth_data = etsy_oauth.get_authorization_url()
-    
+
+    # Store code_verifier in Redis with state as key (expires in 10 minutes)
+    redis_client.setex(
+        f"etsy_oauth_state:{auth_data['state']}",
+        600,  # 10 minutes TTL
+        json.dumps({
+            "code_verifier": auth_data["code_verifier"],
+            "user_id": current_user["id"],
+            "tenant_id": current_user["tenant_id"]
+        })
+    )
+
     return ConnectShopResponse(
-        auth_url=auth_data["auth_url"],
-        state=auth_data["state"]
+        authorization_url=auth_data["auth_url"]
     )
 
 
@@ -48,13 +63,27 @@ async def etsy_oauth_callback(
 ):
     """
     Step 2: Handle OAuth callback from Etsy
-    
+
     Exchange authorization code for access token and save shop
     """
     try:
-        # Exchange code for tokens
-        token_data = await etsy_oauth.exchange_code_for_token(request.code)
-        
+        # Retrieve code_verifier from Redis using state
+        state_data_json = redis_client.get(f"etsy_oauth_state:{request.state}")
+        if not state_data_json:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired OAuth state. Please try connecting again."
+            )
+
+        state_data = json.loads(state_data_json)
+        code_verifier = state_data.get("code_verifier")
+
+        # Clean up Redis entry
+        redis_client.delete(f"etsy_oauth_state:{request.state}")
+
+        # Exchange code for tokens with PKCE verifier
+        token_data = await etsy_oauth.exchange_code_for_token(request.code, code_verifier)
+
         # Get shop information
         shop_info = await etsy_oauth.get_shop_info(token_data["access_token"])
         
@@ -79,8 +108,8 @@ async def etsy_oauth_callback(
             db.add(shop)
             db.flush()
         
-        # Calculate token expiry
-        expires_at = datetime.utcnow() + timedelta(seconds=token_data["expires_in"])
+        # Calculate token expiry (timezone-aware)
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data["expires_in"])
         
         # Encrypt tokens
         encrypted_access = token_encryptor.encrypt(token_data["access_token"])

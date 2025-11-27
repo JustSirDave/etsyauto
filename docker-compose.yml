@@ -49,11 +49,19 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
+      # Etsy API
       ETSY_CLIENT_ID: ${ETSY_CLIENT_ID}
       ETSY_CLIENT_SECRET: ${ETSY_CLIENT_SECRET}
+      ETSY_REDIRECT_URI: ${ETSY_REDIRECT_URI}
+      ETSY_RATE_LIMIT_CAPACITY: ${ETSY_RATE_LIMIT_CAPACITY:-100}
+      ETSY_RATE_LIMIT_REFILL_PER_SEC: ${ETSY_RATE_LIMIT_REFILL_PER_SEC:-0.5}
+      # AI Providers
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Monitoring
       SENTRY_DSN: ${SENTRY_DSN}
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       # Email Configuration
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
@@ -96,10 +104,15 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
+      # Etsy API
       ETSY_CLIENT_ID: ${ETSY_CLIENT_ID}
       ETSY_CLIENT_SECRET: ${ETSY_CLIENT_SECRET}
+      ETSY_REDIRECT_URI: ${ETSY_REDIRECT_URI}
+      # AI & Other APIs
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       PRINTFUL_API_KEY: ${PRINTFUL_API_KEY}
+      # Security
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy

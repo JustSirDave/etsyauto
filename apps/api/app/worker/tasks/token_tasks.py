@@ -4,7 +4,7 @@ Handles automatic token refresh before expiry
 """
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 
 from app.worker.celery_app import celery_app
@@ -29,15 +29,15 @@ def refresh_expiring_tokens() -> Dict[str, Any]:
     db = SessionLocal()
 
     try:
-        # Find tokens expiring in the next 24 hours
-        threshold = datetime.utcnow() + timedelta(hours=24)
+        # Find tokens expiring in the next 24 hours (timezone-aware)
+        threshold = datetime.now(timezone.utc) + timedelta(hours=24)
 
         expiring_tokens = (
             db.query(OAuthToken)
             .filter(
                 OAuthToken.provider == "etsy",
                 OAuthToken.expires_at <= threshold,
-                OAuthToken.expires_at > datetime.utcnow()  # Not already expired
+                OAuthToken.expires_at > datetime.now(timezone.utc)  # Not already expired
             )
             .all()
         )
@@ -71,7 +71,7 @@ def refresh_expiring_tokens() -> Dict[str, Any]:
                     encrypted_refresh = token_encryptor.encrypt(new_token_data["refresh_token"])
                     token.refresh_token = encrypted_refresh
 
-                token.expires_at = datetime.utcnow() + timedelta(
+                token.expires_at = datetime.now(timezone.utc) + timedelta(
                     seconds=new_token_data.get("expires_in", 3600)
                 )
 
