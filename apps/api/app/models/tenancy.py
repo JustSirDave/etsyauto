@@ -43,16 +43,30 @@ class Tenant(Base):
 class User(Base):
     """Platform users"""
     __tablename__ = "users"
-    
+
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     email = Column(CITEXT, unique=True, nullable=False, index=True)
     password_hash = Column(Text, nullable=True)  # Nullable for SSO
     name = Column(Text, nullable=True)
+
+    # Email verification
+    email_verified = Column(Boolean, default=False, nullable=False)
+    verification_token = Column(String(255), unique=True, nullable=True, index=True)
+    verification_token_expires = Column(DateTime(timezone=True), nullable=True)
+
+    # Password reset
+    reset_token = Column(String(255), unique=True, nullable=True, index=True)
+    reset_token_expires = Column(DateTime(timezone=True), nullable=True)
+
+    # Security
+    failed_login_attempts = Column(BigInteger, default=0, nullable=False)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     memberships = relationship("Membership", back_populates="user")
 

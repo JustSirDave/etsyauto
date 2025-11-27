@@ -6,8 +6,10 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { productsApi } from '@/lib/api';
-import { Upload, Plus, Trash2, RefreshCw, Download, Filter } from 'lucide-react';
+import { Upload, Plus, Trash2, RefreshCw, Download, Filter, Sparkles } from 'lucide-react';
+import { addToAIQueue } from '@/lib/ai-queue';
 
 interface Product {
   id: number;
@@ -23,6 +25,7 @@ interface Product {
 }
 
 export default function ProductsPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -81,6 +84,23 @@ export default function ProductsPage() {
       console.error('Bulk delete failed:', error);
       alert('Failed to delete some products');
     }
+  };
+
+  const handleQueueForAI = () => {
+    const selectedProductsData = products
+      .filter(p => selectedProducts.has(p.id))
+      .map(p => ({
+        id: p.id,
+        sku: p.sku,
+        title: p.title,
+        queuedAt: new Date().toISOString(),
+      }));
+
+    addToAIQueue(selectedProductsData);
+    setSelectedProducts(new Set());
+
+    // Navigate to AI page
+    router.push('/ai');
   };
 
   const handleFileImport = async (file: File) => {
@@ -162,6 +182,13 @@ export default function ProductsPage() {
             {selectedProducts.size} product{selectedProducts.size > 1 ? 's' : ''} selected
           </span>
           <div className="flex gap-2">
+            <button
+              onClick={handleQueueForAI}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+            >
+              <Sparkles className="w-4 h-4" />
+              Queue for AI Generation
+            </button>
             <button
               onClick={handleBulkDelete}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"

@@ -13,7 +13,7 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (email: string, password: string, name: string, tenantName: string) => Promise<void>;
   logout: () => Promise<void>;
   error: string | null;
@@ -49,12 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, rememberMe: boolean = false) => {
     try {
       setError(null);
       setIsLoading(true);
 
-      const response = await authApi.login({ email, password });
+      const response = await authApi.login({ email, password, remember_me: rememberMe });
 
       // Save token
       setAuthToken(response.access_token);
@@ -114,6 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/');
     } catch (err) {
       const apiError = err as ApiError;
+
+      // Status 202 means account created successfully but needs email verification
+      if (apiError.status === 202) {
+        // This is a success case - show the message and redirect to login
+        alert(apiError.detail || 'Account created! Please check your email to verify your account.');
+        router.push('/login');
+        return;
+      }
+
       setError(apiError.detail || 'Registration failed');
       throw err;
     } finally {

@@ -13,6 +13,7 @@ export interface ApiError {
 export interface LoginRequest {
   email: string;
   password: string;
+  remember_me?: boolean;
 }
 
 export interface RegisterRequest {
@@ -373,5 +374,70 @@ export const usageApi = {
       costs: any[];
       total: number;
     }>(`/api/usage/history?${params.toString()}`);
+  },
+};
+
+/**
+ * Team Management API
+ */
+export interface TeamMember {
+  id: number;
+  user_id: number;
+  email: string;
+  name: string;
+  role: string;
+  joined_at: string;
+  last_login: string | null;
+}
+
+export interface InviteMemberRequest {
+  email: string;
+  name: string;
+  role: string;
+}
+
+export interface UserPermissions {
+  can_invite_members: boolean;
+  can_manage_roles: boolean;
+  can_remove_members: boolean;
+  can_manage_settings: boolean;
+  can_create_products: boolean;
+  can_generate_ai: boolean;
+  can_publish_listings: boolean;
+  is_owner: boolean;
+}
+
+export const teamApi = {
+  getMembers: async (): Promise<TeamMember[]> => {
+    return apiRequest<TeamMember[]>('/api/team/members');
+  },
+
+  inviteMember: async (data: InviteMemberRequest): Promise<any> => {
+    return apiRequest<any>('/api/team/members/invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateRole: async (userId: number, role: string): Promise<any> => {
+    return apiRequest<any>(`/api/team/members/${userId}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    });
+  },
+
+  removeMember: async (userId: number): Promise<any> => {
+    return apiRequest<any>(`/api/team/members/${userId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getMyRole: async (): Promise<{
+    user_id: number;
+    tenant_id: number;
+    role: string;
+    permissions: UserPermissions;
+  }> => {
+    return apiRequest('/api/team/me/role');
   },
 };

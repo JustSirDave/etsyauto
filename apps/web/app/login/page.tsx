@@ -14,6 +14,7 @@ export default function LoginPage() {
   const { login, error, clearError, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [formError, setFormError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,7 +34,7 @@ export default function LoginPage() {
     }
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
     } catch (err) {
       // Error is handled by context
     }
@@ -109,12 +110,15 @@ export default function LoginPage() {
 
             {/* Forgot Password Link */}
             <div className="flex items-center justify-between">
-              <label className="flex items-center">
+              <label className="flex items-center cursor-pointer">
                 <input
                   type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 text-teal-500 bg-slate-700 border-slate-600 rounded focus:ring-teal-500 focus:ring-2"
+                  disabled={isLoading}
                 />
-                <span className="ml-2 text-sm text-slate-400">Remember me</span>
+                <span className="ml-2 text-sm text-slate-400">Remember me (30 days)</span>
               </label>
               <Link
                 href="/forgot-password"

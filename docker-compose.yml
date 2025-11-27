@@ -54,6 +54,21 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       SENTRY_DSN: ${SENTRY_DSN}
+      # Email Configuration
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME}
+      FRONTEND_URL: ${FRONTEND_URL}
+      # Auth Configuration
+      EMAIL_VERIFICATION_REQUIRED: ${EMAIL_VERIFICATION_REQUIRED}
+      VERIFICATION_TOKEN_EXPIRY_HOURS: ${VERIFICATION_TOKEN_EXPIRY_HOURS}
+      RESET_TOKEN_EXPIRY_HOURS: ${RESET_TOKEN_EXPIRY_HOURS}
+      MAX_LOGIN_ATTEMPTS: ${MAX_LOGIN_ATTEMPTS}
+      ACCOUNT_LOCKOUT_MINUTES: ${ACCOUNT_LOCKOUT_MINUTES}
+      REMEMBER_ME_TTL_DAYS: ${REMEMBER_ME_TTL_DAYS}
     ports:
       - "8080:8080"
     depends_on:
@@ -119,21 +134,17 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8080
     container_name: etsy-web
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8080
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
     ports:
       - "3000:3000"
     depends_on:
       - api
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-      - /app/.next
-    command: npm run dev
     networks:
       - etsy-network
 

@@ -26,20 +26,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
-def create_access_token(user_id: int, tenant_id: int, role: str, shop_ids: list) -> str:
+def create_access_token(user_id: int, tenant_id: int, role: str, shop_ids: list, remember_me: bool = False) -> str:
     """
     Create JWT access token
-    
+
     Args:
         user_id: User ID
         tenant_id: Tenant/Organization ID
         role: User role (owner, admin, creator, viewer)
         shop_ids: List of shop IDs user has access to
-    
+        remember_me: If True, extends token expiry to 30 days
+
     Returns:
         Encoded JWT token string
     """
     now = int(time.time())
+
+    # Use extended TTL if remember_me is enabled
+    if remember_me:
+        ttl_seconds = settings.REMEMBER_ME_TTL_DAYS * 24 * 60 * 60  # Convert days to seconds
+    else:
+        ttl_seconds = settings.JWT_TTL_SECONDS
+
     payload = {
         "iss": settings.JWT_ISSUER,
         "aud": settings.JWT_AUDIENCE,
@@ -48,9 +56,10 @@ def create_access_token(user_id: int, tenant_id: int, role: str, shop_ids: list)
         "role": role,
         "shop_ids": shop_ids,
         "iat": now,
-        "exp": now + settings.JWT_TTL_SECONDS
+        "exp": now + ttl_seconds,
+        "remember_me": remember_me
     }
-    
+
     return jwt.encode(payload, settings.JWT_PRIVATE_KEY, algorithm=settings.JWT_ALGORITHM)
 
 

@@ -82,6 +82,23 @@ class Settings(BaseSettings):
     # Security
     ENCRYPTION_KEY: str = ""  # 32-byte key for AES-GCM
 
+    # Email Configuration
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "Etsy Automation Platform"
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # Auth Configuration
+    EMAIL_VERIFICATION_REQUIRED: bool = True
+    VERIFICATION_TOKEN_EXPIRY_HOURS: int = 24
+    RESET_TOKEN_EXPIRY_HOURS: int = 1
+    MAX_LOGIN_ATTEMPTS: int = 5
+    ACCOUNT_LOCKOUT_MINUTES: int = 30
+    REMEMBER_ME_TTL_DAYS: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=True,
