@@ -200,7 +200,7 @@ export default function SettingsPage() {
   return (
     <div>
       {/* Fixed Header + Tabs */}
-      <div className="fixed top-0 left-64 right-0 z-20 bg-[#0a0a0b] border-b border-dark-border">
+      <div className="fixed top-16 left-64 right-0 z-20 bg-[#0a0a0b] border-b border-dark-border">
         <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center gap-3">
@@ -477,7 +477,7 @@ export default function SettingsPage() {
                           </button>
 
                           {/* Dropdown Menu */}
-                          <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
                             <div className="py-1">
                               <button
                                 onClick={() => handleChangeRole(member.user_id, 'owner')}
