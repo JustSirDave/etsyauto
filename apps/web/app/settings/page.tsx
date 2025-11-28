@@ -198,11 +198,12 @@ export default function SettingsPage() {
   const etsyShop = Array.isArray(shops) ? shops.find((s) => s.status === 'connected') : null;
 
   return (
-    <div className="space-y-6">
-      {/* Sticky Header + Tabs */}
-      <div className="sticky top-0 z-10 bg-[#0a0a0b] pb-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3 pt-6">
+    <div>
+      {/* Fixed Header + Tabs */}
+      <div className="fixed top-0 left-64 right-0 z-20 bg-[#0a0a0b] border-b border-dark-border">
+        <div className="p-6 space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
             <SettingsIcon className="w-5 h-5 text-white" />
           </div>
@@ -214,8 +215,8 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 border-b border-dark-border">
+          {/* Tabs */}
+          <div className="flex gap-2">
         <button
           onClick={() => setActiveTab('connections')}
           className={`px-4 py-2 font-medium text-sm transition-colors relative ${
@@ -266,10 +267,13 @@ export default function SettingsPage() {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
           )}
         </button>
+          </div>
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Content with padding for fixed header */}
+      <div className="pt-48 space-y-6">
+        {/* Error Message */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
@@ -443,6 +447,11 @@ export default function SettingsPage() {
                               You
                             </span>
                           )}
+                          {member.invitation_status === 'pending' && (
+                            <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded">
+                              Pending Invitation
+                            </span>
+                          )}
                         </div>
                         <p className="text-sm text-slate-400">{member.email}</p>
                         {member.last_login && (
@@ -460,8 +469,8 @@ export default function SettingsPage() {
                         <span className="text-sm font-medium capitalize">{member.role}</span>
                       </div>
 
-                      {/* Actions Dropdown (only for owners/admins, not for self) */}
-                      {canManageTeam && member.user_id !== user?.id && (
+                      {/* Actions Dropdown (only for owners/admins, not for self, not for pending invitations) */}
+                      {canManageTeam && member.user_id !== user?.id && member.invitation_status === 'accepted' && (
                         <div className="relative group">
                           <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
                             <MoreVertical className="w-4 h-4 text-slate-400" />
@@ -649,6 +658,7 @@ export default function SettingsPage() {
           </p>
         </div>
       )}
+      </div>
     </div>
   );
 }

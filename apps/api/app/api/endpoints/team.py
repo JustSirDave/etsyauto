@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import secrets
 
 from ...core.database import get_db
 from ...models.tenancy import User, Tenant, Membership
 from ..dependencies import get_current_user, require_role
 from ...core.security import hash_password
+from ...services.email_service import email_service
 
 router = APIRouter()
 
@@ -37,12 +39,18 @@ class UpdateRoleRequest(BaseModel):
     role: str
 
 
+class AcceptInvitationRequest(BaseModel):
+    token: str
+    password: str | None = None  # Only required for new users
+
+
 class MemberResponse(BaseModel):
     id: int
     user_id: int
     email: str
     name: str
     role: str
+    invitation_status: str  # pending, accepted, rejected
     joined_at: str
     last_login: str | None
 
@@ -80,6 +88,7 @@ async def list_team_members(
             email=user.email,
             name=user.name or "No name",
             role=membership.role,
+            invitation_status=membership.invitation_status,
             joined_at=user.created_at.isoformat() if user.created_at else "",
             last_login=user.last_login_at.isoformat() if user.last_login_at else None
         ))
@@ -110,6 +119,14 @@ async def invite_team_member(
             detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
         )
 
+    # Get current user details for invitation email
+    inviter = db.query(User).filter(User.id == int(current_user["sub"])).first()
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
+    # Generate invitation token (valid for 7 days)
+    invitation_token = secrets.token_urlsafe(32)
+    invitation_expires = datetime.now(timezone.utc) + timedelta(days=7)
+
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == request.email.lower()).first()
 
@@ -121,29 +138,51 @@ async def invite_team_member(
         ).first()
 
         if existing_membership:
+            # Check if invitation is pending
+            if existing_membership.invitation_status == 'pending':
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User has a pending invitation. Please wait for them to accept."
+                )
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="User is already a member of this organization"
             )
 
-        # Add existing user to tenant
+        # Add existing user to tenant with pending invitation
         membership = Membership(
             user_id=existing_user.id,
             tenant_id=tenant_id,
-            role=request.role
+            role=request.role,
+            invitation_status='pending',
+            invitation_token=invitation_token,
+            invitation_token_expires=invitation_expires,
+            invited_at=datetime.now(timezone.utc)
         )
         db.add(membership)
         db.commit()
 
+        # Send invitation email
+        email_sent = email_service.send_team_invitation(
+            to_email=existing_user.email,
+            to_name=existing_user.name or request.name,
+            inviter_name=inviter.name or inviter.email,
+            organization_name=tenant.name,
+            role=request.role,
+            invitation_token=invitation_token
+        )
+
         return {
-            "message": "Existing user added to organization",
+            "message": "Invitation sent to existing user",
             "user_id": existing_user.id,
             "email": existing_user.email,
-            "role": request.role
+            "role": request.role,
+            "status": "pending",
+            "email_sent": email_sent
         }
 
     else:
-        # Create new user (without password - they'll set it on first login)
+        # Create new user (without password - they'll set it when accepting invitation)
         new_user = User(
             email=request.email.lower(),
             name=request.name,
@@ -153,22 +192,111 @@ async def invite_team_member(
         db.add(new_user)
         db.flush()  # Get user ID
 
-        # Add membership
+        # Add membership with pending invitation
         membership = Membership(
             user_id=new_user.id,
             tenant_id=tenant_id,
-            role=request.role
+            role=request.role,
+            invitation_status='pending',
+            invitation_token=invitation_token,
+            invitation_token_expires=invitation_expires,
+            invited_at=datetime.now(timezone.utc)
         )
         db.add(membership)
         db.commit()
 
+        # Send invitation email
+        email_sent = email_service.send_team_invitation(
+            to_email=new_user.email,
+            to_name=new_user.name,
+            inviter_name=inviter.name or inviter.email,
+            organization_name=tenant.name,
+            role=request.role,
+            invitation_token=invitation_token
+        )
+
         return {
-            "message": "New user created and invited to organization",
+            "message": "Invitation sent to new user",
             "user_id": new_user.id,
             "email": new_user.email,
             "role": request.role,
-            "note": "User will need to set password on first login"
+            "status": "pending",
+            "email_sent": email_sent,
+            "note": "User will create their account when accepting the invitation"
         }
+
+
+@router.post("/invitations/accept")
+async def accept_invitation(
+    request: AcceptInvitationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Accept a team invitation
+    Available to: anyone with a valid invitation token
+
+    For new users, a password must be provided.
+    For existing users, password is optional.
+    """
+    # Find membership by invitation token
+    membership = db.query(Membership).filter(
+        Membership.invitation_token == request.token,
+        Membership.invitation_status == 'pending'
+    ).first()
+
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired invitation token"
+        )
+
+    # Check if invitation has expired
+    if membership.invitation_token_expires and membership.invitation_token_expires < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Invitation has expired"
+        )
+
+    # Get user
+    user = db.query(User).filter(User.id == membership.user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    # If user doesn't have a password (new user), require password in request
+    if not user.password_hash:
+        if not request.password:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required for new users"
+            )
+
+        # Set password for new user
+        user.password_hash = hash_password(request.password)
+        user.email_verified = True  # Auto-verify email for invited users
+
+    # Update membership status
+    membership.invitation_status = 'accepted'
+    membership.accepted_at = datetime.now(timezone.utc)
+    membership.invitation_token = None  # Clear token after use
+    membership.invitation_token_expires = None
+
+    db.commit()
+
+    # Get tenant info for response
+    tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+
+    return {
+        "message": "Invitation accepted successfully",
+        "user_id": user.id,
+        "email": user.email,
+        "tenant_id": tenant.id,
+        "tenant_name": tenant.name,
+        "role": membership.role
+    }
 
 
 @router.patch("/members/{user_id}/role")

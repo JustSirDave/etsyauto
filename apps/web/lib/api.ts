@@ -386,6 +386,7 @@ export interface TeamMember {
   email: string;
   name: string;
   role: string;
+  invitation_status: string;  // pending, accepted, rejected
   joined_at: string;
   last_login: string | null;
 }

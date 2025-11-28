@@ -74,7 +74,7 @@ class User(Base):
 class Membership(Base):
     """User membership in tenants with RBAC"""
     __tablename__ = "memberships"
-    
+
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
     tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)
@@ -83,7 +83,19 @@ class Membership(Base):
         CheckConstraint("role IN ('owner', 'admin', 'creator', 'viewer')"),
         nullable=False
     )
-    
+
+    # Invitation tracking
+    invitation_status = Column(
+        String(20),
+        CheckConstraint("invitation_status IN ('pending', 'accepted', 'rejected')"),
+        default='accepted',  # Existing memberships are already accepted
+        nullable=False
+    )
+    invitation_token = Column(String(255), unique=True, nullable=True, index=True)
+    invitation_token_expires = Column(DateTime(timezone=True), nullable=True)
+    invited_at = Column(DateTime(timezone=True), nullable=True)
+    accepted_at = Column(DateTime(timezone=True), nullable=True)
+
     __table_args__ = (
         UniqueConstraint('user_id', 'tenant_id', name='uq_user_tenant'),
         Index('idx_membership_user', 'user_id'),
