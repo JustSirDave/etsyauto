@@ -198,8 +198,8 @@ export default function SettingsPage() {
   const etsyShop = Array.isArray(shops) ? shops.find((s) => s.status === 'connected') : null;
 
   return (
-    <div>
-      {/* Fixed Header + Tabs */}
+    <div className="h-screen overflow-hidden flex flex-col">
+      {/* Fixed Header + Tabs - STICKY PARENT */}
       <div className="fixed top-16 left-64 right-0 z-20 bg-[#0a0a0b] border-b border-dark-border">
         <div className="p-6 space-y-6">
           {/* Header */}
@@ -271,8 +271,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Content with padding for fixed header */}
-      <div className="pt-48 space-y-6">
+      {/* Scrollable Content Area - SCROLLABLE CHILDREN */}
+      <div className="mt-[196px] flex-1 overflow-y-auto px-6 pb-6 space-y-6">
         {/* Error Message */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
@@ -433,7 +433,7 @@ export default function SettingsPage() {
                 {teamMembers.map((member) => (
                   <div
                     key={member.id}
-                    className="flex items-center justify-between p-4 bg-slate-800 rounded-lg border border-slate-700"
+                    className="flex items-center justify-between p-4 bg-slate-800 rounded-lg border border-slate-700 relative overflow-visible"
                   >
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white font-semibold">
@@ -476,8 +476,8 @@ export default function SettingsPage() {
                             <MoreVertical className="w-4 h-4 text-slate-400" />
                           </button>
 
-                          {/* Dropdown Menu */}
-                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                          {/* Dropdown Menu - Appears Above */}
+                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                             <div className="py-1">
                               <button
                                 onClick={() => handleChangeRole(member.user_id, 'owner')}
