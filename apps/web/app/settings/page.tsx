@@ -199,21 +199,23 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
-          <SettingsIcon className="w-5 h-5 text-white" />
+      {/* Sticky Header + Tabs */}
+      <div className="sticky top-0 z-10 bg-[#0a0a0b] pb-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3 pt-6">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
+            <SettingsIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Settings</h1>
+            <p className="text-sm text-dark-muted">
+              Manage your integrations and preferences
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
-          <p className="text-sm text-dark-muted">
-            Manage your integrations and preferences
-          </p>
-        </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-dark-border">
+        {/* Tabs */}
+        <div className="flex gap-2 border-b border-dark-border">
         <button
           onClick={() => setActiveTab('connections')}
           className={`px-4 py-2 font-medium text-sm transition-colors relative ${
@@ -264,6 +266,7 @@ export default function SettingsPage() {
             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
           )}
         </button>
+        </div>
       </div>
 
       {/* Error Message */}

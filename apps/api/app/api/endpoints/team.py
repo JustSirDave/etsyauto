@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ...core.database import get_db
 from ...models.tenancy import User, Tenant, Membership
@@ -80,7 +80,7 @@ async def list_team_members(
             email=user.email,
             name=user.name or "No name",
             role=membership.role,
-            joined_at=membership.created_at.isoformat() if membership.created_at else "",
+            joined_at=user.created_at.isoformat() if user.created_at else "",
             last_login=user.last_login_at.isoformat() if user.last_login_at else None
         ))
 
@@ -130,8 +130,7 @@ async def invite_team_member(
         membership = Membership(
             user_id=existing_user.id,
             tenant_id=tenant_id,
-            role=request.role,
-            created_at=datetime.utcnow()
+            role=request.role
         )
         db.add(membership)
         db.commit()
@@ -149,7 +148,7 @@ async def invite_team_member(
             email=request.email.lower(),
             name=request.name,
             password_hash=None,  # Will be set when user accepts invitation
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
         db.add(new_user)
         db.flush()  # Get user ID
@@ -158,8 +157,7 @@ async def invite_team_member(
         membership = Membership(
             user_id=new_user.id,
             tenant_id=tenant_id,
-            role=request.role,
-            created_at=datetime.utcnow()
+            role=request.role
         )
         db.add(membership)
         db.commit()
@@ -237,7 +235,6 @@ async def update_member_role(
     # Update role
     old_role = membership.role
     membership.role = request.role
-    membership.updated_at = datetime.utcnow()
     db.commit()
 
     return {
