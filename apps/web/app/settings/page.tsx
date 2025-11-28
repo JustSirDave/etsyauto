@@ -200,8 +200,8 @@ export default function SettingsPage() {
   return (
     <div>
       {/* Sticky Header + Tabs - STAYS IN PLACE WHILE CONTENT SCROLLS */}
-      <div className="sticky top-0 z-20 bg-[#0a0a0b] border-b border-dark-border -mx-6 px-6 -mt-6 pt-6">
-        <div className="pb-6 space-y-6">
+      <div className="sticky top-0 z-20 bg-dark-bg border-b border-dark-border -mx-6 px-6 -mt-6 pt-6">
+        <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
@@ -469,8 +469,8 @@ export default function SettingsPage() {
                         <span className="text-sm font-medium capitalize">{member.role}</span>
                       </div>
 
-                      {/* Actions Dropdown (only for owners/admins, not for self, not for pending invitations) */}
-                      {canManageTeam && member.user_id !== user?.id && member.invitation_status === 'accepted' && (
+                      {/* Actions Dropdown (only for owners/admins, not for self) */}
+                      {canManageTeam && member.user_id !== user?.id && (
                         <div className="relative group">
                           <button className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
                             <MoreVertical className="w-4 h-4 text-slate-400" />
@@ -479,42 +479,58 @@ export default function SettingsPage() {
                           {/* Dropdown Menu - Appears Above */}
                           <div className="absolute right-0 bottom-full mb-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-[100]">
                             <div className="py-1">
-                              <button
-                                onClick={() => handleChangeRole(member.user_id, 'owner')}
-                                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
-                              >
-                                <Crown className="w-4 h-4" />
-                                Make Owner
-                              </button>
-                              <button
-                                onClick={() => handleChangeRole(member.user_id, 'admin')}
-                                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
-                              >
-                                <Shield className="w-4 h-4" />
-                                Make Admin
-                              </button>
-                              <button
-                                onClick={() => handleChangeRole(member.user_id, 'creator')}
-                                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
-                              >
-                                <Edit className="w-4 h-4" />
-                                Make Creator
-                              </button>
-                              <button
-                                onClick={() => handleChangeRole(member.user_id, 'viewer')}
-                                className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
-                              >
-                                <Eye className="w-4 h-4" />
-                                Make Viewer
-                              </button>
-                              <div className="border-t border-slate-700 my-1"></div>
-                              <button
-                                onClick={() => handleRemoveMember(member.user_id, member.name)}
-                                className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Remove
-                              </button>
+                              {member.invitation_status === 'accepted' ? (
+                                <>
+                                  {/* Options for accepted members */}
+                                  <button
+                                    onClick={() => handleChangeRole(member.user_id, 'owner')}
+                                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
+                                  >
+                                    <Crown className="w-4 h-4" />
+                                    Make Owner
+                                  </button>
+                                  <button
+                                    onClick={() => handleChangeRole(member.user_id, 'admin')}
+                                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
+                                  >
+                                    <Shield className="w-4 h-4" />
+                                    Make Admin
+                                  </button>
+                                  <button
+                                    onClick={() => handleChangeRole(member.user_id, 'creator')}
+                                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                    Make Creator
+                                  </button>
+                                  <button
+                                    onClick={() => handleChangeRole(member.user_id, 'viewer')}
+                                    className="w-full px-4 py-2 text-left text-sm text-white hover:bg-slate-700 flex items-center gap-2"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    Make Viewer
+                                  </button>
+                                  <div className="border-t border-slate-700 my-1"></div>
+                                  <button
+                                    onClick={() => handleRemoveMember(member.user_id, member.name)}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                    Remove
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {/* Options for pending invitations */}
+                                  <button
+                                    onClick={() => handleRemoveMember(member.user_id, member.name)}
+                                    className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-slate-700 flex items-center gap-2"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                    Cancel Invitation
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
