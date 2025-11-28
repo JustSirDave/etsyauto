@@ -198,10 +198,10 @@ export default function SettingsPage() {
   const etsyShop = Array.isArray(shops) ? shops.find((s) => s.status === 'connected') : null;
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col">
-      {/* Fixed Header + Tabs - STICKY PARENT */}
-      <div className="fixed top-16 left-64 right-0 z-20 bg-[#0a0a0b] border-b border-dark-border">
-        <div className="p-6 space-y-6">
+    <div>
+      {/* Sticky Header + Tabs - STAYS IN PLACE WHILE CONTENT SCROLLS */}
+      <div className="sticky top-0 z-20 bg-[#0a0a0b] border-b border-dark-border -mx-6 px-6 -mt-6 pt-6">
+        <div className="pb-6 space-y-6">
           {/* Header */}
           <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center">
@@ -271,8 +271,8 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Scrollable Content Area - SCROLLABLE CHILDREN */}
-      <div className="mt-[196px] flex-1 overflow-y-auto px-6 pb-6 space-y-6">
+      {/* Content Area - SCROLLABLE CHILDREN */}
+      <div className="space-y-6 mt-6 pb-12">
         {/* Error Message */}
       {error && (
         <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
