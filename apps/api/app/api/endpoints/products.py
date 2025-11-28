@@ -2,7 +2,7 @@
 Products API Endpoints
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -65,7 +65,7 @@ async def import_batch(
     """
     Import multiple products at once
     """
-    batch_id = request.batch_id or f"batch_{int(datetime.utcnow().timestamp())}"
+    batch_id = request.batch_id or f"batch_{int(datetime.now(timezone.utc).timestamp())}"
     
     products = []
     for item in request.products:
@@ -111,7 +111,7 @@ async def import_csv(
     csv_text = contents.decode('utf-8')
     csv_reader = csv.DictReader(io.StringIO(csv_text))
     
-    batch_id = f"csv_{int(datetime.utcnow().timestamp())}"
+    batch_id = f"csv_{int(datetime.now(timezone.utc).timestamp())}"
     products = []
     
     for row in csv_reader:
