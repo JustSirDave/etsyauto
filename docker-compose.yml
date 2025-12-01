@@ -142,6 +142,20 @@ services:
     networks:
       - etsy-network
 
+  # Database Admin Tool (Adminer)
+  adminer:
+    image: adminer:latest
+    container_name: etsy-adminer
+    ports:
+      - "8081:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - etsy-network
+
   # Next.js Frontend
   web:
     build:
