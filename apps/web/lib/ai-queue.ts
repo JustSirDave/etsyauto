@@ -7,6 +7,7 @@ export interface QueuedProduct {
   id: number;
   title: string;
   sku: string;
+  queuedAt?: string;
 }
 
 const QUEUE_KEY = 'ai-generation-queue';
