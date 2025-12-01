@@ -42,6 +42,7 @@ export interface User {
   id: number;
   email: string;
   name: string;
+  profile_picture_url?: string | null;
   tenant_id: number;
   tenant_name: string;
   role: string;
@@ -148,6 +149,34 @@ export const authApi = {
   logout: async (): Promise<void> => {
     removeAuthToken();
   },
+
+  uploadProfilePicture: async (file: File): Promise<{ message: string; profile_picture_url: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = getAuthToken();
+    const response = await fetch(`${API_BASE_URL}/api/auth/profile/upload-picture`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw {
+        detail: error.detail || 'Profile picture upload failed',
+        status: response.status,
+      };
+    }
+
+    return response.json();
+  },
+
+  deleteProfilePicture: async (): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>('/api/auth/profile/delete-picture', {
+      method: 'DELETE',
+    });
+  },
 };
 
 /**
@@ -233,9 +262,14 @@ export const productsApi = {
     return response.json();
   },
 
-  generateAI: async (productId: number) => {
+  generateAI: async (productId: number, options?: { model?: string; style?: string; tone?: string }) => {
     return apiRequest<any>(`/api/products/${productId}/generate`, {
       method: 'POST',
+      body: JSON.stringify({
+        model: options?.model || 'gpt-4o-mini',
+        style: options?.style || 'friendly',
+        tone: options?.tone || 'helpful',
+      }),
     });
   },
 

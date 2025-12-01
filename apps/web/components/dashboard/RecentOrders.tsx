@@ -1,5 +1,8 @@
 'use client'
 
+import { useState } from 'react'
+import { MessageDraftModal } from '@/components/orders/MessageDraftModal'
+
 interface Order {
   id: string
   customer: string
@@ -32,6 +35,7 @@ const statusConfig = {
 }
 
 export function RecentOrders() {
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   return (
     <div className="bg-dark-card border border-dark-border rounded-lg overflow-hidden">
       <div className="overflow-x-auto">
@@ -71,12 +75,15 @@ export function RecentOrders() {
                     {order.date}
                   </td>
                   <td className="py-4 px-6">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${config.bgColor} ${config.textColor}`}>
-                      {config.label}
+                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-semibold ${config.bgColor} ${config.textColor}`} title={config.label}>
+                      {config.label.charAt(0)}
                     </span>
                   </td>
                   <td className="py-4 px-6 text-right">
-                    <button className="px-4 py-1.5 text-sm font-medium text-accent-400 hover:text-accent-300 transition-colors">
+                    <button
+                      onClick={() => setSelectedOrder(order)}
+                      className="px-4 py-1.5 text-sm font-medium bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 hover:text-teal-300 border border-teal-500/30 rounded-lg transition-colors"
+                    >
                       Draft Message
                     </button>
                   </td>
@@ -86,6 +93,16 @@ export function RecentOrders() {
           </tbody>
         </table>
       </div>
+
+      {/* Message Draft Modal */}
+      {selectedOrder && (
+        <MessageDraftModal
+          isOpen={!!selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          customerName={selectedOrder.customer}
+          orderId={selectedOrder.id}
+        />
+      )}
     </div>
   )
 }

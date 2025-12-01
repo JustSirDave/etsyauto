@@ -48,6 +48,7 @@ class User(Base):
     email = Column(CITEXT, unique=True, nullable=False, index=True)
     password_hash = Column(Text, nullable=True)  # Nullable for SSO
     name = Column(Text, nullable=True)
+    profile_picture_url = Column(Text, nullable=True)  # URL to profile picture
 
     # Email verification
     email_verified = Column(Boolean, default=False, nullable=False)

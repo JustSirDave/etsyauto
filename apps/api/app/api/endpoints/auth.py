@@ -2,11 +2,15 @@
 Authentication API Endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime, timedelta, timezone
 from typing import Set, Optional
+import os
+import uuid
+from PIL import Image
+import io
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
@@ -352,6 +356,7 @@ async def get_current_user_info(current_user = Depends(get_current_user), db: Se
         "email": user.email,
         "name": user.name,
         "email_verified": user.email_verified,
+        "profile_picture_url": user.profile_picture_url,
         "tenant_id": current_user["tenant_id"],
         "role": current_user["role"]
     }
@@ -530,3 +535,135 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
         "message": "Password reset successfully",
         "email": user.email
     }
+
+
+# Profile Picture Upload
+
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB in bytes
+
+
+@router.post("/profile/upload-picture", tags=["Auth"])
+async def upload_profile_picture(
+    file: UploadFile = File(...),
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload profile picture for current user
+
+    Requirements:
+    - Valid JWT token
+    - Image file (JPEG, PNG, GIF, WebP)
+    - Max size: 5MB
+
+    Returns:
+        Profile picture URL
+    """
+    # Validate file type
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_IMAGE_TYPES)}"
+        )
+
+    # Read file content
+    contents = await file.read()
+
+    # Validate file size
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File size exceeds maximum of {MAX_FILE_SIZE / (1024 * 1024)}MB"
+        )
+
+    try:
+        # Validate it's actually an image and get dimensions
+        image = Image.open(io.BytesIO(contents))
+        image.verify()
+
+        # Reopen for processing (verify() closes the file)
+        image = Image.open(io.BytesIO(contents))
+
+        # Create thumbnail (150x150)
+        thumbnail_size = (150, 150)
+        image.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
+
+        # Generate unique filename
+        file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'jpg'
+        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+
+        # Create uploads directory if it doesn't exist
+        upload_dir = "uploads/profile-pictures"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Save thumbnail
+        file_path = os.path.join(upload_dir, unique_filename)
+        image.save(file_path, optimize=True, quality=85)
+
+        # Generate URL (this would be different if using S3)
+        # For now, using local path - in production, upload to S3 and get URL
+        profile_picture_url = f"/uploads/profile-pictures/{unique_filename}"
+
+        # Update user's profile picture URL
+        user = db.query(User).filter(User.id == int(current_user["sub"])).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Delete old profile picture file if it exists and is local
+        if user.profile_picture_url and user.profile_picture_url.startswith("/uploads/"):
+            old_file_path = user.profile_picture_url.lstrip("/")
+            if os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                except Exception:
+                    pass  # Ignore errors deleting old file
+
+        user.profile_picture_url = profile_picture_url
+        db.commit()
+
+        return {
+            "message": "Profile picture uploaded successfully",
+            "profile_picture_url": profile_picture_url
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid image file: {str(e)}"
+        )
+
+
+@router.delete("/profile/delete-picture", tags=["Auth"])
+async def delete_profile_picture(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete profile picture for current user
+
+    Requires: Valid JWT token
+    """
+    user = db.query(User).filter(User.id == int(current_user["sub"])).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.profile_picture_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No profile picture to delete"
+        )
+
+    # Delete file if it's local
+    if user.profile_picture_url.startswith("/uploads/"):
+        file_path = user.profile_picture_url.lstrip("/")
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass  # Ignore errors deleting file
+
+    user.profile_picture_url = None
+    db.commit()
+
+    return {"message": "Profile picture deleted successfully"}

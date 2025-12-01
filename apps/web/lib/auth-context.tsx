@@ -16,6 +16,8 @@ interface AuthContextType {
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (email: string, password: string, name: string, tenantName: string) => Promise<void>;
   logout: () => Promise<void>;
+  uploadProfilePicture: (file: File) => Promise<void>;
+  deleteProfilePicture: () => Promise<void>;
   error: string | null;
   clearError: () => void;
 }
@@ -148,6 +150,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   };
 
+  const uploadProfilePicture = async (file: File) => {
+    try {
+      setError(null);
+      const response = await authApi.uploadProfilePicture(file);
+
+      // Update user with new profile picture URL
+      if (user) {
+        setUser({
+          ...user,
+          profile_picture_url: response.profile_picture_url,
+        });
+      }
+    } catch (err) {
+      const apiError = err as ApiError;
+      setError(apiError.detail || 'Failed to upload profile picture');
+      throw err;
+    }
+  };
+
+  const deleteProfilePicture = async () => {
+    try {
+      setError(null);
+      await authApi.deleteProfilePicture();
+
+      // Update user to remove profile picture URL
+      if (user) {
+        setUser({
+          ...user,
+          profile_picture_url: null,
+        });
+      }
+    } catch (err) {
+      const apiError = err as ApiError;
+      setError(apiError.detail || 'Failed to delete profile picture');
+      throw err;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isLoading,
@@ -155,6 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     register,
     logout,
+    uploadProfilePicture,
+    deleteProfilePicture,
     error,
     clearError,
   };

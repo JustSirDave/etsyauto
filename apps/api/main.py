@@ -6,9 +6,11 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
+import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
@@ -76,6 +78,13 @@ app.include_router(team.router, prefix="/api/team", tags=["Team Management"])
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
+
+# Serve static files (profile pictures, etc.)
+uploads_dir = "uploads"
+if not os.path.exists(uploads_dir):
+    os.makedirs(uploads_dir, exist_ok=True)
+    
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 
 @app.get("/healthz", tags=["Health"])

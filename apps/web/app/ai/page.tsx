@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { productsApi } from '@/lib/api';
 import { Sparkles, Check, X, RefreshCw, AlertTriangle, Eye, Plus, Trash2 } from 'lucide-react';
 import { getAIQueue, removeFromAIQueue, type QueuedProduct } from '@/lib/ai-queue';
+import { useToast } from '@/lib/toast-context';
 
 interface Product {
   id: number;
@@ -40,11 +41,13 @@ interface AIGeneration {
 
 export default function AIGenerationPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [queuedProducts, setQueuedProducts] = useState<QueuedProduct[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [generation, setGeneration] = useState<AIGeneration | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generatingProductId, setGeneratingProductId] = useState<number | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadQueue();
@@ -63,18 +66,68 @@ export default function AIGenerationPage() {
   };
 
   const handleGenerateAI = async (productId: number) => {
+    console.log('Starting AI generation for product:', productId);
     try {
       setGenerating(true);
       setGeneratingProductId(productId);
       setSelectedProductId(productId);
+      
+      console.log('Calling productsApi.generateAI...');
       const result = await productsApi.generateAI(productId);
+      console.log('AI generation successful:', result);
+      
       setGeneration(result);
+      
+      console.log('Showing success toast...');
+      showToast('AI content generated successfully!', 'success');
+      setStatusMessage({ type: 'success', text: 'AI content generated successfully!' });
+      console.log('Success toast called');
+      
+      // Clear status message after 5 seconds
+      setTimeout(() => setStatusMessage(null), 5000);
     } catch (error: any) {
       console.error('AI generation failed:', error);
-      alert(`AI generation failed: ${error.detail || error.message}`);
+      console.error('Error detail:', error?.detail);
+      console.error('Error message:', error?.message);
+      
+      // Extract user-friendly error message
+      let errorMessage = 'An error occurred while generating content';
+      
+      if (error?.detail) {
+        // If detail is a string, use it
+        if (typeof error.detail === 'string') {
+          errorMessage = error.detail;
+        } 
+        // If detail is an object with a message property
+        else if (error.detail?.message) {
+          errorMessage = error.detail.message;
+        }
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Check for specific error types and provide user-friendly messages
+      if (errorMessage.includes('quota') || errorMessage.includes('429')) {
+        errorMessage = 'OpenAI API quota exceeded. Please check your API key and billing.';
+      } else if (errorMessage.includes('API key') || errorMessage.includes('401')) {
+        errorMessage = 'Invalid OpenAI API key. Please check your settings.';
+      } else if (errorMessage.includes('timeout')) {
+        errorMessage = 'Request timed out. Please try again.';
+      } else if (errorMessage.includes('network')) {
+        errorMessage = 'Network error. Please check your connection.';
+      }
+      
+      console.log('Showing error toast with message:', errorMessage);
+      showToast(`AI generation failed: ${errorMessage}`, 'error', 8000);
+      setStatusMessage({ type: 'error', text: errorMessage });
+      console.log('Error toast called');
+      
+      // Clear status message after 8 seconds
+      setTimeout(() => setStatusMessage(null), 8000);
     } finally {
       setGenerating(false);
       setGeneratingProductId(null);
+      console.log('AI generation process completed');
     }
   };
 
@@ -97,6 +150,41 @@ export default function AIGenerationPage() {
           </p>
         </div>
       </div>
+
+      {/* Status Message Banner */}
+      {statusMessage && (
+        <div className={`p-4 rounded-lg border ${
+          statusMessage.type === 'success' 
+            ? 'bg-green-900/20 border-green-500 text-green-100' 
+            : 'bg-red-900/20 border-red-500 text-red-100'
+        } flex items-start gap-3`}>
+          {statusMessage.type === 'success' ? (
+            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+          ) : (
+            <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+          )}
+          <div className="flex-1">
+            <p className="font-medium">{statusMessage.text}</p>
+            {statusMessage.type === 'error' && statusMessage.text.includes('quota') && (
+              <p className="text-sm mt-1 opacity-90">
+                Please verify your OpenAI API key has sufficient credits and billing is set up correctly.
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => setStatusMessage(null)}
+            className="flex-shrink-0 hover:opacity-70 transition-opacity"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Queued Products */}
       <div className="bg-slate-800 rounded-lg p-6">

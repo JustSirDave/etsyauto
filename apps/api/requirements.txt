@@ -38,6 +38,7 @@ sentry-sdk[fastapi]==1.40.0
 python-dateutil==2.8.2
 python-dotenv==1.0.1
 tenacity==8.2.3
+Pillow==10.2.0  # Image processing for profile pictures
 
 # Testing
 pytest==7.4.4
