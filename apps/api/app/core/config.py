@@ -30,14 +30,51 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Load JWT keys from files
-        try:
-            with open('private.pem', 'r') as f:
-                self.JWT_PRIVATE_KEY = f.read()
-            with open('public.pem', 'r') as f:
-                self.JWT_PUBLIC_KEY = f.read()
-        except FileNotFoundError:
-            print("Warning: JWT key files not found. Authentication will not work.")
+        
+        # Restore newlines in PEM keys if they were stored without newlines in env
+        # PEM format requires newlines, but env vars are often stored as single lines
+        if self.JWT_PRIVATE_KEY and '-----BEGIN' in self.JWT_PRIVATE_KEY and '\n' not in self.JWT_PRIVATE_KEY:
+            # Restore newlines: add \n after header, before footer, and every 64 chars in between
+            private_key = self.JWT_PRIVATE_KEY
+            if 'BEGIN RSA PRIVATE KEY' in private_key:
+                private_key = private_key.replace('-----BEGIN RSA PRIVATE KEY-----', '-----BEGIN RSA PRIVATE KEY-----\n')
+                private_key = private_key.replace('-----END RSA PRIVATE KEY-----', '\n-----END RSA PRIVATE KEY-----')
+            elif 'BEGIN PRIVATE KEY' in private_key:
+                private_key = private_key.replace('-----BEGIN PRIVATE KEY-----', '-----BEGIN PRIVATE KEY-----\n')
+                private_key = private_key.replace('-----END PRIVATE KEY-----', '\n-----END PRIVATE KEY-----')
+            # Insert newlines every 64 characters in the key body
+            parts = private_key.split('\n')
+            if len(parts) == 3:  # header, body, footer
+                body = parts[1]
+                body_with_newlines = '\n'.join([body[i:i+64] for i in range(0, len(body), 64)])
+                self.JWT_PRIVATE_KEY = f"{parts[0]}\n{body_with_newlines}\n{parts[2]}"
+            else:
+                self.JWT_PRIVATE_KEY = private_key
+        
+        if self.JWT_PUBLIC_KEY and '-----BEGIN' in self.JWT_PUBLIC_KEY and '\n' not in self.JWT_PUBLIC_KEY:
+            public_key = self.JWT_PUBLIC_KEY
+            if 'BEGIN PUBLIC KEY' in public_key:
+                public_key = public_key.replace('-----BEGIN PUBLIC KEY-----', '-----BEGIN PUBLIC KEY-----\n')
+                public_key = public_key.replace('-----END PUBLIC KEY-----', '\n-----END PUBLIC KEY-----')
+            # Insert newlines every 64 characters in the key body
+            parts = public_key.split('\n')
+            if len(parts) == 3:  # header, body, footer
+                body = parts[1]
+                body_with_newlines = '\n'.join([body[i:i+64] for i in range(0, len(body), 64)])
+                self.JWT_PUBLIC_KEY = f"{parts[0]}\n{body_with_newlines}\n{parts[2]}"
+            else:
+                self.JWT_PUBLIC_KEY = public_key
+        
+        # Load JWT keys from files only if not set via environment variables
+        if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
+            try:
+                with open('private.pem', 'r') as f:
+                    self.JWT_PRIVATE_KEY = f.read()
+                with open('public.pem', 'r') as f:
+                    self.JWT_PUBLIC_KEY = f.read()
+            except FileNotFoundError:
+                if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
+                    print("⚠️  Warning: JWT keys not found in files or environment. Authentication will not work.")
 
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
