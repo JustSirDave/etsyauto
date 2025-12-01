@@ -28,22 +28,23 @@ export function getAIQueue(): QueuedProduct[] {
 }
 
 /**
- * Add a product to the AI queue
+ * Add a product or products to the AI queue
  */
-export function addToAIQueue(product: QueuedProduct): void {
+export function addToAIQueue(product: QueuedProduct | QueuedProduct[]): void {
   if (typeof window === 'undefined') return;
   
   try {
     const queue = getAIQueue();
+    const productsToAdd = Array.isArray(product) ? product : [product];
     
-    // Check if product already exists
-    const exists = queue.some(p => p.id === product.id);
-    if (exists) {
-      console.log('Product already in queue');
-      return;
-    }
+    // Add only products that don't already exist
+    productsToAdd.forEach(p => {
+      const exists = queue.some(existing => existing.id === p.id);
+      if (!exists) {
+        queue.push(p);
+      }
+    });
     
-    queue.push(product);
     localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
     
     // Dispatch event to notify other components
