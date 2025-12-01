@@ -143,11 +143,12 @@ services:
       - etsy-network
 
   # Database Admin Tool (Adminer)
+  # Accessible via nginx at /adminer
   adminer:
     image: adminer:latest
     container_name: etsy-adminer
     ports:
-      - "8081:8080"
+      - "127.0.0.1:8081:8080"  # Expose on localhost for nginx proxy
     environment:
       ADMINER_DEFAULT_SERVER: db
     depends_on:
