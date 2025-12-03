@@ -14,7 +14,7 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team
+from app.api.endpoints import auth, shops, products, team, onboarding
 
 # Initialize Sentry
 if settings.SENTRY_DSN:
@@ -65,6 +65,7 @@ app.add_middleware(
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])
 app.include_router(shops.router, prefix="/api/shops", tags=["Shops"])
 app.include_router(products.router, prefix="/api/products", tags=["Products"])
 app.include_router(team.router, prefix="/api/team", tags=["Team Management"])

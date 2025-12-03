@@ -1,13 +1,15 @@
 'use client';
 
 /**
- * Listings Management Page
- * Track job queue, retry failed listings, view status
+ * Listings Page - Vuexy Style
  */
 
 import { useState, useEffect } from 'react';
 import { listingsApi } from '@/lib/api';
-import { Clock, CheckCircle, XCircle, RefreshCw, Play, Loader } from 'lucide-react';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { DashboardCard } from '@/components/dashboard/DashboardCard';
+import { Clock, CheckCircle, XCircle, RefreshCw, Loader } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ListingJob {
   id: number;
@@ -23,13 +25,13 @@ interface ListingJob {
   created_at: string;
 }
 
-const statusColors = {
-  pending: 'bg-slate-700 text-slate-300',
-  scheduled: 'bg-blue-900/30 text-blue-400',
-  processing: 'bg-yellow-900/30 text-yellow-400',
-  completed: 'bg-green-900/30 text-green-400',
-  failed: 'bg-red-900/30 text-red-400',
-  cancelled: 'bg-slate-700 text-slate-400',
+const statusStyles: Record<string, string> = {
+  pending: 'bg-[var(--background)] text-[var(--text-muted)]',
+  scheduled: 'bg-[var(--info-bg)] text-[var(--info)]',
+  processing: 'bg-[var(--warning-bg)] text-[var(--warning)]',
+  completed: 'bg-[var(--success-bg)] text-[var(--success)]',
+  failed: 'bg-[var(--danger-bg)] text-[var(--danger)]',
+  cancelled: 'bg-[var(--background)] text-[var(--text-muted)]',
 };
 
 const statusIcons = {
@@ -41,19 +43,17 @@ const statusIcons = {
   cancelled: XCircle,
 };
 
-export default function ListingsPage() {
+function ListingsContent() {
   const [jobs, setJobs] = useState<ListingJob[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [retrying, setRetrying] = useState<Set<number>>(new Set());
-
   const limit = 20;
 
   useEffect(() => {
     loadJobs();
-    // Auto-refresh every 5 seconds
     const interval = setInterval(loadJobs, 5000);
     return () => clearInterval(interval);
   }, [page, filterStatus]);
@@ -64,8 +64,8 @@ export default function ListingsPage() {
       const response = await listingsApi.getAll(page, limit, filterStatus);
       setJobs(response.jobs);
       setTotal(response.total);
-    } catch (error: any) {
-      console.error('Failed to load listing jobs:', error);
+    } catch (error) {
+      console.error('Failed to load:', error);
     } finally {
       setLoading(false);
     }
@@ -77,31 +77,23 @@ export default function ListingsPage() {
       await listingsApi.retry(jobId);
       await loadJobs();
     } catch (error: any) {
-      console.error('Retry failed:', error);
       alert(`Retry failed: ${error.detail || error.message}`);
     } finally {
-      setRetrying(prev => {
-        const next = new Set(prev);
-        next.delete(jobId);
-        return next;
-      });
+      setRetrying(prev => { const next = new Set(prev); next.delete(jobId); return next; });
     }
   };
 
   const handleCancel = async (jobId: number) => {
-    if (!confirm('Cancel this listing job?')) return;
-
+    if (!confirm('Cancel this job?')) return;
     try {
       await listingsApi.cancel(jobId);
       await loadJobs();
     } catch (error: any) {
-      console.error('Cancel failed:', error);
       alert(`Cancel failed: ${error.detail || error.message}`);
     }
   };
 
   const totalPages = Math.ceil(total / limit);
-
   const stats = {
     pending: jobs.filter(j => j.status === 'pending').length,
     processing: jobs.filter(j => j.status === 'processing').length,
@@ -110,162 +102,96 @@ export default function ListingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-[1600px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Listing Jobs</h1>
-          <p className="text-slate-400 mt-1">
-            Monitor and manage your Etsy listing publication queue
-          </p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Listing Jobs</h1>
+          <p className="text-[var(--text-muted)] mt-1">Monitor your Etsy listing publication queue</p>
         </div>
-        <button
-          onClick={loadJobs}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
+        <button onClick={loadJobs} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--card-bg-hover)] transition-colors">
+          <RefreshCw className="w-4 h-4" />Refresh
         </button>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-slate-400 text-sm">Pending</div>
-          <div className="text-2xl font-bold text-slate-300 mt-1">{stats.pending}</div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+          <p className="text-[var(--text-muted)] text-sm">Pending</p>
+          <p className="text-3xl font-bold text-[var(--text-primary)] mt-1">{stats.pending}</p>
         </div>
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-slate-400 text-sm">Processing</div>
-          <div className="text-2xl font-bold text-yellow-400 mt-1">{stats.processing}</div>
+        <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+          <p className="text-[var(--text-muted)] text-sm">Processing</p>
+          <p className="text-3xl font-bold text-[var(--warning)] mt-1">{stats.processing}</p>
         </div>
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-slate-400 text-sm">Completed</div>
-          <div className="text-2xl font-bold text-green-400 mt-1">{stats.completed}</div>
+        <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+          <p className="text-[var(--text-muted)] text-sm">Completed</p>
+          <p className="text-3xl font-bold text-[var(--success)] mt-1">{stats.completed}</p>
         </div>
-        <div className="bg-slate-800 rounded-lg p-4">
-          <div className="text-slate-400 text-sm">Failed</div>
-          <div className="text-2xl font-bold text-red-400 mt-1">{stats.failed}</div>
+        <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+          <p className="text-[var(--text-muted)] text-sm">Failed</p>
+          <p className="text-3xl font-bold text-[var(--danger)] mt-1">{stats.failed}</p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex gap-2">
-        <button
-          onClick={() => setFilterStatus(undefined)}
-          className={`px-4 py-2 rounded-lg transition-colors ${
-            !filterStatus
-              ? 'bg-teal-600 text-white'
-              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-          }`}
-        >
-          All
-        </button>
-        {['pending', 'processing', 'completed', 'failed'].map(status => (
-          <button
-            key={status}
-            onClick={() => setFilterStatus(status)}
-            className={`px-4 py-2 rounded-lg transition-colors capitalize ${
-              filterStatus === status
-                ? 'bg-teal-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
-          >
-            {status}
+        {[undefined, 'pending', 'processing', 'completed', 'failed'].map((status, i) => (
+          <button key={i} onClick={() => setFilterStatus(status)} className={cn('px-4 py-2 rounded-lg transition-colors capitalize', filterStatus === status ? 'gradient-primary text-white shadow-lg shadow-[var(--primary)]/25' : 'bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)]')}>
+            {status || 'All'}
           </button>
         ))}
       </div>
 
-      {/* Jobs Table */}
-      <div className="bg-slate-800 rounded-lg overflow-hidden">
+      {/* Table */}
+      <DashboardCard noPadding>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-900 border-b border-slate-700">
-              <tr>
-                <th className="p-4 text-left text-slate-300 font-medium">Job ID</th>
-                <th className="p-4 text-left text-slate-300 font-medium">Product</th>
-                <th className="p-4 text-left text-slate-300 font-medium">Status</th>
-                <th className="p-4 text-left text-slate-300 font-medium">Etsy ID</th>
-                <th className="p-4 text-left text-slate-300 font-medium">Retries</th>
-                <th className="p-4 text-left text-slate-300 font-medium">Created</th>
-                <th className="p-4 text-left text-slate-300 font-medium">Actions</th>
+            <thead>
+              <tr className="border-b border-[var(--border-color)]">
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Job ID</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Product</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Etsy ID</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Retries</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Created</th>
+                <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-700">
+            <tbody>
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
-                    Loading jobs...
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">Loading...</td></tr>
               ) : jobs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
-                    No listing jobs found. Create your first listing to get started.
-                  </td>
-                </tr>
+                <tr><td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">No listing jobs found.</td></tr>
               ) : (
                 jobs.map(job => {
                   const StatusIcon = statusIcons[job.status as keyof typeof statusIcons] || Clock;
-
                   return (
-                    <tr key={job.id} className="hover:bg-slate-750 transition-colors">
-                      <td className="p-4 text-white font-mono">#{job.id}</td>
-                      <td className="p-4 text-white">
-                        <div>Product #{job.product_id}</div>
-                        <div className="text-xs text-slate-400 mt-1">Shop #{job.shop_id}</div>
+                    <tr key={job.id} className="border-b border-[var(--border-color)] hover:bg-[var(--background)] transition-colors">
+                      <td className="py-4 px-5 text-[var(--text-primary)] font-mono">#{job.id}</td>
+                      <td className="py-4 px-5">
+                        <p className="text-[var(--text-primary)]">Product #{job.product_id}</p>
+                        <p className="text-xs text-[var(--text-muted)]">Shop #{job.shop_id}</p>
                       </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                              statusColors[job.status as keyof typeof statusColors] || statusColors.pending
-                            }`}
-                          >
-                            <StatusIcon className={`w-3.5 h-3.5 ${job.status === 'processing' ? 'animate-spin' : ''}`} />
-                            {job.status}
-                          </span>
-                        </div>
-                        {job.error_message && (
-                          <div className="text-xs text-red-400 mt-1 max-w-xs truncate" title={job.error_message}>
-                            {job.error_message}
-                          </div>
-                        )}
+                      <td className="py-4 px-5">
+                        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium', statusStyles[job.status] || statusStyles.pending)}>
+                          <StatusIcon className={cn('w-3.5 h-3.5', job.status === 'processing' && 'animate-spin')} />
+                          {job.status}
+                        </span>
+                        {job.error_message && <p className="text-xs text-[var(--danger)] mt-1 max-w-xs truncate">{job.error_message}</p>}
                       </td>
-                      <td className="p-4 text-slate-300 font-mono text-sm">
-                        {job.etsy_listing_id || '-'}
-                      </td>
-                      <td className="p-4 text-slate-300">
-                        {job.retry_count > 0 ? (
-                          <span className="text-yellow-400">{job.retry_count}/3</span>
-                        ) : (
-                          '0/3'
-                        )}
-                      </td>
-                      <td className="p-4 text-slate-400 text-sm">
-                        {new Date(job.created_at).toLocaleString()}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex gap-2">
+                      <td className="py-4 px-5 text-[var(--text-muted)] font-mono text-sm">{job.etsy_listing_id || '-'}</td>
+                      <td className="py-4 px-5 text-[var(--text-muted)]">{job.retry_count > 0 ? <span className="text-[var(--warning)]">{job.retry_count}/3</span> : '0/3'}</td>
+                      <td className="py-4 px-5 text-[var(--text-muted)] text-sm">{new Date(job.created_at).toLocaleString()}</td>
+                      <td className="py-4 px-5">
+                        <div className="flex gap-2 justify-end">
                           {job.status === 'failed' && job.retry_count < 3 && (
-                            <button
-                              onClick={() => handleRetry(job.id)}
-                              disabled={retrying.has(job.id)}
-                              className="text-teal-400 hover:text-teal-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                              title="Retry"
-                            >
-                              {retrying.has(job.id) ? (
-                                <Loader className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <RefreshCw className="w-4 h-4" />
-                              )}
+                            <button onClick={() => handleRetry(job.id)} disabled={retrying.has(job.id)} className="p-2 text-[var(--primary)] hover:bg-[var(--primary-bg)] rounded-lg disabled:opacity-50 transition-colors">
+                              {retrying.has(job.id) ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                             </button>
                           )}
-                          {(job.status === 'pending' || job.status === 'scheduled') && (
-                            <button
-                              onClick={() => handleCancel(job.id)}
-                              className="text-red-400 hover:text-red-300 transition-colors"
-                              title="Cancel"
-                            >
+                          {['pending', 'scheduled'].includes(job.status) && (
+                            <button onClick={() => handleCancel(job.id)} className="p-2 text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg transition-colors">
                               <XCircle className="w-4 h-4" />
                             </button>
                           )}
@@ -278,32 +204,20 @@ export default function ListingsPage() {
             </tbody>
           </table>
         </div>
-
-        {/* Pagination */}
         {totalPages > 1 && (
-          <div className="border-t border-slate-700 p-4 flex items-center justify-between">
-            <div className="text-slate-400 text-sm">
-              Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} jobs
-            </div>
+          <div className="border-t border-[var(--border-color)] p-4 flex items-center justify-between">
+            <p className="text-sm text-[var(--text-muted)]">Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total}</p>
             <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
-              >
-                Next
-              </button>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg disabled:opacity-50 transition-colors">Previous</button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg disabled:opacity-50 transition-colors">Next</button>
             </div>
           </div>
         )}
-      </div>
+      </DashboardCard>
     </div>
   );
+}
+
+export default function ListingsPage() {
+  return <DashboardLayout><ListingsContent /></DashboardLayout>;
 }

@@ -11,10 +11,12 @@ import { authApi, setAuthToken, removeAuthToken, type User, type ApiError } from
 
 interface AuthContextType {
   user: User | null;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   register: (email: string, password: string, name: string, tenantName: string) => Promise<void>;
+  googleLogin: (googleToken: string, tenantName?: string) => Promise<void>;
   logout: () => Promise<void>;
   uploadProfilePicture: (file: File) => Promise<void>;
   deleteProfilePicture: () => Promise<void>;
@@ -69,6 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tenant_id: response.tenant.id,
         tenant_name: response.tenant.name,
         role: response.tenant.role,
+        profile_picture_url: response.user.profile_picture_url,
+        tenant_description: response.tenant.description,
+        onboarding_completed: response.tenant.onboarding_completed,
       });
 
       // Redirect to dashboard
@@ -110,22 +115,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tenant_id: response.tenant.id,
         tenant_name: response.tenant.name,
         role: response.tenant.role,
+        profile_picture_url: response.user.profile_picture_url,
+        tenant_description: response.tenant.description,
+        onboarding_completed: response.tenant.onboarding_completed,
       });
 
-      // Redirect to dashboard
-      router.push('/');
-    } catch (err) {
-      const apiError = err as ApiError;
-
+      // Post-registration onboarding (new users always see onboarding)
+      router.push('/?welcome=true');
+    } catch (err: any) {
       // Status 202 means account created successfully but needs email verification
-      if (apiError.status === 202) {
-        // This is a success case - show the message and redirect to login
-        alert(apiError.detail || 'Account created! Please check your email to verify your account.');
-        router.push('/login');
+      // Check both err.status and fall through to message check
+      const status = err?.status;
+      const detail = err?.detail || '';
+      
+      // 202 status OR success message indicates account was created
+      if (status === 202 || detail.toLowerCase().includes('account created')) {
+        // This is a success case - store success message and redirect to login
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('registration_success', detail || 'Account created! Please check your email to verify your account.');
+        }
+        router.push('/login?registered=true');
         return;
       }
 
-      setError(apiError.detail || 'Registration failed');
+      setError(detail || 'Registration failed');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const googleLogin = async (googleToken: string, tenantName?: string) => {
+    try {
+      setError(null);
+      setIsLoading(true);
+
+      const response = await authApi.googleAuth({
+        google_token: googleToken,
+        tenant_name: tenantName,
+      });
+
+      // Save token
+      setAuthToken(response.access_token);
+
+      // Set user
+      setUser({
+        id: response.user.id,
+        email: response.user.email,
+        name: response.user.name,
+        tenant_id: response.tenant.id,
+        tenant_name: response.tenant.name,
+        role: response.tenant.role,
+        profile_picture_url: response.user.profile_picture_url,
+        tenant_description: response.tenant.description,
+        onboarding_completed: response.tenant.onboarding_completed,
+      });
+
+      // Post-login onboarding for new users
+      if (response.user.is_new_user) {
+        console.log('New Google OAuth user detected - showing onboarding');
+        // TODO: Show onboarding modal or redirect to onboarding flow
+        // For now, redirect to dashboard with a welcome message
+        router.push('/?welcome=true');
+      } else {
+        // Existing user - redirect to dashboard
+        router.push('/');
+      }
+    } catch (err) {
+      const apiError = err as ApiError;
+      // Provide detailed error message from backend
+      setError(apiError.detail || 'Google sign in failed. Please try again.');
       throw err;
     } finally {
       setIsLoading(false);
@@ -190,10 +249,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthContextType = {
     user,
+    setUser,
     isLoading,
     isAuthenticated: !!user,
     login,
     register,
+    googleLogin,
     logout,
     uploadProfilePicture,
     deleteProfilePicture,

@@ -2,7 +2,7 @@
 Authentication API Endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime, timedelta, timezone
@@ -11,15 +11,19 @@ import os
 import uuid
 from PIL import Image
 import io
+import logging
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.email import generate_token, send_verification_email, send_password_reset_email, send_password_changed_notification
 from app.core.config import settings
+from app.core.password_validator import validate_password as validate_password_strength
 from app.models.tenancy import User, Tenant, Membership
+from app.models.oauth import OAuthProvider
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # List of disposable/temporary email domains to block
@@ -86,10 +90,11 @@ class RegisterRequest(BaseModel):
 
     @field_validator('password')
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        if len(v) > 72:
-            raise ValueError('Password must be less than 72 characters')
+        """Validate password strength with comprehensive rules"""
+        is_valid, errors = validate_password_strength(v)
+        if not is_valid:
+            # Join all error messages with newlines
+            raise ValueError('\n'.join(errors))
         return v
 
     @field_validator('name')
@@ -258,6 +263,22 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail=f"Account is locked. Try again in {minutes_left} minute(s)"
         )
 
+    # Check if account was created via OAuth (no password set)
+    if not user.password_hash:
+        # Check which OAuth provider they used
+        oauth_provider = db.query(OAuthProvider).filter(OAuthProvider.user_id == user.id).first()
+        if oauth_provider:
+            provider_name = oauth_provider.provider.capitalize()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"This account was created using {provider_name} sign-in. Please use the '{provider_name} Sign-In' button to log in, or set a password using 'Forgot Password' to enable email/password login."
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This account has no password set. Please use 'Forgot Password' to set a password."
+            )
+    
     # Verify password
     if not verify_password(request.password, user.password_hash):
         # Increment failed login attempts
@@ -332,7 +353,9 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         tenant={
             "id": tenant.id,
             "name": tenant.name,
-            "role": membership.role
+            "role": membership.role,
+            "description": tenant.description,
+            "onboarding_completed": tenant.onboarding_completed
         }
     )
 
@@ -359,6 +382,9 @@ async def get_current_user_info(current_user = Depends(get_current_user), db: Se
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Get tenant info for onboarding status and tenant details
+    tenant = db.query(Tenant).filter(Tenant.id == int(current_user["tenant_id"])).first()
+    
     return {
         "id": user.id,
         "email": user.email,
@@ -366,6 +392,9 @@ async def get_current_user_info(current_user = Depends(get_current_user), db: Se
         "email_verified": user.email_verified,
         "profile_picture_url": user.profile_picture_url,
         "tenant_id": current_user["tenant_id"],
+        "tenant_name": tenant.name if tenant else None,
+        "tenant_description": tenant.description if tenant else None,
+        "onboarding_completed": tenant.onboarding_completed if tenant else False,
         "role": current_user["role"]
     }
 
@@ -675,3 +704,160 @@ async def delete_profile_picture(
     db.commit()
 
     return {"message": "Profile picture deleted successfully"}
+
+
+# Password Strength Check Endpoint
+
+class PasswordStrengthRequest(BaseModel):
+    password: str
+
+
+class PasswordStrengthResponse(BaseModel):
+    score: int
+    label: str
+    is_valid: bool
+    errors: list[str]
+
+
+@router.post("/password/check-strength", response_model=PasswordStrengthResponse, tags=["Auth"])
+async def check_password_strength(request: PasswordStrengthRequest):
+    """
+    Check password strength in real-time
+    Used by frontend to show strength indicator
+    """
+    from app.core.password_validator import PasswordValidator
+
+    score, label = PasswordValidator.calculate_strength(request.password)
+    is_valid, errors = PasswordValidator.validate(request.password)
+
+    return PasswordStrengthResponse(
+        score=score,
+        label=label,
+        is_valid=is_valid,
+        errors=errors
+    )
+
+
+# Google OAuth Endpoints
+
+class GoogleAuthRequest(BaseModel):
+    google_token: str
+    tenant_name: Optional[str] = None
+
+
+@router.post("/google", response_model=TokenResponse, tags=["Auth"])
+async def google_oauth(
+    request_body: GoogleAuthRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate with Google OAuth 2.0 / OpenID Connect (Passwordless)
+    
+    **Production-Ready Features:**
+    - Server-side Google ID token verification (signature, aud, iss, exp, email_verified)
+    - Account linking: Links Google identity to existing email-based accounts
+    - Auto-creates organization for new users
+    - Rate-limited to prevent abuse
+    - Detailed error messages for troubleshooting
+    
+    **Security:**
+    - Validates token server-side (not client-side only)
+    - Requires email verification by Google
+    - Uses unique Google user ID (sub) to prevent account conflicts
+    - Logs all authentication attempts
+
+    Args:
+        request: Google ID token and optional tenant name for new users
+
+    Returns:
+        JWT token for API access with user and tenant info
+
+    Flow:
+    1. Verify Google ID token server-side (signature, aud, iss, exp, email_verified)
+    2. Check if OAuth provider exists (by Google sub + provider)
+    3. If not, check if user exists by email (account linking)
+    4. Create new user + tenant if needed
+    5. Update last login and return JWT token
+    
+    Raises:
+        400: Invalid/expired token, unverified email
+        401: Authentication failed
+        500: Server error during authentication
+    """
+    from app.services.google_oauth import GoogleOAuthService
+    from app.core.auth_rate_limiter import get_auth_rate_limiter
+    
+    # Rate limiting: Prevent abuse of Google OAuth endpoint
+    rate_limiter = get_auth_rate_limiter()
+    rate_limiter.check_google_oauth_limit(request)
+
+    # Authenticate with Google (server-side verification)
+    user, error, tenant, is_new_user = GoogleOAuthService.authenticate_with_google(
+        db,
+        request_body.google_token,
+        request_body.tenant_name
+    )
+
+    # Handle authentication errors with detailed messages
+    if error:
+        logger.warning(f"Google OAuth failed: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST if "token" in error.lower() or "verify" in error.lower() else status.HTTP_401_UNAUTHORIZED,
+            detail=error
+        )
+
+    if not user:
+        logger.error("Google OAuth: User creation/retrieval failed without error message")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed due to a server error. Please try again."
+        )
+
+    # Get user's tenant and role
+    membership = db.query(Membership).filter(Membership.user_id == user.id).first()
+    if not membership:
+        logger.error(f"Google OAuth: User {user.id} has no organization membership")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User account setup incomplete. Please contact support."
+        )
+
+    # Get tenant info if not provided (for existing users)
+    if not tenant:
+        tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+
+    # Get user's shops (empty for now)
+    shop_ids = []
+
+    # Generate JWT token with conservative expiry
+    token = create_access_token(
+        user_id=user.id,
+        tenant_id=membership.tenant_id,
+        role=membership.role,
+        shop_ids=shop_ids,
+        remember_me=False  # Google OAuth users get standard session lifetime
+    )
+
+    # Log successful authentication
+    logger.info(f"Google OAuth successful: user_id={user.id}, is_new={is_new_user}, tenant_id={tenant.id}")
+
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.JWT_TTL_SECONDS,
+        user={
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "email_verified": user.email_verified,
+            "profile_picture_url": user.profile_picture_url,
+            "is_new_user": is_new_user  # For post-login onboarding detection
+        },
+        tenant={
+            "id": tenant.id,
+            "name": tenant.name,
+            "role": membership.role,
+            "description": tenant.description,
+            "onboarding_completed": tenant.onboarding_completed
+        }
+    )

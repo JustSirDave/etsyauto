@@ -1,25 +1,26 @@
 'use client';
 
 /**
- * Register Page
- * Create new account with tenant
+ * Register Page - Vuexy Style
  */
 
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { UserPlus, Mail, Lock, User, Building2, AlertCircle, Check } from 'lucide-react';
+import AuthLayout from '@/components/auth/AuthLayout';
+import GoogleSignInButton from '@/components/GoogleSignInButton';
+import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register, error, clearError, isLoading } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    confirmPassword: '',
     name: '',
-    tenantName: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({
@@ -35,9 +36,13 @@ export default function RegisterPage() {
     setFormError('');
     clearError();
 
-    // Validation
-    if (!formData.email || !formData.password || !formData.name || !formData.tenantName) {
+    if (!formData.email || !formData.password || !formData.name) {
       setFormError('Please fill in all fields');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      setFormError('Please agree to the Terms & Conditions');
       return;
     }
 
@@ -46,22 +51,13 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.password.length > 72) {
-      setFormError('Password must be less than 72 characters');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setFormError('Passwords do not match');
-      return;
-    }
-
     try {
+      const defaultTenantName = `${formData.name}'s Shop`;
       await register(
         formData.email,
         formData.password,
         formData.name,
-        formData.tenantName
+        defaultTenantName
       );
     } catch (err) {
       // Error is handled by context
@@ -70,216 +66,139 @@ export default function RegisterPage() {
 
   const displayError = formError || error;
 
-  const passwordRequirements = [
-    { text: 'At least 8 characters', met: formData.password.length >= 8 },
-    { text: 'Less than 72 characters', met: formData.password.length <= 72 || formData.password.length === 0 },
-    { text: 'Passwords match', met: formData.password === formData.confirmPassword && formData.password.length > 0 },
-  ];
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4 py-12">
-      <div className="w-full max-w-md">
-        {/* Logo & Title */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-teal-500 mb-4">
-            <UserPlus className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Create Account</h1>
-          <p className="text-slate-400">Start automating your Etsy shop today</p>
+    <AuthLayout mode="register">
+      {/* Error Message */}
+      {displayError && (
+        <div className="mb-6 bg-[var(--danger-bg)] border border-[var(--danger)]/30 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-[var(--danger)] flex-shrink-0 mt-0.5" />
+          <p className="text-[var(--danger)] text-sm">{displayError}</p>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Name Field */}
+        <div>
+          <label htmlFor="name" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            Username
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="johndoe"
+            autoComplete="name"
+            className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
+            disabled={isLoading}
+            required
+          />
         </div>
 
-        {/* Register Form */}
-        <div className="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Error Message */}
-            {displayError && (
-              <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-red-400 text-sm">{displayError}</p>
-                </div>
-              </div>
-            )}
+        {/* Email Field */}
+        <div>
+          <label htmlFor="email" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            placeholder="john@example.com"
+            autoComplete="email"
+            className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
+            disabled={isLoading}
+            required
+          />
+        </div>
 
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="you@example.com"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Name Field */}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-slate-300 mb-2">
-                Your Name
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={handleChange}
-                  placeholder="John Doe"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Tenant Name Field */}
-            <div>
-              <label htmlFor="tenantName" className="block text-sm font-medium text-slate-300 mb-2">
-                Company/Shop Name
-              </label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="tenantName"
-                  name="tenantName"
-                  type="text"
-                  value={formData.tenantName}
-                  onChange={handleChange}
-                  placeholder="My Etsy Shop"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-                  disabled={isLoading}
-                  required
-                  minLength={8}
-                  maxLength={72}
-                />
-              </div>
-            </div>
-
-            {/* Confirm Password Field */}
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-300 mb-2">
-                Confirm Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  id="confirmPassword"
-                  name="confirmPassword"
-                  type="password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  className="w-full pl-11 pr-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-            </div>
-
-            {/* Password Requirements */}
-            {formData.password && (
-              <div className="bg-slate-700/50 rounded-lg p-3 space-y-1.5">
-                {passwordRequirements.map((req, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-sm">
-                    {req.met ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full border-2 border-slate-500" />
-                    )}
-                    <span className={req.met ? 'text-green-400' : 'text-slate-400'}>
-                      {req.text}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Terms Checkbox */}
-            <div className="flex items-start">
-              <input
-                id="terms"
-                type="checkbox"
-                className="w-4 h-4 mt-1 text-teal-500 bg-slate-700 border-slate-600 rounded focus:ring-teal-500 focus:ring-2"
-                required
-              />
-              <label htmlFor="terms" className="ml-2 text-sm text-slate-400">
-                I agree to the{' '}
-                <Link href="/terms" className="text-teal-400 hover:text-teal-300 underline">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link href="/privacy" className="text-teal-400 hover:text-teal-300 underline">
-                  Privacy Policy
-                </Link>
-              </label>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
+        {/* Password Field */}
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
+            Password
+          </label>
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              value={formData.password}
+              onChange={handleChange}
+              placeholder="············"
+              autoComplete="new-password"
+              className="w-full px-4 py-3 pr-12 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
               disabled={isLoading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-blue-500 to-teal-500 text-white font-medium rounded-lg hover:from-blue-600 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 focus:ring-offset-slate-800 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+              tabIndex={-1}
             >
-              {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Creating account...</span>
-                </>
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
               ) : (
-                <>
-                  <UserPlus className="w-5 h-5" />
-                  <span>Create Account</span>
-                </>
+                <Eye className="w-5 h-5" />
               )}
             </button>
-          </form>
-
-          {/* Sign In Link */}
-          <div className="mt-6 text-center">
-            <p className="text-slate-400 text-sm">
-              Already have an account?{' '}
-              <Link
-                href="/login"
-                className="text-teal-400 hover:text-teal-300 font-medium transition"
-              >
-                Sign in
-              </Link>
-            </p>
           </div>
         </div>
+
+        {/* Terms Checkbox */}
+        <label className="flex items-start gap-3 cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={agreedToTerms}
+            onChange={(e) => setAgreedToTerms(e.target.checked)}
+            className="w-4 h-4 mt-1 rounded border-[var(--border-color)] bg-[var(--background)] text-[var(--primary)] focus:ring-[var(--primary)] focus:ring-offset-0 cursor-pointer"
+          />
+          <span className="text-sm text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors">
+            I agree to{' '}
+            <Link href="/privacy" className="text-[var(--primary)] hover:underline">
+              privacy policy
+            </Link>
+            {' & '}
+            <Link href="/terms" className="text-[var(--primary)] hover:underline">
+              terms
+            </Link>
+          </span>
+        </label>
+
+        {/* Submit Button */}
+        <button
+          type="submit"
+          disabled={isLoading || !agreedToTerms}
+          className="w-full py-3 px-4 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] transition shadow-lg shadow-[var(--primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              Creating account...
+            </span>
+          ) : (
+            'Sign up'
+          )}
+        </button>
+      </form>
+
+      {/* Divider */}
+      <div className="relative my-8">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[var(--border-color)]" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="px-4 bg-[var(--card-bg)] text-[var(--text-muted)] text-sm">
+            or
+          </span>
+        </div>
       </div>
-    </div>
+
+      {/* Google Sign-In */}
+      <GoogleSignInButton mode="register" />
+    </AuthLayout>
   );
 }

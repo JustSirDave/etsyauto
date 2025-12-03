@@ -2,9 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   VUEXY DARK THEME - BLUE TO GREEN SPECTRUM
+   ============================================ */
 :root {
-  --background: #0f172a;
-  --foreground: #f1f5f9;
+  /* Background Colors */
+  --background: #1A1F2E;
+  --background-dark: #141821;
+  --card-bg: #232A3B;
+  --card-bg-hover: #2A3347;
+  
+  /* Border Colors */
+  --border-color: #2E3650;
+  
+  /* Text Colors */
+  --text-primary: #E4E6F0;
+  --text-secondary: #A8B0C5;
+  --text-muted: #6B7A99;
+  
+  /* Primary - Blue to Teal Gradient */
+  --primary: #0EA5E9;
+  --primary-light: #38BDF8;
+  --primary-dark: #0284C7;
+  --primary-bg: rgba(14, 165, 233, 0.15);
+  
+  /* Secondary - Teal/Cyan */
+  --secondary: #14B8A6;
+  --secondary-light: #2DD4BF;
+  --secondary-bg: rgba(20, 184, 166, 0.15);
+  
+  /* Accent - Emerald Green */
+  --accent: #10B981;
+  --accent-light: #34D399;
+  --accent-bg: rgba(16, 185, 129, 0.15);
+  
+  /* Success - Green */
+  --success: #22C55E;
+  --success-bg: rgba(34, 197, 94, 0.15);
+  
+  /* Warning - Amber */
+  --warning: #F59E0B;
+  --warning-bg: rgba(245, 158, 11, 0.15);
+  
+  /* Danger - Red */
+  --danger: #EF4444;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  
+  /* Info - Sky Blue */
+  --info: #06B6D4;
+  --info-bg: rgba(6, 182, 212, 0.15);
+  
+  /* Sidebar */
+  --sidebar-bg: #232A3B;
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 80px;
 }
 
 * {
@@ -15,8 +66,10 @@
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--text-primary);
+  font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 @layer utilities {
@@ -27,18 +80,107 @@ body {
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #1e293b;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #475569;
-  border-radius: 5px;
+  background: var(--border-color);
+  border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: var(--text-muted);
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25);
+}
+
+/* Glow effects */
+.glow-primary {
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+/* Gradient backgrounds - Blue to Green spectrum */
+.gradient-primary {
+  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
+}
+
+.gradient-secondary {
+  background: linear-gradient(135deg, #14B8A6 0%, #10B981 100%);
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, #10B981 0%, #22C55E 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, #22C55E 0%, #4ADE80 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #EF4444 0%, #F87171 100%);
+}
+
+.gradient-info {
+  background: linear-gradient(135deg, #06B6D4 0%, #22D3EE 100%);
+}
+
+/* Blue-Green gradient text */
+.text-gradient {
+  background: linear-gradient(135deg, #0EA5E9 0%, #10B981 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Animation utilities */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slide-in {
+  animation: slideInLeft 0.3s ease forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* Sidebar active item style */
+.sidebar-item-active {
+  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.35);
 }

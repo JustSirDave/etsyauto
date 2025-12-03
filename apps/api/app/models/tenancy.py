@@ -19,6 +19,8 @@ class Tenant(Base):
     
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     name = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)  # Shop description (up to ~240 chars recommended)
+    onboarding_completed = Column(Boolean, default=False, nullable=False)  # Track if user completed onboarding
     billing_tier = Column(
         String(20), 
         CheckConstraint("billing_tier IN ('starter', 'pro', 'enterprise')"),

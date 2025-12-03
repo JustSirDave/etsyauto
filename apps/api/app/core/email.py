@@ -19,7 +19,7 @@ def generate_token(length: int = 32) -> str:
 
 def send_email(to_email: str, subject: str, html_content: str, text_content: Optional[str] = None) -> bool:
     """
-    Send an email via SMTP
+    Send an email via Resend (preferred) or SMTP (fallback)
 
     Args:
         to_email: Recipient email address
@@ -30,36 +30,9 @@ def send_email(to_email: str, subject: str, html_content: str, text_content: Opt
     Returns:
         True if successful, False otherwise
     """
-    # Skip sending if SMTP not configured
-    if not settings.SMTP_USER or not settings.SMTP_PASSWORD or not settings.SMTP_FROM_EMAIL:
-        print(f"⚠️  Email not configured. Would have sent to {to_email}:")
-        print(f"   Subject: {subject}")
-        print(f"   Content: {text_content or 'See HTML'}")
-        return True  # Return True in dev mode
-
-    try:
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
-        msg['To'] = to_email
-
-        # Add plain text and HTML parts
-        if text_content:
-            msg.attach(MIMEText(text_content, 'plain'))
-        msg.attach(MIMEText(html_content, 'html'))
-
-        # Send email
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-            server.send_message(msg)
-
-        return True
-
-    except Exception as e:
-        print(f"❌ Failed to send email to {to_email}: {e}")
-        return False
+    # Use the new unified email service
+    from app.services.resend_email import send_email as send_email_unified
+    return send_email_unified(to_email, subject, html_content, text_content)
 
 
 def send_verification_email(email: str, name: str, verification_token: str) -> bool:

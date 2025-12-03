@@ -128,6 +128,11 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = "Etsy Automation Platform"
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Resend Configuration (Recommended)
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM: str = "noreply@yourdomain.com"
+    USE_RESEND: bool = False
+
     # Auth Configuration
     EMAIL_VERIFICATION_REQUIRED: bool = True
     VERIFICATION_TOKEN_EXPIRY_HOURS: int = 24
@@ -135,6 +140,11 @@ class Settings(BaseSettings):
     MAX_LOGIN_ATTEMPTS: int = 5
     ACCOUNT_LOCKOUT_MINUTES: int = 30
     REMEMBER_ME_TTL_DAYS: int = 30
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/api/auth/callback/google"
 
     model_config = SettingsConfigDict(
         env_file=".env",

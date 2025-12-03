@@ -23,18 +23,29 @@ export interface RegisterRequest {
   tenant_name: string;
 }
 
+export interface GoogleAuthRequest {
+  google_token: string;
+  tenant_name?: string;
+}
+
 export interface AuthResponse {
   access_token: string;
   token_type: string;
+  expires_in: number;
   user: {
     id: number;
     email: string;
     name: string;
+    email_verified?: boolean;
+    profile_picture_url?: string | null;
+    is_new_user?: boolean;  // For post-login onboarding detection
   };
   tenant: {
     id: number;
     name: string;
     role: string;
+    description?: string | null;
+    onboarding_completed?: boolean;
   };
 }
 
@@ -46,6 +57,8 @@ export interface User {
   tenant_id: number;
   tenant_name: string;
   role: string;
+  tenant_description?: string | null;
+  onboarding_completed?: boolean;
 }
 
 export interface Shop {
@@ -105,6 +118,7 @@ async function apiRequest<T>(
     headers,
   });
 
+  // Handle non-2xx responses as errors
   if (!response.ok) {
     const error: ApiError = {
       detail: 'An error occurred',
@@ -118,6 +132,17 @@ async function apiRequest<T>(
       error.detail = response.statusText || 'An error occurred';
     }
 
+    throw error;
+  }
+
+  // Special handling for 202 Accepted (used for email verification required)
+  // FastAPI's HTTPException returns {"detail": "..."} format
+  if (response.status === 202) {
+    const data = await response.json();
+    const error: ApiError = {
+      detail: data.detail || 'Action accepted, please check your email',
+      status: 202,
+    };
     throw error;
   }
 
@@ -137,6 +162,13 @@ export const authApi = {
 
   register: async (data: RegisterRequest): Promise<AuthResponse> => {
     return apiRequest<AuthResponse>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  googleAuth: async (data: GoogleAuthRequest): Promise<AuthResponse> => {
+    return apiRequest<AuthResponse>('/api/auth/google', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -474,5 +506,29 @@ export const teamApi = {
     permissions: UserPermissions;
   }> => {
     return apiRequest('/api/team/me/role');
+  },
+};
+
+/**
+ * Onboarding API
+ */
+export const onboardingApi = {
+  complete: async (shopName: string, description: string | null): Promise<any> => {
+    return apiRequest('/api/onboarding/complete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        shop_name: shopName,
+        description: description,
+      }),
+    });
+  },
+
+  skip: async (): Promise<any> => {
+    return apiRequest('/api/onboarding/skip', {
+      method: 'POST',
+    });
   },
 };
