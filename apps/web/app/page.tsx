@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Dashboard Page - Vuexy Style
+ * Dashboard Page - Two Column Layout
  */
 
 import { Suspense, useEffect, useState } from 'react';
@@ -11,19 +11,24 @@ import { useToast } from '@/lib/toast-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import OnboardingModal from '@/components/OnboardingModal';
-import { onboardingApi } from '@/lib/api';
+import { onboardingApi, shopsApi } from '@/lib/api';
 import {
   DollarSign,
-  Users,
   Package,
   ShoppingCart,
   Star,
   ArrowUp,
   ArrowDown,
   MoreVertical,
+  Sparkles,
+  Calendar,
+  FileText,
+  Settings,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 
-// Stats Card
+// Stats Card Component
 function StatsCard({
   title,
   value,
@@ -31,7 +36,7 @@ function StatsCard({
   change,
   changeType,
   icon: Icon,
-  iconColor,
+  iconBg,
 }: {
   title: string;
   value: string;
@@ -39,7 +44,7 @@ function StatsCard({
   change?: string;
   changeType?: 'up' | 'down';
   icon: React.ComponentType<{ className?: string }>;
-  iconColor: string;
+  iconBg: string;
 }) {
   return (
     <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
@@ -59,7 +64,7 @@ function StatsCard({
             </div>
           )}
         </div>
-        <div className={`w-12 h-12 rounded-lg ${iconColor} flex items-center justify-center`}>
+        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon className="w-6 h-6 text-white" />
         </div>
       </div>
@@ -67,7 +72,7 @@ function StatsCard({
   );
 }
 
-// Welcome Handler
+// Welcome Handler Component
 function WelcomeHandler() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
@@ -82,28 +87,7 @@ function WelcomeHandler() {
   return null;
 }
 
-// Product Row
-function ProductRow({ name, category, sales, revenue }: { name: string; category: string; sales: number; revenue: string }) {
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-[var(--border-color)] last:border-0">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg bg-[var(--background)] flex items-center justify-center">
-          <Package className="w-5 h-5 text-[var(--text-muted)]" />
-        </div>
-        <div>
-          <p className="text-[var(--text-primary)] font-medium">{name}</p>
-          <p className="text-[var(--text-muted)] text-sm">{category}</p>
-        </div>
-      </div>
-      <div className="text-right">
-        <p className="text-[var(--text-primary)] font-medium">{revenue}</p>
-        <p className="text-[var(--text-muted)] text-sm">{sales} sold</p>
-      </div>
-    </div>
-  );
-}
-
-// Transaction Row
+// Transaction Row Component
 function TransactionRow({ id, customer, amount, status }: { id: string; customer: string; amount: string; status: 'paid' | 'pending' | 'refunded' }) {
   const statusStyles = {
     paid: 'bg-[var(--success-bg)] text-[var(--success)]',
@@ -136,12 +120,31 @@ function DashboardContent() {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [shops, setShops] = useState<any[]>([]);
+  const [loadingShops, setLoadingShops] = useState(true);
 
   useEffect(() => {
     if (user && !user.onboarding_completed) {
       setShowOnboarding(true);
     }
   }, [user]);
+
+  useEffect(() => {
+    loadShops();
+  }, []);
+
+  const loadShops = async () => {
+    try {
+      setLoadingShops(true);
+      const data = await shopsApi.getAll();
+      setShops(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load shops:', error);
+      setShops([]);
+    } finally {
+      setLoadingShops(false);
+    }
+  };
 
   const handleCompleteOnboarding = async (shopName: string, description: string | null) => {
     try {
@@ -166,6 +169,8 @@ function DashboardContent() {
     }
   };
 
+  const etsyShop = shops.find((s) => s.status === 'connected');
+
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
       <Suspense fallback={null}>
@@ -180,57 +185,171 @@ function DashboardContent() {
         <p className="text-[var(--text-muted)] mt-1">Here's what's happening with your shop today</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatsCard title="Total Revenue" value="$45,385" subtitle="This month" change="+12.5%" changeType="up" icon={DollarSign} iconColor="gradient-success" />
-        <StatsCard title="Total Orders" value="1,247" subtitle="This month" change="+8.2%" changeType="up" icon={ShoppingCart} iconColor="gradient-primary" />
-        <StatsCard title="Total Customers" value="3,842" subtitle="Active" change="+5.7%" changeType="up" icon={Users} iconColor="gradient-info" />
-        <StatsCard title="Average Rating" value="4.8" subtitle="From 2,453 reviews" change="-0.1" changeType="down" icon={Star} iconColor="gradient-warning" />
-      </div>
-
-      {/* Charts */}
+      {/* Two Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <DashboardCard title="Revenue Overview" subtitle="Monthly breakdown" className="lg:col-span-2" action={<button className="p-2 hover:bg-[var(--background)] rounded-lg"><MoreVertical className="w-5 h-5 text-[var(--text-muted)]" /></button>}>
-          <div className="h-64 flex items-center justify-center border border-dashed border-[var(--border-color)] rounded-lg text-[var(--text-muted)]">
-            Revenue Chart Placeholder
-          </div>
-        </DashboardCard>
+        {/* Left Column - Connection Status & Quick Actions */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Shop Connection Status */}
+          <DashboardCard title="Shop Connection" subtitle="Etsy Integration">
+            {loadingShops ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : etsyShop ? (
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-12 h-12 rounded-xl bg-[var(--success-bg)] flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-[var(--success)]" />
+                </div>
+                <div>
+                  <p className="text-[var(--text-primary)] font-semibold">{etsyShop.display_name}</p>
+                  <p className="text-[var(--success)] text-sm">Connected</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 py-2">
+                <div className="w-12 h-12 rounded-xl bg-[var(--danger-bg)] flex items-center justify-center">
+                  <XCircle className="w-6 h-6 text-[var(--danger)]" />
+                </div>
+                <div>
+                  <p className="text-[var(--text-primary)] font-semibold">No Shop Connected</p>
+                  <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to get started</p>
+                </div>
+              </div>
+            )}
+            {!etsyShop && !loadingShops && (
+              <a
+                href="/settings"
+                className="mt-4 w-full py-2.5 gradient-primary text-white font-medium rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2"
+              >
+                Connect Etsy Shop
+              </a>
+            )}
+          </DashboardCard>
 
-        <DashboardCard title="Earnings" subtitle="This month">
-          <div className="space-y-4">
-            <div className="text-center">
-              <p className="text-4xl font-bold text-[var(--text-primary)]">$15,420</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">Total Earnings</p>
+          {/* Quick Actions */}
+          <DashboardCard title="Quick Actions">
+            <div className="grid grid-cols-2 gap-3">
+              <a
+                href="/products"
+                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:bg-[var(--primary-bg)] transition-colors group"
+              >
+                <Package className="w-6 h-6 text-[var(--primary)] mb-2 group-hover:scale-110 transition-transform" />
+                <span className="text-sm text-[var(--text-primary)] font-medium">Products</span>
+              </a>
+              <a
+                href="/ai"
+                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--info)] hover:bg-[var(--info-bg)] transition-colors group"
+              >
+                <Sparkles className="w-6 h-6 text-[var(--info)] mb-2 group-hover:scale-110 transition-transform" />
+                <span className="text-sm text-[var(--text-primary)] font-medium">AI Gen</span>
+              </a>
+              <a
+                href="/schedules"
+                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--warning)] hover:bg-[var(--warning-bg)] transition-colors group"
+              >
+                <Calendar className="w-6 h-6 text-[var(--warning)] mb-2 group-hover:scale-110 transition-transform" />
+                <span className="text-sm text-[var(--text-primary)] font-medium">Schedules</span>
+              </a>
+              <a
+                href="/listings"
+                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--success)] hover:bg-[var(--success-bg)] transition-colors group"
+              >
+                <FileText className="w-6 h-6 text-[var(--success)] mb-2 group-hover:scale-110 transition-transform" />
+                <span className="text-sm text-[var(--text-primary)] font-medium">Listings</span>
+              </a>
+              <a
+                href="/settings"
+                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--text-muted)] hover:bg-[var(--card-bg-hover)] transition-colors group col-span-2"
+              >
+                <Settings className="w-6 h-6 text-[var(--text-muted)] mb-2 group-hover:scale-110 transition-transform" />
+                <span className="text-sm text-[var(--text-primary)] font-medium">Settings</span>
+              </a>
             </div>
-            <div className="h-32 flex items-center justify-center border border-dashed border-[var(--border-color)] rounded-lg text-[var(--text-muted)] text-sm">
-              Donut Chart
-            </div>
-            <div className="grid grid-cols-2 gap-4 text-center">
-              <div><p className="text-[var(--text-primary)] font-semibold">$12,340</p><p className="text-[var(--text-muted)] text-xs">Income</p></div>
-              <div><p className="text-[var(--text-primary)] font-semibold">$3,080</p><p className="text-[var(--text-muted)] text-xs">Expenses</p></div>
-            </div>
+          </DashboardCard>
+        </div>
+
+        {/* Right Column - Key Metrics & Charts */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <StatsCard
+              title="Total Revenue"
+              value="$45,385"
+              subtitle="This month"
+              change="+12.5%"
+              changeType="up"
+              icon={DollarSign}
+              iconBg="gradient-success"
+            />
+            <StatsCard
+              title="Total Orders"
+              value="1,247"
+              subtitle="This month"
+              change="+8.2%"
+              changeType="up"
+              icon={ShoppingCart}
+              iconBg="gradient-primary"
+            />
+            <StatsCard
+              title="Active Listings"
+              value="156"
+              subtitle="Currently live"
+              change="+3.1%"
+              changeType="up"
+              icon={Package}
+              iconBg="gradient-info"
+            />
+            <StatsCard
+              title="Shop Rating"
+              value="4.9 ⭐"
+              subtitle="From 2,453 reviews"
+              change="-0.1"
+              changeType="down"
+              icon={Star}
+              iconBg="gradient-warning"
+            />
           </div>
-        </DashboardCard>
+
+          {/* Revenue Overview */}
+          <DashboardCard
+            title="Revenue Overview"
+            subtitle="Monthly breakdown"
+            action={
+              <button className="p-2 hover:bg-[var(--background)] rounded-lg transition-colors">
+                <MoreVertical className="w-5 h-5 text-[var(--text-muted)]" />
+              </button>
+            }
+          >
+            <div className="h-64 flex items-center justify-center border border-dashed border-[var(--border-color)] rounded-xl text-[var(--text-muted)]">
+              Revenue Chart Placeholder
+            </div>
+          </DashboardCard>
+
+          {/* Recent Transactions */}
+          <DashboardCard
+            title="Recent Transactions"
+            subtitle="Latest orders"
+            action={
+              <a href="/orders" className="text-sm text-[var(--primary)] hover:underline">
+                View All
+              </a>
+            }
+          >
+            <TransactionRow id="#ORD-7234" customer="Sarah Wilson" amount="$125.00" status="paid" />
+            <TransactionRow id="#ORD-7233" customer="Mike Johnson" amount="$89.99" status="pending" />
+            <TransactionRow id="#ORD-7232" customer="Emma Davis" amount="$234.50" status="paid" />
+            <TransactionRow id="#ORD-7231" customer="James Brown" amount="$45.00" status="refunded" />
+          </DashboardCard>
+        </div>
       </div>
 
-      {/* Bottom */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <DashboardCard title="Popular Products" subtitle="Best selling items" action={<a href="/products" className="text-sm text-[var(--primary)] hover:underline">View All</a>}>
-          <ProductRow name="Handmade Silver Ring" category="Jewelry" sales={142} revenue="$6,530" />
-          <ProductRow name="Vintage Leather Wallet" category="Accessories" sales={98} revenue="$8,722" />
-          <ProductRow name="Custom Photo Frame" category="Home Decor" sales={87} revenue="$3,006" />
-          <ProductRow name="Ceramic Plant Pot" category="Home Decor" sales={76} revenue="$2,128" />
-        </DashboardCard>
-
-        <DashboardCard title="Recent Transactions" subtitle="Latest orders" action={<a href="/orders" className="text-sm text-[var(--primary)] hover:underline">View All</a>}>
-          <TransactionRow id="#ORD-7234" customer="Sarah Wilson" amount="$125.00" status="paid" />
-          <TransactionRow id="#ORD-7233" customer="Mike Johnson" amount="$89.99" status="pending" />
-          <TransactionRow id="#ORD-7232" customer="Emma Davis" amount="$234.50" status="paid" />
-          <TransactionRow id="#ORD-7231" customer="James Brown" amount="$45.00" status="refunded" />
-        </DashboardCard>
-      </div>
-
-      <OnboardingModal isOpen={showOnboarding} onComplete={handleCompleteOnboarding} onSkip={handleSkipOnboarding} currentShopName={user?.tenant_name} />
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        isOpen={showOnboarding}
+        onComplete={handleCompleteOnboarding}
+        onSkip={handleSkipOnboarding}
+        currentShopName={user?.tenant_name}
+      />
     </div>
   );
 }

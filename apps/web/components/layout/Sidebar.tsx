@@ -1,12 +1,12 @@
 'use client';
 
 /**
- * Sidebar Component - Vuexy Style
+ * Sidebar Component - Collapsible with Sections
  */
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Package,
@@ -16,21 +16,18 @@ import {
   Settings,
   BarChart3,
   Sparkles,
-  Users,
-  Star,
-  HelpCircle,
-  ChevronDown,
-  Store,
+  ChevronLeft,
+  ChevronRight,
+  LifeBuoy,
+  X,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
   name: string;
-  href?: string;
+  href: string;
   icon: React.ComponentType<{ className?: string }>;
-  badge?: string | number;
-  badgeColor?: string;
-  children?: { name: string; href: string }[];
 }
 
 interface NavSection {
@@ -47,192 +44,142 @@ const navigation: NavSection[] = [
   {
     title: 'SHOP MANAGEMENT',
     items: [
-      {
-        name: 'Products',
-        icon: Package,
-        children: [
-          { name: 'Product List', href: '/products' },
-          { name: 'Add Product', href: '/products/new' },
-          { name: 'Categories', href: '/products/categories' },
-        ],
-      },
-      { name: 'Listings', href: '/listings', icon: FileText, badge: 'New', badgeColor: 'success' },
-      {
-        name: 'Orders',
-        icon: ShoppingCart,
-        badge: 12,
-        badgeColor: 'primary',
-        children: [
-          { name: 'Order List', href: '/orders' },
-          { name: 'Order Details', href: '/orders/details' },
-        ],
-      },
-      { name: 'Customers', href: '/customers', icon: Users },
-      { name: 'Reviews', href: '/reviews', icon: Star },
+      { name: 'Products', href: '/products', icon: Package },
+      { name: 'Listings', href: '/listings', icon: FileText },
+      { name: 'Orders', href: '/orders', icon: ShoppingCart },
+    ],
+  },
+  {
+    title: 'AUTOMATION',
+    items: [
+      { name: 'AI Generation', href: '/ai', icon: Sparkles },
+      { name: 'Schedules', href: '/schedules', icon: Calendar },
     ],
   },
   {
     title: 'ANALYTICS',
     items: [
       { name: 'Usage & Costs', href: '/usage', icon: BarChart3 },
-      { name: 'Reports', href: '/reports', icon: FileText },
     ],
   },
   {
     title: 'SETTINGS',
     items: [
-      { name: 'Shop Settings', href: '/shop-settings', icon: Store },
-      { name: 'Team', href: '/team', icon: Users },
-      { name: 'Account', href: '/settings', icon: Settings },
+      { name: 'Settings', href: '/settings', icon: Settings },
     ],
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Products', 'Orders']);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showHelpCard, setShowHelpCard] = useState(true);
 
-  const toggleExpanded = (name: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
+  // Load saved state from localStorage
+  useEffect(() => {
+    const savedCollapsed = localStorage.getItem('sidebarCollapsed');
+    if (savedCollapsed !== null) {
+      setIsCollapsed(savedCollapsed === 'true');
+    }
+    const helpDismissed = localStorage.getItem('helpCardDismissed');
+    if (helpDismissed === 'true') {
+      setShowHelpCard(false);
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('sidebarCollapsed', String(newState));
   };
 
-  const isActive = (href?: string, children?: { href: string }[]) => {
-    if (href && pathname === href) return true;
-    if (children) return children.some((child) => pathname === child.href);
-    return false;
+  const dismissHelpCard = () => {
+    setShowHelpCard(false);
+    localStorage.setItem('helpCardDismissed', 'true');
   };
 
   return (
-    <div className="w-[260px] h-screen flex flex-col bg-[var(--card-bg)] border-r border-[var(--border-color)]">
+    <div
+      className={cn(
+        'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out relative',
+        isCollapsed ? 'w-[80px]' : 'w-[260px]'
+      )}
+    >
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b border-[var(--border-color)]">
+      <div className={cn(
+        'h-16 flex items-center border-b border-[var(--border-color)]',
+        isCollapsed ? 'justify-center px-2' : 'px-6'
+      )}>
         <Link href="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30">
+          <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30 flex-shrink-0">
             <span className="text-white font-bold text-lg">E</span>
           </div>
-          <span className="text-[var(--text-primary)] font-bold text-xl tracking-tight">
-            Etsy Auto
-          </span>
+          {!isCollapsed && (
+            <span className="text-[var(--text-primary)] font-bold text-xl tracking-tight">
+              Etsy Auto
+            </span>
+          )}
         </Link>
       </div>
+
+      {/* Collapse Toggle Button */}
+      <button
+        onClick={toggleSidebar}
+        className="absolute -right-3 top-20 w-6 h-6 bg-[var(--primary)] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[var(--primary-dark)] transition-colors z-10"
+        title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+      >
+        {isCollapsed ? (
+          <ChevronRight className="w-4 h-4" />
+        ) : (
+          <ChevronLeft className="w-4 h-4" />
+        )}
+      </button>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
         {navigation.map((section, sectionIndex) => (
           <div key={sectionIndex} className={cn(sectionIndex > 0 && 'mt-6')}>
-            {section.title && (
+            {section.title && !isCollapsed && (
               <p className="px-3 mb-2 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                 {section.title}
               </p>
             )}
+            {section.title && isCollapsed && (
+              <div className="h-px bg-[var(--border-color)] mx-2 mb-2" />
+            )}
             <div className="space-y-1">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const active = isActive(item.href, item.children);
-                const expanded = expandedItems.includes(item.name);
-                const hasChildren = item.children && item.children.length > 0;
+                const isActive = pathname === item.href;
 
                 return (
-                  <div key={item.name}>
-                    {hasChildren ? (
-                      // Expandable item
-                      <button
-                        onClick={() => toggleExpanded(item.name)}
-                        className={cn(
-                          'w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200',
-                          active
-                            ? 'sidebar-item-active text-[var(--primary)]'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon className="w-5 h-5" />
-                          <span className="font-medium">{item.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {item.badge && (
-                            <span
-                              className={cn(
-                                'px-2 py-0.5 rounded-full text-xs font-medium',
-                                item.badgeColor === 'success' && 'bg-[var(--success-bg)] text-[var(--success)]',
-                                item.badgeColor === 'primary' && 'bg-[var(--primary-bg)] text-[var(--primary)]',
-                                item.badgeColor === 'warning' && 'bg-[var(--warning-bg)] text-[var(--warning)]',
-                                item.badgeColor === 'danger' && 'bg-[var(--danger-bg)] text-[var(--danger)]'
-                              )}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                          <ChevronDown
-                            className={cn(
-                              'w-4 h-4 transition-transform duration-200',
-                              expanded && 'rotate-180'
-                            )}
-                          />
-                        </div>
-                      </button>
-                    ) : (
-                      // Regular link
-                      <Link
-                        href={item.href || '#'}
-                        className={cn(
-                          'flex items-center justify-between px-3 py-2.5 rounded-lg transition-all duration-200',
-                          active
-                            ? 'sidebar-item-active text-[var(--primary)]'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
-                        )}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icon className="w-5 h-5" />
-                          <span className="font-medium">{item.name}</span>
-                        </div>
-                        {item.badge && (
-                          <span
-                            className={cn(
-                              'px-2 py-0.5 rounded-full text-xs font-medium',
-                              item.badgeColor === 'success' && 'bg-[var(--success-bg)] text-[var(--success)]',
-                              item.badgeColor === 'primary' && 'bg-[var(--primary-bg)] text-[var(--primary)]',
-                              item.badgeColor === 'warning' && 'bg-[var(--warning-bg)] text-[var(--warning)]',
-                              item.badgeColor === 'danger' && 'bg-[var(--danger-bg)] text-[var(--danger)]'
-                            )}
-                          >
-                            {item.badge}
-                          </span>
-                        )}
-                      </Link>
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative',
+                      isCollapsed && 'justify-center',
+                      isActive
+                        ? 'bg-gradient-to-r from-[var(--primary)] to-[var(--info)] text-white shadow-md shadow-[var(--primary)]/30'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
                     )}
-
-                    {/* Children */}
-                    {hasChildren && expanded && (
-                      <div className="mt-1 ml-8 space-y-1 animate-fade-in">
-                        {item.children?.map((child) => {
-                          const childActive = pathname === child.href;
-                          return (
-                            <Link
-                              key={child.href}
-                              href={child.href}
-                              className={cn(
-                                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
-                                childActive
-                                  ? 'text-[var(--primary)] bg-[var(--primary-bg)]'
-                                  : 'text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--background)]'
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  'w-1.5 h-1.5 rounded-full',
-                                  childActive ? 'bg-[var(--primary)]' : 'bg-[var(--text-muted)]'
-                                )}
-                              />
-                              {child.name}
-                            </Link>
-                          );
-                        })}
+                    title={isCollapsed ? item.name : undefined}
+                  >
+                    <Icon className={cn(
+                      'w-5 h-5 flex-shrink-0',
+                      isActive ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
+                    )} />
+                    {!isCollapsed && (
+                      <span className="font-medium">{item.name}</span>
+                    )}
+                    
+                    {/* Tooltip for collapsed state */}
+                    {isCollapsed && (
+                      <div className="absolute left-full ml-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--text-primary)] text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 border border-[var(--border-color)]">
+                        {item.name}
                       </div>
                     )}
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -240,25 +187,60 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Help Card */}
-      <div className="p-4">
-        <div className="bg-[var(--primary-bg)] rounded-xl p-4">
-          <div className="w-10 h-10 rounded-lg bg-[var(--primary)] flex items-center justify-center mb-3">
-            <HelpCircle className="w-5 h-5 text-white" />
+      {/* Help & Documentation Card */}
+      {!isCollapsed && showHelpCard && (
+        <div className="p-4">
+          <div className="bg-gradient-to-br from-[var(--primary-bg)] to-[var(--info-bg)] border border-[var(--primary)]/30 rounded-xl p-4 relative">
+            <button
+              onClick={dismissHelpCard}
+              className="absolute top-2 right-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--primary)] flex items-center justify-center flex-shrink-0">
+                <LifeBuoy className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-[var(--text-primary)] font-semibold mb-1">Need Help?</h4>
+                <p className="text-[var(--text-muted)] text-sm mb-3">
+                  Check our docs for guides and tutorials
+                </p>
+                <Link
+                  href="/docs"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-[var(--primary)] hover:underline"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  View Docs
+                </Link>
+              </div>
+            </div>
           </div>
-          <h4 className="text-[var(--text-primary)] font-semibold mb-1">Need Help?</h4>
-          <p className="text-[var(--text-muted)] text-sm mb-3">
-            Check our docs or contact support
-          </p>
-          <button className="w-full py-2 px-4 bg-white text-[var(--primary)] rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors">
-            View Documentation
-          </button>
         </div>
-      </div>
+      )}
+
+      {/* Collapsed Help Icon */}
+      {isCollapsed && (
+        <div className="p-3">
+          <Link
+            href="/docs"
+            className="flex items-center justify-center w-full py-2.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[var(--primary-bg)] transition-colors"
+            title="Documentation"
+          >
+            <BookOpen className="w-5 h-5" />
+          </Link>
+        </div>
+      )}
 
       {/* Footer */}
-      <div className="px-6 py-3 border-t border-[var(--border-color)]">
-        <p className="text-xs text-[var(--text-muted)]">Etsy Auto v1.0.0 • © 2024</p>
+      <div className={cn(
+        'py-3 border-t border-[var(--border-color)]',
+        isCollapsed ? 'px-2 text-center' : 'px-6'
+      )}>
+        <p className="text-xs text-[var(--text-muted)]">
+          {isCollapsed ? 'v1.0' : 'Etsy Auto v1.0.0'}
+        </p>
       </div>
     </div>
   );

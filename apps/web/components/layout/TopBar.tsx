@@ -18,6 +18,7 @@ import {
   LogOut,
   User,
   Settings,
+  BookOpen,
 } from 'lucide-react';
 
 export function TopBar() {
@@ -150,6 +151,13 @@ export function TopBar() {
                     >
                       <Settings className="w-4 h-4" />
                       <span>Settings</span>
+                    </a>
+                    <a
+                      href="/docs"
+                      className="flex items-center gap-3 px-4 py-2.5 text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>Documentation</span>
                     </a>
                   </div>
 
