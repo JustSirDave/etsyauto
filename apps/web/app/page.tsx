@@ -16,14 +16,12 @@ import OnboardingModal from '@/components/OnboardingModal';
 import { onboardingApi, shopsApi } from '@/lib/api';
 import {
   Package,
-  Users,
   ShoppingCart,
   FileText,
   CheckCircle,
   XCircle,
   Upload,
   Sparkles,
-  Calendar,
   TrendingUp,
   TrendingDown,
   MessageCircle,
@@ -45,7 +43,7 @@ function WelcomeHandler() {
   return null;
 }
 
-// Connection Item Component
+// Connection Item Component (Compact for side-by-side)
 function ConnectionItem({
   name,
   status,
@@ -60,32 +58,34 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="flex items-center justify-between p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
-      <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
-          {isConnected ? (
-            <CheckCircle className="w-5 h-5 text-[var(--success)]" />
-          ) : (
-            <XCircle className="w-5 h-5 text-[var(--danger)]" />
-          )}
+    <div className="flex-1 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
+            {isConnected ? (
+              <CheckCircle className="w-5 h-5 text-[var(--success)]" />
+            ) : (
+              <XCircle className="w-5 h-5 text-[var(--danger)]" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[var(--text-primary)] font-medium truncate">{name}</p>
+            {isConnected ? (
+              <p className="text-[var(--success)] text-sm truncate">{storeName || 'Connected'}</p>
+            ) : (
+              <p className="text-[var(--danger)] text-sm">Not Connected</p>
+            )}
+          </div>
         </div>
-        <div>
-          <p className="text-[var(--text-primary)] font-medium">{name}</p>
-          {isConnected ? (
-            <p className="text-[var(--success)] text-sm">{storeName || 'Connected'}</p>
-          ) : (
-            <p className="text-[var(--danger)] text-sm">Not Connected</p>
-          )}
-        </div>
+        {!isConnected && (
+          <button
+            onClick={onConnect}
+            className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+          >
+            Connect
+          </button>
+        )}
       </div>
-      {!isConnected && (
-        <button
-          onClick={onConnect}
-          className="px-4 py-2 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          Connect
-        </button>
-      )}
     </div>
   );
 }
@@ -187,14 +187,14 @@ function TransactionRow({
   };
 
   return (
-    <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto_auto] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
+    <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_auto_auto] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
       {/* Order ID */}
-      <div>
+      <div className="text-left">
         <p className="text-[var(--text-primary)] font-medium">{orderId}</p>
       </div>
 
       {/* Customer */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 text-left">
         <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
           {customer.charAt(0).toUpperCase()}
         </div>
@@ -202,24 +202,24 @@ function TransactionRow({
       </div>
 
       {/* Date */}
-      <div>
+      <div className="text-left">
         <p className="text-[var(--text-muted)]">{date}</p>
       </div>
 
       {/* Amount */}
-      <div>
+      <div className="text-left">
         <p className="text-[var(--text-primary)] font-semibold">{amount}</p>
       </div>
 
       {/* Status */}
-      <div>
+      <div className="text-left">
         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${statusStyles[status]}`}>
           {statusLabels[status]}
         </span>
       </div>
 
       {/* Action */}
-      <div>
+      <div className="text-left">
         <button
           onClick={onMessage}
           className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white text-sm font-medium rounded-lg transition-colors"
@@ -295,9 +295,9 @@ function DashboardContent() {
   // Mock data for metrics (replace with real API data)
   const metrics = {
     totalProducts: 0,
-    totalCustomers: 0,
-    totalOrders: 0,
     activeListings: 0,
+    aiGenerations: 0,
+    aiCosts: '$0.00',
   };
 
   // Mock transactions (replace with real API data)
@@ -321,40 +321,38 @@ function DashboardContent() {
         <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
       </div>
 
-      {/* Main Grid: Left 40% / Right 60% */}
-      <div className="grid grid-cols-1 lg:grid-cols-[40%_60%] gap-6">
-        {/* Left Column */}
-        <div className="space-y-6">
+      {/* Main Grid: Left 40% / Right 60% - Equal Heights */}
+      <div className="grid grid-cols-1 lg:grid-cols-[40%_1fr] gap-6">
+        {/* Left Column - Same height as right */}
+        <div className="flex flex-col gap-6">
           {/* Connection Status Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 h-fit">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 flex-1">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
-            <div className="space-y-3">
-              {loadingShops ? (
-                <div className="flex items-center justify-center py-8">
-                  <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : (
-                <>
-                  <ConnectionItem
-                    name="Etsy Shop"
-                    status={etsyShop ? 'connected' : 'disconnected'}
-                    storeName={etsyShop?.display_name || user?.tenant_name}
-                    onConnect={() => window.location.href = '/settings'}
-                  />
-                  <ConnectionItem
-                    name="Supplier API"
-                    status="disconnected"
-                    onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
-                  />
-                </>
-              )}
-            </div>
+            {loadingShops ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="flex gap-3">
+                <ConnectionItem
+                  name="Etsy Shop"
+                  status={etsyShop ? 'connected' : 'disconnected'}
+                  storeName={etsyShop?.display_name || user?.tenant_name}
+                  onConnect={() => window.location.href = '/settings'}
+                />
+                <ConnectionItem
+                  name="Supplier API"
+                  status="disconnected"
+                  onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
+                />
+              </div>
+            )}
           </div>
 
           {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 flex-1">
             <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3">
               <QuickActionButton
                 icon={Upload}
                 label="Import Products"
@@ -380,41 +378,38 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* Right Column - Key Metrics 2x2 Grid */}
-        <div className="space-y-6">
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Key Metrics</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <MetricCard
-              icon={Package}
-              value={metrics.totalProducts}
-              label="Total Products"
-              change={12}
-              iconBg="bg-[var(--primary)]"
-            />
-            <MetricCard
-              icon={FileText}
-              value={metrics.activeListings}
-              label="Active Listings"
-              change={8}
-              iconBg="bg-[var(--info)]"
-            />
-            <MetricCard
-              icon={Sparkles}
-              value={0}
-              label="AI Generations"
-              change={0}
-              changeLabel="Today"
-              iconBg="bg-[var(--warning)]"
-            />
-            <MetricCard
-              icon={ShoppingCart}
-              value="$0.00"
-              label="AI Costs"
-              change={0}
-              changeLabel="This month"
-              iconBg="bg-[var(--success)]"
-            />
-          </div>
+        {/* Right Column - Key Metrics 2x2 Grid (no header text) */}
+        <div className="grid grid-cols-2 gap-4 content-start">
+          <MetricCard
+            icon={Package}
+            value={metrics.totalProducts}
+            label="Total Products"
+            change={12}
+            iconBg="bg-[var(--primary)]"
+          />
+          <MetricCard
+            icon={FileText}
+            value={metrics.activeListings}
+            label="Active Listings"
+            change={8}
+            iconBg="bg-[var(--info)]"
+          />
+          <MetricCard
+            icon={Sparkles}
+            value={metrics.aiGenerations}
+            label="AI Generations"
+            change={0}
+            changeLabel="Today"
+            iconBg="bg-[var(--warning)]"
+          />
+          <MetricCard
+            icon={ShoppingCart}
+            value={metrics.aiCosts}
+            label="AI Costs"
+            change={0}
+            changeLabel="This month"
+            iconBg="bg-[var(--success)]"
+          />
         </div>
       </div>
 
@@ -422,7 +417,7 @@ function DashboardContent() {
       <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Recent Orders</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Recent Transactions</h2>
             <p className="text-[var(--text-muted)] text-sm">Latest customer transactions</p>
           </div>
           <a
@@ -434,13 +429,13 @@ function DashboardContent() {
         </div>
 
         {/* Table Header */}
-        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto_auto] gap-4 pb-3 border-b border-[var(--border-color)] text-sm font-medium text-[var(--text-muted)]">
-          <div>Order ID</div>
-          <div>Customer</div>
-          <div>Date</div>
-          <div>Amount</div>
-          <div>Status</div>
-          <div>Actions</div>
+        <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_auto_auto] gap-4 pb-3 border-b border-[var(--border-color)] text-sm font-medium text-[var(--text-muted)]">
+          <div className="text-left">Order ID</div>
+          <div className="text-left">Customer</div>
+          <div className="text-left">Date</div>
+          <div className="text-left">Amount</div>
+          <div className="text-left">Status</div>
+          <div className="text-left">Actions</div>
         </div>
 
         {/* Transaction Rows */}
