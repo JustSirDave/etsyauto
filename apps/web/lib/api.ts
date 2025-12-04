@@ -3,7 +3,8 @@
  * Handles all HTTP requests to the FastAPI backend
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+// Use local API routes for demo, or external API if specified
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? '' : 'http://localhost:8080');
 
 export interface ApiError {
   detail: string;
