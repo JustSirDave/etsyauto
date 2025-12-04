@@ -2,58 +2,39 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ============================================
-   VUEXY DARK THEME - BLUE TO GREEN SPECTRUM
-   ============================================ */
 :root {
-  /* Background Colors */
-  --background: #1A1F2E;
-  --background-dark: #141821;
-  --card-bg: #232A3B;
-  --card-bg-hover: #2A3347;
-  
-  /* Border Colors */
-  --border-color: #2E3650;
+  /* Vuexy Dark Theme Color Palette */
+  --background: #25293C;
+  --background-dark: #1E2132;
+  --card-bg: #2F3349;
+  --card-bg-hover: #363A4F;
+  --border-color: #3B3F5C;
   
   /* Text Colors */
-  --text-primary: #E4E6F0;
-  --text-secondary: #A8B0C5;
-  --text-muted: #6B7A99;
+  --text-primary: #E7E9F6;
+  --text-secondary: #A3A4B5;
+  --text-muted: #787B8D;
   
-  /* Primary - Blue to Teal Gradient */
-  --primary: #0EA5E9;
-  --primary-light: #38BDF8;
-  --primary-dark: #0284C7;
-  --primary-bg: rgba(14, 165, 233, 0.15);
+  /* Accent Colors */
+  --primary: #7367F0;
+  --primary-light: #8F85F3;
+  --primary-dark: #5A50D9;
+  --primary-bg: rgba(115, 103, 240, 0.16);
   
-  /* Secondary - Teal/Cyan */
-  --secondary: #14B8A6;
-  --secondary-light: #2DD4BF;
-  --secondary-bg: rgba(20, 184, 166, 0.15);
+  --success: #28C76F;
+  --success-bg: rgba(40, 199, 111, 0.16);
   
-  /* Accent - Emerald Green */
-  --accent: #10B981;
-  --accent-light: #34D399;
-  --accent-bg: rgba(16, 185, 129, 0.15);
+  --warning: #FF9F43;
+  --warning-bg: rgba(255, 159, 67, 0.16);
   
-  /* Success - Green */
-  --success: #22C55E;
-  --success-bg: rgba(34, 197, 94, 0.15);
+  --danger: #EA5455;
+  --danger-bg: rgba(234, 84, 85, 0.16);
   
-  /* Warning - Amber */
-  --warning: #F59E0B;
-  --warning-bg: rgba(245, 158, 11, 0.15);
-  
-  /* Danger - Red */
-  --danger: #EF4444;
-  --danger-bg: rgba(239, 68, 68, 0.15);
-  
-  /* Info - Sky Blue */
-  --info: #06B6D4;
-  --info-bg: rgba(6, 182, 212, 0.15);
+  --info: #00CFE8;
+  --info-bg: rgba(0, 207, 232, 0.16);
   
   /* Sidebar */
-  --sidebar-bg: #232A3B;
+  --sidebar-bg: #2F3349;
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 80px;
 }
@@ -78,7 +59,7 @@ body {
   }
 }
 
-/* Custom scrollbar */
+/* Custom scrollbar - Vuexy style */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -107,50 +88,30 @@ body {
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.25);
 }
 
-/* Glow effects */
+/* Glow effects for active states */
 .glow-primary {
-  box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+  box-shadow: 0 0 20px rgba(115, 103, 240, 0.4);
 }
 
-.glow-accent {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
-}
-
-/* Gradient backgrounds - Blue to Green spectrum */
+/* Gradient backgrounds */
 .gradient-primary {
-  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
-}
-
-.gradient-secondary {
-  background: linear-gradient(135deg, #14B8A6 0%, #10B981 100%);
-}
-
-.gradient-accent {
-  background: linear-gradient(135deg, #10B981 0%, #22C55E 100%);
+  background: linear-gradient(135deg, var(--primary) 0%, #9E95F5 100%);
 }
 
 .gradient-success {
-  background: linear-gradient(135deg, #22C55E 0%, #4ADE80 100%);
+  background: linear-gradient(135deg, var(--success) 0%, #48DA89 100%);
 }
 
 .gradient-warning {
-  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+  background: linear-gradient(135deg, var(--warning) 0%, #FFB976 100%);
 }
 
 .gradient-danger {
-  background: linear-gradient(135deg, #EF4444 0%, #F87171 100%);
+  background: linear-gradient(135deg, var(--danger) 0%, #F08182 100%);
 }
 
 .gradient-info {
-  background: linear-gradient(135deg, #06B6D4 0%, #22D3EE 100%);
-}
-
-/* Blue-Green gradient text */
-.text-gradient {
-  background: linear-gradient(135deg, #0EA5E9 0%, #10B981 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  background: linear-gradient(135deg, var(--info) 0%, #1CE7FF 100%);
 }
 
 /* Animation utilities */
@@ -176,11 +137,4 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease forwards;
-}
-
-/* Sidebar active item style */
-.sidebar-item-active {
-  background: linear-gradient(135deg, #0EA5E9 0%, #14B8A6 100%);
-  color: white;
-  box-shadow: 0 4px 15px rgba(14, 165, 233, 0.35);
 }
