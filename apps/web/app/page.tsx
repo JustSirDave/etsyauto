@@ -59,29 +59,29 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="flex-1 p-3 bg-[var(--background)] rounded-lg border border-[var(--border-color)]">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
+    <div className="flex-1 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
             {isConnected ? (
-              <CheckCircle className="w-4 h-4 text-[var(--success)]" />
+              <CheckCircle className="w-5 h-5 text-[var(--success)]" />
             ) : (
-              <XCircle className="w-4 h-4 text-[var(--danger)]" />
+              <XCircle className="w-5 h-5 text-[var(--danger)]" />
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-[var(--text-primary)] font-medium text-sm truncate">{name}</p>
+            <p className="text-[var(--text-primary)] font-medium truncate">{name}</p>
             {isConnected ? (
-              <p className="text-[var(--success)] text-xs truncate">{storeName || 'Connected'}</p>
+              <p className="text-[var(--success)] text-sm truncate">{storeName || 'Connected'}</p>
             ) : (
-              <p className="text-[var(--danger)] text-xs">Not Connected</p>
+              <p className="text-[var(--danger)] text-sm">Not Connected</p>
             )}
           </div>
         </div>
         {!isConnected && (
           <button
             onClick={onConnect}
-            className="px-2.5 py-1 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-xs font-medium rounded-md transition-colors flex-shrink-0"
+            className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
           >
             Connect
           </button>
@@ -305,10 +305,10 @@ function DashboardContent() {
         <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
       </div>
 
-      {/* Main Grid: Left / Right - Aligned Heights */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Main Grid: Left / Right */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {/* Left Column */}
-        <div className="grid grid-rows-2 gap-4">
+        <div className="flex flex-col gap-4">
           {/* Connection Status Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl px-4 pt-4 pb-3">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Connection Status</h2>
