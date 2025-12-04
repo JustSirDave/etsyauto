@@ -310,10 +310,10 @@ function DashboardContent() {
         {/* Left Column */}
         <div className="grid grid-rows-2 gap-4">
           {/* Connection Status Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl px-4 pt-4 pb-3">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Connection Status</h2>
             {loadingShops ? (
-              <div className="flex items-center justify-center py-4">
+              <div className="flex items-center justify-center py-2">
                 <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
@@ -334,7 +334,7 @@ function DashboardContent() {
           </div>
 
           {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl px-4 pt-4 pb-3">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Quick Actions</h2>
             <div className="grid grid-cols-3 gap-3">
               <QuickActionButton
