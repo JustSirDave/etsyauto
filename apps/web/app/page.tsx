@@ -59,10 +59,10 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="flex-1 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+    <div className="flex-1 p-5 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
+          <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
             {isConnected ? (
               <CheckCircle className="w-5 h-5 text-[var(--success)]" />
             ) : (
@@ -81,7 +81,7 @@ function ConnectionItem({
         {!isConnected && (
           <button
             onClick={onConnect}
-            className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+            className="px-4 py-2 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
           >
             Connect
           </button>
@@ -108,13 +108,13 @@ function QuickActionButton({
   return (
     <a
       href={href}
-      className="flex flex-col p-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group"
+      className="flex flex-col p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group"
     >
-      <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
-        <Icon className="w-4 h-4 text-white" />
+      <div className={`w-11 h-11 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+        <Icon className="w-5 h-5 text-white" />
       </div>
-      <p className="text-[var(--text-primary)] font-medium text-sm">{label}</p>
-      <p className="text-[var(--text-muted)] text-xs">{subtitle}</p>
+      <p className="text-[var(--text-primary)] font-medium">{label}</p>
+      <p className="text-[var(--text-muted)] text-sm">{subtitle}</p>
     </a>
   );
 }
@@ -136,17 +136,17 @@ function MetricCard({
   const isPositive = change >= 0;
 
   return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-      <div className="flex items-start justify-between mb-3">
-        <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center`}>
-          <Icon className="w-5 h-5 text-white" />
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+      <div className="flex items-start justify-between mb-4">
+        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
+          <Icon className="w-6 h-6 text-white" />
         </div>
         <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
           {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
           {isPositive ? '+' : ''}{change}%
         </div>
       </div>
-      <p className="text-2xl font-bold text-[var(--text-primary)] mb-0.5">{value}</p>
+      <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
       <p className="text-[var(--text-muted)] text-sm">{label}</p>
     </div>
   );
@@ -183,28 +183,28 @@ function TransactionRow({
   };
 
   return (
-    <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_auto_auto] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
-      <div className="text-left">
+    <div className="grid grid-cols-[100px_1fr_120px_100px_100px_120px] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
+      <div>
         <p className="text-[var(--text-primary)] font-medium">{orderId}</p>
       </div>
-      <div className="flex items-center gap-3 text-left">
+      <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
           {customer.charAt(0).toUpperCase()}
         </div>
         <p className="text-[var(--text-primary)]">{customer}</p>
       </div>
-      <div className="text-left">
+      <div>
         <p className="text-[var(--text-muted)]">{date}</p>
       </div>
-      <div className="text-left">
+      <div>
         <p className="text-[var(--text-primary)] font-semibold">{amount}</p>
       </div>
-      <div className="text-left">
+      <div>
         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${statusStyles[status]}`}>
           {statusLabels[status]}
         </span>
       </div>
-      <div className="text-left">
+      <div>
         <button
           onClick={onMessage}
           className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white text-sm font-medium rounded-lg transition-colors"
@@ -310,8 +310,8 @@ function DashboardContent() {
         {/* Left Column */}
         <div className="flex flex-col gap-4">
           {/* Connection Status Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl px-4 pt-4 pb-3">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Connection Status</h2>
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
             {loadingShops ? (
               <div className="flex items-center justify-center py-2">
                 <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
@@ -334,8 +334,8 @@ function DashboardContent() {
           </div>
 
           {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl px-4 pt-4 pb-3">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Quick Actions</h2>
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
             <div className="grid grid-cols-3 gap-3">
               <QuickActionButton
                 icon={Upload}
@@ -411,13 +411,13 @@ function DashboardContent() {
         </div>
 
         {/* Table Header */}
-        <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_auto_auto] gap-4 pb-3 border-b border-[var(--border-color)] text-sm font-medium text-[var(--text-muted)]">
-          <div className="text-left">Order ID</div>
-          <div className="text-left">Customer</div>
-          <div className="text-left">Date</div>
-          <div className="text-left">Amount</div>
-          <div className="text-left">Status</div>
-          <div className="text-left">Actions</div>
+        <div className="grid grid-cols-[100px_1fr_120px_100px_100px_120px] gap-4 pb-3 border-b border-[var(--border-color)] text-sm font-medium text-[var(--text-muted)]">
+          <div>Order ID</div>
+          <div>Customer</div>
+          <div>Date</div>
+          <div>Amount</div>
+          <div>Status</div>
+          <div>Actions</div>
         </div>
 
         {/* Transaction Rows */}
