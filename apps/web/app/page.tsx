@@ -11,7 +11,7 @@ import { useToast } from '@/lib/toast-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import OnboardingModal from '@/components/OnboardingModal';
-import { api } from '@/lib/api';
+import { onboardingApi } from '@/lib/api';
 import {
   DollarSign,
   Users,
@@ -145,7 +145,7 @@ function DashboardContent() {
 
   const handleCompleteOnboarding = async (shopName: string, description: string | null) => {
     try {
-      await api.onboarding.complete({ shop_name: shopName, shop_description: description });
+      await onboardingApi.complete(shopName, description);
       showToast('Shop setup complete!', 'success');
       setUser((prev: any) => prev ? { ...prev, tenant_name: shopName, onboarding_completed: true } : null);
       setShowOnboarding(false);
@@ -157,7 +157,7 @@ function DashboardContent() {
 
   const handleSkipOnboarding = async () => {
     try {
-      await api.onboarding.complete({ shop_name: user?.tenant_name || 'My Shop', shop_description: null });
+      await onboardingApi.complete(user?.tenant_name || 'My Shop', null);
       setUser((prev: any) => prev ? { ...prev, onboarding_completed: true } : null);
       showToast('You can complete setup anytime from Settings', 'info');
       setShowOnboarding(false);

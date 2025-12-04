@@ -3,38 +3,44 @@
 @tailwind utilities;
 
 :root {
-  /* Vuexy Dark Theme Color Palette */
-  --background: #25293C;
-  --background-dark: #1E2132;
-  --card-bg: #2F3349;
-  --card-bg-hover: #363A4F;
-  --border-color: #3B3F5C;
+  /* Blue-Green Dark Theme Color Palette */
+  --background: #0F172A;
+  --background-dark: #020617;
+  --card-bg: #1E293B;
+  --card-bg-hover: #273548;
+  --border-color: #334155;
   
   /* Text Colors */
-  --text-primary: #E7E9F6;
-  --text-secondary: #A3A4B5;
-  --text-muted: #787B8D;
+  --text-primary: #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
   
-  /* Accent Colors */
-  --primary: #7367F0;
-  --primary-light: #8F85F3;
-  --primary-dark: #5A50D9;
-  --primary-bg: rgba(115, 103, 240, 0.16);
+  /* Blue-Green Spectrum Accent Colors */
+  --primary: #3B82F6;
+  --primary-light: #60A5FA;
+  --primary-dark: #2563EB;
+  --primary-bg: rgba(59, 130, 246, 0.15);
   
-  --success: #28C76F;
-  --success-bg: rgba(40, 199, 111, 0.16);
+  --success: #10B981;
+  --success-light: #34D399;
+  --success-bg: rgba(16, 185, 129, 0.15);
   
-  --warning: #FF9F43;
-  --warning-bg: rgba(255, 159, 67, 0.16);
+  --info: #06B6D4;
+  --info-light: #22D3EE;
+  --info-bg: rgba(6, 182, 212, 0.15);
   
-  --danger: #EA5455;
-  --danger-bg: rgba(234, 84, 85, 0.16);
+  --warning: #F59E0B;
+  --warning-bg: rgba(245, 158, 11, 0.15);
   
-  --info: #00CFE8;
-  --info-bg: rgba(0, 207, 232, 0.16);
+  --danger: #EF4444;
+  --danger-bg: rgba(239, 68, 68, 0.15);
+  
+  /* Teal accent for variety */
+  --teal: #14B8A6;
+  --teal-bg: rgba(20, 184, 166, 0.15);
   
   /* Sidebar */
-  --sidebar-bg: #2F3349;
+  --sidebar-bg: #1E293B;
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 80px;
 }
@@ -90,28 +96,45 @@ body {
 
 /* Glow effects for active states */
 .glow-primary {
-  box-shadow: 0 0 20px rgba(115, 103, 240, 0.4);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
 }
 
-/* Gradient backgrounds */
+.glow-success {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.glow-info {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+}
+
+/* Gradient backgrounds - Blue to Green spectrum */
 .gradient-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, #9E95F5 100%);
+  background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
 }
 
 .gradient-success {
-  background: linear-gradient(135deg, var(--success) 0%, #48DA89 100%);
-}
-
-.gradient-warning {
-  background: linear-gradient(135deg, var(--warning) 0%, #FFB976 100%);
-}
-
-.gradient-danger {
-  background: linear-gradient(135deg, var(--danger) 0%, #F08182 100%);
+  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
 }
 
 .gradient-info {
-  background: linear-gradient(135deg, var(--info) 0%, #1CE7FF 100%);
+  background: linear-gradient(135deg, #06B6D4 0%, #22D3EE 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #EF4444 0%, #F87171 100%);
+}
+
+/* Blue-to-Green spectrum gradient */
+.gradient-blue-green {
+  background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 50%, #10B981 100%);
+}
+
+.gradient-teal {
+  background: linear-gradient(135deg, #14B8A6 0%, #2DD4BF 100%);
 }
 
 /* Animation utilities */
@@ -137,4 +160,55 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease forwards;
+}
+
+/* Sidebar active item with blue-green gradient */
+.sidebar-item-active {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.15) 0%, rgba(6, 182, 212, 0.08) 100%);
+  border-left: 3px solid var(--primary);
+}
+
+/* Custom scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Input focus states with blue glow */
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* Button primary with blue-green gradient */
+.btn-primary {
+  background: linear-gradient(135deg, #3B82F6 0%, #06B6D4 100%);
+  color: white;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Success button with green gradient */
+.btn-success {
+  background: linear-gradient(135deg, #10B981 0%, #14B8A6 100%);
+  color: white;
+  border: none;
 }
