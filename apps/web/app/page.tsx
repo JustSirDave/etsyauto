@@ -1,7 +1,10 @@
 'use client';
 
 /**
- * Dashboard Page - Two Column Layout
+ * Dashboard Page - Redesigned Layout
+ * Left: 40% (Connection Status + Quick Actions)
+ * Right: 60% (Key Metrics 2x2)
+ * Full Width: Recent Transactions
  */
 
 import { Suspense, useEffect, useState } from 'react';
@@ -9,68 +12,23 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import OnboardingModal from '@/components/OnboardingModal';
 import { onboardingApi, shopsApi } from '@/lib/api';
 import {
-  DollarSign,
   Package,
+  Users,
   ShoppingCart,
-  Star,
-  ArrowUp,
-  ArrowDown,
-  MoreVertical,
-  Sparkles,
-  Calendar,
   FileText,
-  Settings,
   CheckCircle,
   XCircle,
+  Upload,
+  Sparkles,
+  Calendar,
+  TrendingUp,
+  TrendingDown,
+  MessageCircle,
+  Link as LinkIcon,
 } from 'lucide-react';
-
-// Stats Card Component
-function StatsCard({
-  title,
-  value,
-  subtitle,
-  change,
-  changeType,
-  icon: Icon,
-  iconBg,
-}: {
-  title: string;
-  value: string;
-  subtitle?: string;
-  change?: string;
-  changeType?: 'up' | 'down';
-  icon: React.ComponentType<{ className?: string }>;
-  iconBg: string;
-}) {
-  return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[var(--text-muted)] text-sm">{title}</p>
-          <p className="text-2xl font-bold text-[var(--text-primary)] mt-1">{value}</p>
-          {(subtitle || change) && (
-            <div className="flex items-center gap-2 mt-1">
-              {subtitle && <span className="text-sm text-[var(--text-muted)]">{subtitle}</span>}
-              {change && (
-                <span className={`flex items-center gap-0.5 text-sm font-medium ${changeType === 'up' ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
-                  {changeType === 'up' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                  {change}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // Welcome Handler Component
 function WelcomeHandler() {
@@ -87,30 +45,188 @@ function WelcomeHandler() {
   return null;
 }
 
+// Connection Item Component
+function ConnectionItem({
+  name,
+  status,
+  storeName,
+  onConnect,
+}: {
+  name: string;
+  status: 'connected' | 'disconnected';
+  storeName?: string;
+  onConnect?: () => void;
+}) {
+  const isConnected = status === 'connected';
+
+  return (
+    <div className="flex items-center justify-between p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+      <div className="flex items-center gap-3">
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
+          {isConnected ? (
+            <CheckCircle className="w-5 h-5 text-[var(--success)]" />
+          ) : (
+            <XCircle className="w-5 h-5 text-[var(--danger)]" />
+          )}
+        </div>
+        <div>
+          <p className="text-[var(--text-primary)] font-medium">{name}</p>
+          {isConnected ? (
+            <p className="text-[var(--success)] text-sm">{storeName || 'Connected'}</p>
+          ) : (
+            <p className="text-[var(--danger)] text-sm">Not Connected</p>
+          )}
+        </div>
+      </div>
+      {!isConnected && (
+        <button
+          onClick={onConnect}
+          className="px-4 py-2 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          Connect
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Quick Action Button Component
+function QuickActionButton({
+  icon: Icon,
+  label,
+  subtitle,
+  href,
+  color,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  subtitle: string;
+  href: string;
+  color: string;
+}) {
+  return (
+    <a
+      href={href}
+      className="flex flex-col p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group"
+    >
+      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+        <Icon className="w-5 h-5 text-white" />
+      </div>
+      <p className="text-[var(--text-primary)] font-semibold">{label}</p>
+      <p className="text-[var(--text-muted)] text-sm">{subtitle}</p>
+    </a>
+  );
+}
+
+// Metric Card Component
+function MetricCard({
+  icon: Icon,
+  value,
+  label,
+  change,
+  changeLabel,
+  iconBg,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  value: string | number;
+  label: string;
+  change: number;
+  changeLabel?: string;
+  iconBg: string;
+}) {
+  const isPositive = change >= 0;
+
+  return (
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 flex flex-col h-full">
+      <div className="flex items-start justify-between mb-4">
+        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+        <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+          {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          {isPositive ? '+' : ''}{change}%
+        </div>
+      </div>
+      <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
+      <p className="text-[var(--text-muted)] text-sm">{label}</p>
+      {changeLabel && (
+        <p className="text-[var(--text-muted)] text-xs mt-1">{changeLabel}</p>
+      )}
+    </div>
+  );
+}
+
 // Transaction Row Component
-function TransactionRow({ id, customer, amount, status }: { id: string; customer: string; amount: string; status: 'paid' | 'pending' | 'refunded' }) {
+function TransactionRow({
+  orderId,
+  customer,
+  date,
+  amount,
+  status,
+  onMessage,
+}: {
+  orderId: string;
+  customer: string;
+  date: string;
+  amount: string;
+  status: 'paid' | 'pending' | 'refunded' | 'processing';
+  onMessage: () => void;
+}) {
   const statusStyles = {
     paid: 'bg-[var(--success-bg)] text-[var(--success)]',
     pending: 'bg-[var(--warning-bg)] text-[var(--warning)]',
     refunded: 'bg-[var(--danger-bg)] text-[var(--danger)]',
+    processing: 'bg-[var(--info-bg)] text-[var(--info)]',
+  };
+
+  const statusLabels = {
+    paid: 'Paid',
+    pending: 'Pending',
+    refunded: 'Refunded',
+    processing: 'Processing',
   };
 
   return (
-    <div className="flex items-center justify-between py-3 border-b border-[var(--border-color)] last:border-0">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-white font-semibold text-sm">
-          {customer.charAt(0)}
-        </div>
-        <div>
-          <p className="text-[var(--text-primary)] font-medium">{customer}</p>
-          <p className="text-[var(--text-muted)] text-sm">{id}</p>
-        </div>
+    <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto_auto] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
+      {/* Order ID */}
+      <div>
+        <p className="text-[var(--text-primary)] font-medium">{orderId}</p>
       </div>
-      <div className="text-right">
-        <p className="text-[var(--text-primary)] font-medium">{amount}</p>
-        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${statusStyles[status]}`}>
-          {status.charAt(0).toUpperCase() + status.slice(1)}
+
+      {/* Customer */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+          {customer.charAt(0).toUpperCase()}
+        </div>
+        <p className="text-[var(--text-primary)]">{customer}</p>
+      </div>
+
+      {/* Date */}
+      <div>
+        <p className="text-[var(--text-muted)]">{date}</p>
+      </div>
+
+      {/* Amount */}
+      <div>
+        <p className="text-[var(--text-primary)] font-semibold">{amount}</p>
+      </div>
+
+      {/* Status */}
+      <div>
+        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${statusStyles[status]}`}>
+          {statusLabels[status]}
         </span>
+      </div>
+
+      {/* Action */}
+      <div>
+        <button
+          onClick={onMessage}
+          className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white text-sm font-medium rounded-lg transition-colors"
+        >
+          <MessageCircle className="w-4 h-4" />
+          Message
+        </button>
       </div>
     </div>
   );
@@ -169,7 +285,29 @@ function DashboardContent() {
     }
   };
 
+  const handleMessageCustomer = (customer: string) => {
+    showToast(`Opening message interface for ${customer}...`, 'info');
+    // TODO: Implement messaging modal
+  };
+
   const etsyShop = shops.find((s) => s.status === 'connected');
+
+  // Mock data for metrics (replace with real API data)
+  const metrics = {
+    totalProducts: 0,
+    totalCustomers: 0,
+    totalOrders: 0,
+    activeListings: 0,
+  };
+
+  // Mock transactions (replace with real API data)
+  const transactions = [
+    { orderId: 'ETSY001', customer: 'John Doe', date: '2025-10-17', amount: '$125.00', status: 'processing' as const },
+    { orderId: 'ETSY002', customer: 'Sarah Wilson', date: '2025-10-16', amount: '$89.99', status: 'paid' as const },
+    { orderId: 'ETSY003', customer: 'Mike Johnson', date: '2025-10-15', amount: '$234.50', status: 'paid' as const },
+    { orderId: 'ETSY004', customer: 'Emma Davis', date: '2025-10-14', amount: '$45.00', status: 'pending' as const },
+    { orderId: 'ETSY005', customer: 'James Brown', date: '2025-10-13', amount: '$178.00', status: 'refunded' as const },
+  ];
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
@@ -179,167 +317,145 @@ function DashboardContent() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-          Welcome back, {user?.name?.split(' ')[0] || 'there'}! 👋
-        </h1>
-        <p className="text-[var(--text-muted)] mt-1">Here's what's happening with your shop today</p>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
+        <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
       </div>
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column - Connection Status & Quick Actions */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Shop Connection Status */}
-          <DashboardCard title="Shop Connection" subtitle="Etsy Integration">
-            {loadingShops ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : etsyShop ? (
-              <div className="flex items-center gap-3 py-2">
-                <div className="w-12 h-12 rounded-xl bg-[var(--success-bg)] flex items-center justify-center">
-                  <CheckCircle className="w-6 h-6 text-[var(--success)]" />
+      {/* Main Grid: Left 40% / Right 60% */}
+      <div className="grid grid-cols-1 lg:grid-cols-[40%_60%] gap-6">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Connection Status Card */}
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 h-fit">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
+            <div className="space-y-3">
+              {loadingShops ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
                 </div>
-                <div>
-                  <p className="text-[var(--text-primary)] font-semibold">{etsyShop.display_name}</p>
-                  <p className="text-[var(--success)] text-sm">Connected</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 py-2">
-                <div className="w-12 h-12 rounded-xl bg-[var(--danger-bg)] flex items-center justify-center">
-                  <XCircle className="w-6 h-6 text-[var(--danger)]" />
-                </div>
-                <div>
-                  <p className="text-[var(--text-primary)] font-semibold">No Shop Connected</p>
-                  <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to get started</p>
-                </div>
-              </div>
-            )}
-            {!etsyShop && !loadingShops && (
-              <a
-                href="/settings"
-                className="mt-4 w-full py-2.5 gradient-primary text-white font-medium rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2"
-              >
-                Connect Etsy Shop
-              </a>
-            )}
-          </DashboardCard>
-
-          {/* Quick Actions */}
-          <DashboardCard title="Quick Actions">
-            <div className="grid grid-cols-2 gap-3">
-              <a
-                href="/products"
-                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:bg-[var(--primary-bg)] transition-colors group"
-              >
-                <Package className="w-6 h-6 text-[var(--primary)] mb-2 group-hover:scale-110 transition-transform" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">Products</span>
-              </a>
-              <a
-                href="/ai"
-                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--info)] hover:bg-[var(--info-bg)] transition-colors group"
-              >
-                <Sparkles className="w-6 h-6 text-[var(--info)] mb-2 group-hover:scale-110 transition-transform" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">AI Gen</span>
-              </a>
-              <a
-                href="/schedules"
-                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--warning)] hover:bg-[var(--warning-bg)] transition-colors group"
-              >
-                <Calendar className="w-6 h-6 text-[var(--warning)] mb-2 group-hover:scale-110 transition-transform" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">Schedules</span>
-              </a>
-              <a
-                href="/listings"
-                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--success)] hover:bg-[var(--success-bg)] transition-colors group"
-              >
-                <FileText className="w-6 h-6 text-[var(--success)] mb-2 group-hover:scale-110 transition-transform" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">Listings</span>
-              </a>
-              <a
-                href="/settings"
-                className="flex flex-col items-center justify-center p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--text-muted)] hover:bg-[var(--card-bg-hover)] transition-colors group col-span-2"
-              >
-                <Settings className="w-6 h-6 text-[var(--text-muted)] mb-2 group-hover:scale-110 transition-transform" />
-                <span className="text-sm text-[var(--text-primary)] font-medium">Settings</span>
-              </a>
+              ) : (
+                <>
+                  <ConnectionItem
+                    name="Etsy Shop"
+                    status={etsyShop ? 'connected' : 'disconnected'}
+                    storeName={etsyShop?.display_name || user?.tenant_name}
+                    onConnect={() => window.location.href = '/settings'}
+                  />
+                  <ConnectionItem
+                    name="Supplier API"
+                    status="disconnected"
+                    onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
+                  />
+                </>
+              )}
             </div>
-          </DashboardCard>
-        </div>
-
-        {/* Right Column - Key Metrics & Charts */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Key Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <StatsCard
-              title="Total Revenue"
-              value="$45,385"
-              subtitle="This month"
-              change="+12.5%"
-              changeType="up"
-              icon={DollarSign}
-              iconBg="gradient-success"
-            />
-            <StatsCard
-              title="Total Orders"
-              value="1,247"
-              subtitle="This month"
-              change="+8.2%"
-              changeType="up"
-              icon={ShoppingCart}
-              iconBg="gradient-primary"
-            />
-            <StatsCard
-              title="Active Listings"
-              value="156"
-              subtitle="Currently live"
-              change="+3.1%"
-              changeType="up"
-              icon={Package}
-              iconBg="gradient-info"
-            />
-            <StatsCard
-              title="Shop Rating"
-              value="4.9 ⭐"
-              subtitle="From 2,453 reviews"
-              change="-0.1"
-              changeType="down"
-              icon={Star}
-              iconBg="gradient-warning"
-            />
           </div>
 
-          {/* Revenue Overview */}
-          <DashboardCard
-            title="Revenue Overview"
-            subtitle="Monthly breakdown"
-            action={
-              <button className="p-2 hover:bg-[var(--background)] rounded-lg transition-colors">
-                <MoreVertical className="w-5 h-5 text-[var(--text-muted)]" />
-              </button>
-            }
-          >
-            <div className="h-64 flex items-center justify-center border border-dashed border-[var(--border-color)] rounded-xl text-[var(--text-muted)]">
-              Revenue Chart Placeholder
+          {/* Quick Actions Card */}
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <QuickActionButton
+                icon={Upload}
+                label="Import Products"
+                subtitle="Upload CSV"
+                href="/products/import"
+                color="bg-[var(--primary)]"
+              />
+              <QuickActionButton
+                icon={Sparkles}
+                label="AI Content"
+                subtitle="Generate"
+                href="/ai"
+                color="bg-[var(--info)]"
+              />
+              <QuickActionButton
+                icon={LinkIcon}
+                label="Connect Etsy"
+                subtitle="Link shop"
+                href="/settings"
+                color="bg-[var(--success)]"
+              />
             </div>
-          </DashboardCard>
+          </div>
+        </div>
 
-          {/* Recent Transactions */}
-          <DashboardCard
-            title="Recent Transactions"
-            subtitle="Latest orders"
-            action={
-              <a href="/orders" className="text-sm text-[var(--primary)] hover:underline">
-                View All
-              </a>
-            }
+        {/* Right Column - Key Metrics 2x2 Grid */}
+        <div className="space-y-6">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Key Metrics</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <MetricCard
+              icon={Package}
+              value={metrics.totalProducts}
+              label="Total Products"
+              change={12}
+              iconBg="bg-[var(--primary)]"
+            />
+            <MetricCard
+              icon={FileText}
+              value={metrics.activeListings}
+              label="Active Listings"
+              change={8}
+              iconBg="bg-[var(--info)]"
+            />
+            <MetricCard
+              icon={Sparkles}
+              value={0}
+              label="AI Generations"
+              change={0}
+              changeLabel="Today"
+              iconBg="bg-[var(--warning)]"
+            />
+            <MetricCard
+              icon={ShoppingCart}
+              value="$0.00"
+              label="AI Costs"
+              change={0}
+              changeLabel="This month"
+              iconBg="bg-[var(--success)]"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Full Width - Recent Transactions */}
+      <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Recent Orders</h2>
+            <p className="text-[var(--text-muted)] text-sm">Latest customer transactions</p>
+          </div>
+          <a
+            href="/orders"
+            className="text-[var(--primary)] hover:underline text-sm font-medium"
           >
-            <TransactionRow id="#ORD-7234" customer="Sarah Wilson" amount="$125.00" status="paid" />
-            <TransactionRow id="#ORD-7233" customer="Mike Johnson" amount="$89.99" status="pending" />
-            <TransactionRow id="#ORD-7232" customer="Emma Davis" amount="$234.50" status="paid" />
-            <TransactionRow id="#ORD-7231" customer="James Brown" amount="$45.00" status="refunded" />
-          </DashboardCard>
+            View All
+          </a>
+        </div>
+
+        {/* Table Header */}
+        <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto_auto] gap-4 pb-3 border-b border-[var(--border-color)] text-sm font-medium text-[var(--text-muted)]">
+          <div>Order ID</div>
+          <div>Customer</div>
+          <div>Date</div>
+          <div>Amount</div>
+          <div>Status</div>
+          <div>Actions</div>
+        </div>
+
+        {/* Transaction Rows */}
+        <div>
+          {transactions.map((transaction) => (
+            <TransactionRow
+              key={transaction.orderId}
+              orderId={transaction.orderId}
+              customer={transaction.customer}
+              date={transaction.date}
+              amount={transaction.amount}
+              status={transaction.status}
+              onMessage={() => handleMessageCustomer(transaction.customer)}
+            />
+          ))}
         </div>
       </div>
 
