@@ -39,13 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = async () => {
     try {
-      console.log('🔍 Loading user...');
       const currentUser = await authApi.getCurrentUser();
-      console.log('✅ User loaded:', currentUser);
       setUser(currentUser);
     } catch (err) {
-      // No valid token, user not logged in
-      console.log('❌ Failed to load user:', err);
+      // No valid token, user not logged in - fail silently for UI viewing
       removeAuthToken();
       setUser(null);
     } finally {
