@@ -16,6 +16,7 @@ import OnboardingModal from '@/components/OnboardingModal';
 import { onboardingApi, shopsApi } from '@/lib/api';
 import {
   Package,
+  Users,
   ShoppingCart,
   FileText,
   CheckCircle,
@@ -58,29 +59,29 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="flex-1 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
+    <div className="flex-1 p-3 bg-[var(--background)] rounded-lg border border-[var(--border-color)]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
             {isConnected ? (
-              <CheckCircle className="w-5 h-5 text-[var(--success)]" />
+              <CheckCircle className="w-4 h-4 text-[var(--success)]" />
             ) : (
-              <XCircle className="w-5 h-5 text-[var(--danger)]" />
+              <XCircle className="w-4 h-4 text-[var(--danger)]" />
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-[var(--text-primary)] font-medium truncate">{name}</p>
+            <p className="text-[var(--text-primary)] font-medium text-sm truncate">{name}</p>
             {isConnected ? (
-              <p className="text-[var(--success)] text-sm truncate">{storeName || 'Connected'}</p>
+              <p className="text-[var(--success)] text-xs truncate">{storeName || 'Connected'}</p>
             ) : (
-              <p className="text-[var(--danger)] text-sm">Not Connected</p>
+              <p className="text-[var(--danger)] text-xs">Not Connected</p>
             )}
           </div>
         </div>
         {!isConnected && (
           <button
             onClick={onConnect}
-            className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-sm font-medium rounded-lg transition-colors flex-shrink-0"
+            className="px-2.5 py-1 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-xs font-medium rounded-md transition-colors flex-shrink-0"
           >
             Connect
           </button>
@@ -107,13 +108,13 @@ function QuickActionButton({
   return (
     <a
       href={href}
-      className="flex flex-col p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group"
+      className="flex flex-col p-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group"
     >
-      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-        <Icon className="w-5 h-5 text-white" />
+      <div className={`w-9 h-9 rounded-lg ${color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
+        <Icon className="w-4 h-4 text-white" />
       </div>
-      <p className="text-[var(--text-primary)] font-semibold">{label}</p>
-      <p className="text-[var(--text-muted)] text-sm">{subtitle}</p>
+      <p className="text-[var(--text-primary)] font-medium text-sm">{label}</p>
+      <p className="text-[var(--text-muted)] text-xs">{subtitle}</p>
     </a>
   );
 }
@@ -124,34 +125,29 @@ function MetricCard({
   value,
   label,
   change,
-  changeLabel,
   iconBg,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   value: string | number;
   label: string;
   change: number;
-  changeLabel?: string;
   iconBg: string;
 }) {
   const isPositive = change >= 0;
 
   return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 flex flex-col h-full">
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
-          <Icon className="w-6 h-6 text-white" />
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`w-10 h-10 rounded-lg ${iconBg} flex items-center justify-center`}>
+          <Icon className="w-5 h-5 text-white" />
         </div>
         <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
           {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
           {isPositive ? '+' : ''}{change}%
         </div>
       </div>
-      <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
+      <p className="text-2xl font-bold text-[var(--text-primary)] mb-0.5">{value}</p>
       <p className="text-[var(--text-muted)] text-sm">{label}</p>
-      {changeLabel && (
-        <p className="text-[var(--text-muted)] text-xs mt-1">{changeLabel}</p>
-      )}
     </div>
   );
 }
@@ -188,37 +184,26 @@ function TransactionRow({
 
   return (
     <div className="grid grid-cols-[1fr_1.5fr_1fr_1fr_auto_auto] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
-      {/* Order ID */}
       <div className="text-left">
         <p className="text-[var(--text-primary)] font-medium">{orderId}</p>
       </div>
-
-      {/* Customer */}
       <div className="flex items-center gap-3 text-left">
         <div className="w-9 h-9 rounded-full gradient-primary flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
           {customer.charAt(0).toUpperCase()}
         </div>
         <p className="text-[var(--text-primary)]">{customer}</p>
       </div>
-
-      {/* Date */}
       <div className="text-left">
         <p className="text-[var(--text-muted)]">{date}</p>
       </div>
-
-      {/* Amount */}
       <div className="text-left">
         <p className="text-[var(--text-primary)] font-semibold">{amount}</p>
       </div>
-
-      {/* Status */}
       <div className="text-left">
         <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${statusStyles[status]}`}>
           {statusLabels[status]}
         </span>
       </div>
-
-      {/* Action */}
       <div className="text-left">
         <button
           onClick={onMessage}
@@ -287,7 +272,6 @@ function DashboardContent() {
 
   const handleMessageCustomer = (customer: string) => {
     showToast(`Opening message interface for ${customer}...`, 'info');
-    // TODO: Implement messaging modal
   };
 
   const etsyShop = shops.find((s) => s.status === 'connected');
@@ -295,9 +279,9 @@ function DashboardContent() {
   // Mock data for metrics (replace with real API data)
   const metrics = {
     totalProducts: 0,
+    totalCustomers: 0,
+    totalOrders: 0,
     activeListings: 0,
-    aiGenerations: 0,
-    aiCosts: '$0.00',
   };
 
   // Mock transactions (replace with real API data)
@@ -321,16 +305,16 @@ function DashboardContent() {
         <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
       </div>
 
-      {/* Main Grid: Left 40% / Right 60% - Equal Heights */}
-      <div className="grid grid-cols-1 lg:grid-cols-[40%_1fr] gap-6">
-        {/* Left Column - Same height as right */}
-        <div className="flex flex-col gap-6">
+      {/* Main Grid: Left / Right - Aligned Heights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left Column */}
+        <div className="grid grid-rows-2 gap-4">
           {/* Connection Status Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 flex-1">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Connection Status</h2>
             {loadingShops ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center py-4">
+                <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
               <div className="flex gap-3">
@@ -350,8 +334,8 @@ function DashboardContent() {
           </div>
 
           {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 flex-1">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Quick Actions</h2>
             <div className="grid grid-cols-3 gap-3">
               <QuickActionButton
                 icon={Upload}
@@ -378,8 +362,8 @@ function DashboardContent() {
           </div>
         </div>
 
-        {/* Right Column - Key Metrics 2x2 Grid (no header text) */}
-        <div className="grid grid-cols-2 gap-4 content-start">
+        {/* Right Column - Key Metrics 2x2 Grid */}
+        <div className="grid grid-cols-2 grid-rows-2 gap-4">
           <MetricCard
             icon={Package}
             value={metrics.totalProducts}
@@ -388,26 +372,24 @@ function DashboardContent() {
             iconBg="bg-[var(--primary)]"
           />
           <MetricCard
-            icon={FileText}
-            value={metrics.activeListings}
-            label="Active Listings"
+            icon={Users}
+            value={metrics.totalCustomers}
+            label="Total Customers"
             change={8}
             iconBg="bg-[var(--info)]"
           />
           <MetricCard
-            icon={Sparkles}
-            value={metrics.aiGenerations}
-            label="AI Generations"
-            change={0}
-            changeLabel="Today"
+            icon={ShoppingCart}
+            value={metrics.totalOrders}
+            label="Total Orders"
+            change={15}
             iconBg="bg-[var(--warning)]"
           />
           <MetricCard
-            icon={ShoppingCart}
-            value={metrics.aiCosts}
-            label="AI Costs"
-            change={0}
-            changeLabel="This month"
+            icon={FileText}
+            value={metrics.activeListings}
+            label="Active Listings"
+            change={5}
             iconBg="bg-[var(--success)]"
           />
         </div>
