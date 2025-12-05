@@ -3,9 +3,6 @@
  * Handles all HTTP requests to the FastAPI backend
  */
 
-// Use local API routes for demo, or external API if specified
-// Use environment variable or default to localhost for development
-// In production, this will be set to the frontend URL, and nginx will proxy /api to the backend
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 export interface ApiError {

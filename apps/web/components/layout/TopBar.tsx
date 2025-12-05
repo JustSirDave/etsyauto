@@ -163,13 +163,13 @@ export function TopBar() {
 
                   {/* Logout */}
                   <div className="p-2 border-t border-[var(--border-color)]">
-                    <button
-                      onClick={handleLogout}
+            <button
+              onClick={handleLogout}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
+            >
+              <LogOut className="w-4 h-4" />
                       <span>Logout</span>
-                    </button>
+            </button>
                   </div>
                 </div>
               </>

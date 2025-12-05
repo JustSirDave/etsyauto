@@ -7,11 +7,11 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import {
-  LayoutDashboard,
-  Package,
-  FileText,
-  ShoppingCart,
+import { 
+  LayoutDashboard, 
+  Package, 
+  FileText, 
+  ShoppingCart, 
   Calendar,
   Settings,
   BarChart3,
@@ -38,34 +38,34 @@ interface NavSection {
 const navigation: NavSection[] = [
   {
     items: [
-      { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     ],
   },
   {
     title: 'SHOP MANAGEMENT',
     items: [
-      { name: 'Products', href: '/products', icon: Package },
-      { name: 'Listings', href: '/listings', icon: FileText },
-      { name: 'Orders', href: '/orders', icon: ShoppingCart },
+  { name: 'Products', href: '/products', icon: Package },
+  { name: 'Listings', href: '/listings', icon: FileText },
+  { name: 'Orders', href: '/orders', icon: ShoppingCart },
     ],
   },
   {
     title: 'AUTOMATION',
     items: [
       { name: 'AI Generation', href: '/ai', icon: Sparkles },
-      { name: 'Schedules', href: '/schedules', icon: Calendar },
+  { name: 'Schedules', href: '/schedules', icon: Calendar },
     ],
   },
   {
     title: 'ANALYTICS',
     items: [
-      { name: 'Usage & Costs', href: '/usage', icon: BarChart3 },
+  { name: 'Usage & Costs', href: '/usage', icon: BarChart3 },
     ],
   },
   {
     title: 'SETTINGS',
     items: [
-      { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Settings', href: '/settings', icon: Settings },
     ],
   },
 ];
@@ -151,26 +151,26 @@ export function Sidebar() {
               {section.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
-
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={cn(
+          
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={cn(
                       'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative',
                       isCollapsed && 'justify-center',
-                      isActive
+                isActive
                         ? 'bg-gradient-to-r from-[var(--primary)] to-[var(--info)] text-white shadow-md shadow-[var(--primary)]/30'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
-                    )}
+              )}
                     title={isCollapsed ? item.name : undefined}
-                  >
+            >
                     <Icon className={cn(
                       'w-5 h-5 flex-shrink-0',
                       isActive ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
                     )} />
                     {!isCollapsed && (
-                      <span className="font-medium">{item.name}</span>
+              <span className="font-medium">{item.name}</span>
                     )}
                     
                     {/* Tooltip for collapsed state */}
@@ -179,9 +179,9 @@ export function Sidebar() {
                         {item.name}
                       </div>
                     )}
-                  </Link>
+            </Link>
                 );
-              })}
+        })}
             </div>
           </div>
         ))}
