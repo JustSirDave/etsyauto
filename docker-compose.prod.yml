@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -46,7 +44,8 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-etsy_platform}
       REDIS_URL: redis://redis:6379/0
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       JWT_ISSUER: ${JWT_ISSUER:-etsy-automation-platform}
       ENVIRONMENT: production
       CORS_ORIGINS: ${FRONTEND_URL}
