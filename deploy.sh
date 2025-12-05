@@ -7,16 +7,16 @@ set -e
 
 echo "🚀 Starting deployment to BlueVPS..."
 
-# Check if .env.production exists
-if [ ! -f .env.production ]; then
-    echo "❌ Error: .env.production file not found!"
-    echo "📝 Please copy .env.production.example to .env.production and fill in your values"
+# Check if .env exists
+if [ ! -f .env ]; then
+    echo "❌ Error: .env file not found!"
+    echo "📝 Please copy env.production.example to .env and fill in your values"
     exit 1
 fi
 
-# Load environment variables (if .env.production exists)
-if [ -f .env.production ]; then
-    export $(cat .env.production | grep -v '^#' | xargs)
+# Load environment variables (if .env exists)
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
 fi
 
 # Pull latest code
