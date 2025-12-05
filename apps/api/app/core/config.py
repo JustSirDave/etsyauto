@@ -76,8 +76,18 @@ class Settings(BaseSettings):
                 if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
                     print("⚠️  Warning: JWT keys not found in files or environment. Authentication will not work.")
 
-    # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    # CORS - Can be a comma-separated string or list
+    CORS_ORIGINS: str | List[str] = "http://localhost:3000,http://localhost:3001"
+    
+    def get_cors_origins(self) -> List[str]:
+        """Convert CORS_ORIGINS to a list of strings"""
+        if isinstance(self.CORS_ORIGINS, list):
+            return self.CORS_ORIGINS
+        elif isinstance(self.CORS_ORIGINS, str):
+            # Split by comma and strip whitespace
+            return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+        else:
+            return ["http://localhost:3000"]
 
     # Etsy API
     ETSY_CLIENT_ID: str = ""
