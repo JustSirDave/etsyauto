@@ -116,6 +116,18 @@ services:
     environment:
       - NODE_ENV=production
 
+  adminer:
+    image: adminer:latest
+    container_name: etsy-adminer
+    restart: always
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - etsy-network
+
   nginx:
     image: nginx:alpine
     container_name: etsy-nginx
@@ -129,6 +141,7 @@ services:
     depends_on:
       - api
       - web
+      - adminer
     networks:
       - etsy-network
 
