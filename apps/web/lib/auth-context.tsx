@@ -78,9 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Redirect to dashboard
       router.push('/');
-    } catch (err) {
-      const apiError = err as ApiError;
-      setError(apiError.detail || 'Login failed');
+    } catch (err: any) {
+      let detail = err?.detail || '';
+
+      // Handle FastAPI validation errors (array format)
+      if (Array.isArray(detail) && detail.length > 0) {
+        detail = detail.map((error: any) => error.msg).join('\n');
+      }
+
+      setError(detail || 'Login failed');
       throw err;
     } finally {
       setIsLoading(false);
@@ -126,10 +132,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Status 202 means account created successfully but needs email verification
       // Check both err.status and fall through to message check
       const status = err?.status;
-      const detail = err?.detail || '';
-      
+      let detail = err?.detail || '';
+
+      // Handle FastAPI validation errors (array format)
+      if (Array.isArray(detail) && detail.length > 0) {
+        // Extract error messages from validation errors
+        detail = detail.map((error: any) => error.msg).join('\n');
+      }
+
       // 202 status OR success message indicates account was created
-      if (status === 202 || detail.toLowerCase().includes('account created')) {
+      if (status === 202 || (typeof detail === 'string' && detail.toLowerCase().includes('account created'))) {
         // This is a success case - store success message and redirect to login
         if (typeof window !== 'undefined') {
           sessionStorage.setItem('registration_success', detail || 'Account created! Please check your email to verify your account.');
