@@ -136,7 +136,7 @@ function MetricCard({
   const isPositive = change >= 0;
 
   return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 h-full flex flex-col">
       <div className="flex items-start justify-between mb-4">
         <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon className="w-6 h-6 text-white" />
@@ -146,8 +146,10 @@ function MetricCard({
           {isPositive ? '+' : ''}{change}%
         </div>
       </div>
-      <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
-      <p className="text-[var(--text-muted)] text-sm">{label}</p>
+      <div className="flex-1 flex flex-col justify-center">
+        <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
+        <p className="text-[var(--text-muted)] text-sm">{label}</p>
+      </div>
     </div>
   );
 }
@@ -305,38 +307,40 @@ function DashboardContent() {
         <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
       </div>
 
-      {/* Main Grid: Left / Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      {/* Main Grid: Left / Right - Equal Heights */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {/* Left Column */}
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-rows-2 gap-4 min-h-0">
           {/* Connection Status Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
-            {loadingShops ? (
-              <div className="flex items-center justify-center py-2">
-                <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : (
-              <div className="flex gap-3">
-                <ConnectionItem
-                  name="Etsy Shop"
-                  status={etsyShop ? 'connected' : 'disconnected'}
-                  storeName={etsyShop?.display_name || user?.tenant_name}
-                  onConnect={() => window.location.href = '/settings'}
-                />
-                <ConnectionItem
-                  name="Supplier API"
-                  status="disconnected"
-                  onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
-                />
-              </div>
-            )}
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 flex flex-col min-h-0">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex-shrink-0">Connection Status</h2>
+            <div className="flex-1 flex items-center min-h-0">
+              {loadingShops ? (
+                <div className="flex items-center justify-center w-full py-2">
+                  <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <div className="flex gap-3 w-full">
+                  <ConnectionItem
+                    name="Etsy Shop"
+                    status={etsyShop ? 'connected' : 'disconnected'}
+                    storeName={etsyShop?.display_name || user?.tenant_name}
+                    onConnect={() => window.location.href = '/settings'}
+                  />
+                  <ConnectionItem
+                    name="Supplier API"
+                    status="disconnected"
+                    onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-3 gap-3">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 flex flex-col min-h-0">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4 flex-shrink-0">Quick Actions</h2>
+            <div className="flex-1 grid grid-cols-3 gap-3 min-h-0">
               <QuickActionButton
                 icon={Upload}
                 label="Import Products"
@@ -363,7 +367,7 @@ function DashboardContent() {
         </div>
 
         {/* Right Column - Key Metrics 2x2 Grid */}
-        <div className="grid grid-cols-2 grid-rows-2 gap-4">
+        <div className="grid grid-cols-2 grid-rows-2 gap-4 min-h-0">
           <MetricCard
             icon={Package}
             value={metrics.totalProducts}
