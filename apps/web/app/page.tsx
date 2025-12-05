@@ -59,7 +59,7 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="flex-1 p-5 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+    <div className="flex-1 p-5 bg-[var(--background)] rounded-xl border border-[var(--border-color)] h-full">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className={`w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
@@ -108,7 +108,7 @@ function QuickActionButton({
   return (
     <a
       href={href}
-      className="flex flex-col p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group"
+      className="flex flex-col p-4 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group h-full"
     >
       <div className={`w-11 h-11 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
         <Icon className="w-5 h-5 text-white" />
@@ -136,7 +136,7 @@ function MetricCard({
   const isPositive = change >= 0;
 
   return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 h-full flex flex-col justify-between">
       <div className="flex items-start justify-between mb-4">
         <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon className="w-6 h-6 text-white" />
@@ -146,8 +146,10 @@ function MetricCard({
           {isPositive ? '+' : ''}{change}%
         </div>
       </div>
-      <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
-      <p className="text-[var(--text-muted)] text-sm">{label}</p>
+      <div>
+        <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
+        <p className="text-[var(--text-muted)] text-sm">{label}</p>
+      </div>
     </div>
   );
 }
@@ -306,9 +308,9 @@ function DashboardContent() {
       </div>
 
       {/* Main Grid: Left / Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {/* Left Column */}
-        <div className="flex flex-col gap-4">
+        <div className="grid grid-rows-[1fr_1fr] gap-4 h-full">
           {/* Connection Status Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
@@ -363,7 +365,7 @@ function DashboardContent() {
         </div>
 
         {/* Right Column - Key Metrics 2x2 Grid */}
-        <div className="grid grid-cols-2 grid-rows-2 gap-4">
+        <div className="grid grid-cols-2 grid-rows-[1fr_1fr] gap-4 h-full">
           <MetricCard
             icon={Package}
             value={metrics.totalProducts}
