@@ -115,10 +115,25 @@ services:
     environment:
       - NODE_ENV=production
 
+  nginx:
+    image: nginx:alpine
+    container_name: etsy-nginx
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api
+      - web
+    networks:
+      - etsy-network
+
 volumes:
   postgres_data:
   redis_data:
 
 networks:
   etsy-network:
+    name: etsy-network
     driver: bridge
