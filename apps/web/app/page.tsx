@@ -296,7 +296,7 @@ function DashboardContent() {
   ];
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="max-w-[1400px] mx-auto space-y-6 px-3 sm:px-4">
       <Suspense fallback={null}>
         <WelcomeHandler />
       </Suspense>
@@ -308,9 +308,9 @@ function DashboardContent() {
       </div>
 
       {/* Main Grid: Left / Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-5 items-start">
         {/* Left Column */}
-        <div className="grid grid-rows-[1fr_1fr] gap-4 h-full">
+        <div className="flex flex-col gap-4 min-w-0">
           {/* Connection Status Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
@@ -319,7 +319,7 @@ function DashboardContent() {
                 <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
                 <ConnectionItem
                   name="Etsy Shop"
                   status={etsyShop ? 'connected' : 'disconnected'}
@@ -338,7 +338,7 @@ function DashboardContent() {
           {/* Quick Actions Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <QuickActionButton
                 icon={Upload}
                 label="Import Products"
@@ -365,7 +365,7 @@ function DashboardContent() {
         </div>
 
         {/* Right Column - Key Metrics 2x2 Grid */}
-        <div className="grid grid-cols-2 grid-rows-[1fr_1fr] gap-4 h-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
           <MetricCard
             icon={Package}
             value={metrics.totalProducts}
