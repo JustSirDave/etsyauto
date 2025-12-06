@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * AI Generation Page
+ * AI Generation Page - Full Integration
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import {
@@ -22,6 +22,8 @@ import {
   Play,
   Settings,
 } from 'lucide-react';
+import { aiApi, productsApi, AIStats, AIGeneration, Product } from '@/lib/api';
+import { useToast } from '@/lib/toast-context';
 
 // AI Tool Card Component
 function AIToolCard({
@@ -122,7 +124,90 @@ function RecentGeneration({
 }
 
 export default function AIGenerationPage() {
-  const [selectedTool, setSelectedTool] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const [stats, setStats] = useState<AIStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [recentGenerations, setRecentGenerations] = useState<AIGeneration[]>([]);
+  const [loadingGenerations, setLoadingGenerations] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  // Load stats
+  const loadStats = async () => {
+    try {
+      setLoadingStats(true);
+      const data = await aiApi.getStats();
+      setStats(data);
+    } catch (error: any) {
+      console.error('Failed to load AI stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // Load recent generations
+  const loadRecentGenerations = async () => {
+    try {
+      setLoadingGenerations(true);
+      const data = await aiApi.getRecentGenerations(4);
+      setRecentGenerations(data.generations);
+    } catch (error: any) {
+      console.error('Failed to load recent generations:', error);
+    } finally {
+      setLoadingGenerations(false);
+    }
+  };
+
+  // Load products for dropdown
+  const loadProducts = async () => {
+    try {
+      setLoadingProducts(true);
+      const data = await productsApi.getAll(1, 100);
+      setProducts(data.products);
+    } catch (error: any) {
+      console.error('Failed to load products:', error);
+      showToast('Failed to load products', 'error');
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+    loadRecentGenerations();
+    loadProducts();
+  }, []);
+
+  // Handle AI generation
+  const handleGenerate = async () => {
+    if (!selectedProductId) {
+      showToast('Please select a product first', 'error');
+      return;
+    }
+
+    try {
+      setGenerating(true);
+      const result = await aiApi.generateContent(selectedProductId);
+
+      showToast(
+        `AI content generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
+        'success'
+      );
+
+      // Reload stats and recent generations
+      await Promise.all([loadStats(), loadRecentGenerations()]);
+
+      // Reset selection
+      setSelectedProductId(null);
+    } catch (error: any) {
+      console.error('AI generation failed:', error);
+      showToast(error.detail || 'Failed to generate AI content', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -138,7 +223,10 @@ export default function AIGenerationPage() {
               Generate product titles, descriptions, and tags using AI
             </p>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--card-bg-hover)] transition-colors">
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--card-bg-hover)] transition-colors"
+            onClick={() => showToast('AI Settings coming soon', 'info')}
+          >
             <Settings className="w-4 h-4" />
             AI Settings
           </button>
@@ -152,7 +240,11 @@ export default function AIGenerationPage() {
                 <Zap className="w-5 h-5 text-[var(--primary)]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">1,247</p>
+                {loadingStats ? (
+                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
+                ) : (
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">{stats?.total_generations.toLocaleString() || 0}</p>
+                )}
                 <p className="text-[var(--text-muted)] text-sm">Total Generations</p>
               </div>
             </div>
@@ -163,7 +255,11 @@ export default function AIGenerationPage() {
                 <CheckCircle className="w-5 h-5 text-[var(--success)]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">98.5%</p>
+                {loadingStats ? (
+                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
+                ) : (
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">{stats?.success_rate.toFixed(1) || 0}%</p>
+                )}
                 <p className="text-[var(--text-muted)] text-sm">Success Rate</p>
               </div>
             </div>
@@ -174,7 +270,11 @@ export default function AIGenerationPage() {
                 <Clock className="w-5 h-5 text-[var(--info)]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">2.3s</p>
+                {loadingStats ? (
+                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
+                ) : (
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">{((stats?.avg_response_time_ms || 0) / 1000).toFixed(1)}s</p>
+                )}
                 <p className="text-[var(--text-muted)] text-sm">Avg. Response Time</p>
               </div>
             </div>
@@ -185,7 +285,13 @@ export default function AIGenerationPage() {
                 <TrendingUp className="w-5 h-5 text-[var(--warning)]" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-[var(--text-primary)]">+23%</p>
+                {loadingStats ? (
+                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
+                ) : (
+                  <p className="text-2xl font-bold text-[var(--text-primary)]">
+                    {stats?.growth_percentage ? (stats.growth_percentage > 0 ? '+' : '') + stats.growth_percentage.toFixed(0) : 0}%
+                  </p>
+                )}
                 <p className="text-[var(--text-muted)] text-sm">This Month</p>
               </div>
             </div>
@@ -203,7 +309,7 @@ export default function AIGenerationPage() {
                   icon={FileText}
                   iconBg="gradient-primary"
                   status="available"
-                  onClick={() => setSelectedTool('title')}
+                  onClick={() => showToast('Generate content using the form below', 'info')}
                 />
                 <AIToolCard
                   title="Description Writer"
@@ -211,7 +317,7 @@ export default function AIGenerationPage() {
                   icon={Wand2}
                   iconBg="gradient-info"
                   status="available"
-                  onClick={() => setSelectedTool('description')}
+                  onClick={() => showToast('Generate content using the form below', 'info')}
                 />
                 <AIToolCard
                   title="Tag Optimizer"
@@ -219,7 +325,7 @@ export default function AIGenerationPage() {
                   icon={Tag}
                   iconBg="gradient-success"
                   status="available"
-                  onClick={() => setSelectedTool('tags')}
+                  onClick={() => showToast('Generate content using the form below', 'info')}
                 />
                 <AIToolCard
                   title="Image Enhancer"
@@ -236,32 +342,59 @@ export default function AIGenerationPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                    Product Name or URL
+                    Select Product
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Enter product name or paste Etsy URL..."
-                    className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
-                  />
+                  {loadingProducts ? (
+                    <div className="w-full h-12 bg-[var(--background)] animate-pulse rounded-lg" />
+                  ) : (
+                    <select
+                      value={selectedProductId || ''}
+                      onChange={(e) => setSelectedProductId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
+                    >
+                      <option value="">Select a product...</option>
+                      {products.map((product) => (
+                        <option key={product.id} value={product.id}>
+                          {product.title_raw || `Product #${product.id}`}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {products.length === 0 && !loadingProducts && (
+                    <p className="text-[var(--text-muted)] text-sm mt-2">
+                      No products found. Add products first to generate AI content.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                     What to Generate
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {['Title', 'Description', 'Tags', 'All'].map((option) => (
-                      <button
-                        key={option}
-                        className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
-                      >
-                        {option}
-                      </button>
-                    ))}
+                    <span className="px-4 py-2 bg-[var(--primary-bg)] border border-[var(--primary)] rounded-lg text-[var(--primary)] text-sm font-medium">
+                      All (Title + Description + Tags)
+                    </span>
                   </div>
+                  <p className="text-[var(--text-muted)] text-xs mt-2">
+                    Currently generates all content types together for best results
+                  </p>
                 </div>
-                <button className="w-full py-3 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 shadow-lg shadow-[var(--primary)]/25">
-                  <Play className="w-5 h-5" />
-                  Generate Now
+                <button
+                  onClick={handleGenerate}
+                  disabled={!selectedProductId || generating || loadingProducts}
+                  className="w-full py-3 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 shadow-lg shadow-[var(--primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {generating ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-5 h-5" />
+                      Generate Now
+                    </>
+                  )}
                 </button>
               </div>
             </DashboardCard>
@@ -273,35 +406,45 @@ export default function AIGenerationPage() {
               title="Recent Generations"
               subtitle="Your latest AI generations"
               action={
-                <a href="/ai/history" className="text-sm text-[var(--primary)] hover:underline">
+                <button
+                  onClick={() => showToast('Generation history coming soon', 'info')}
+                  className="text-sm text-[var(--primary)] hover:underline"
+                >
                   View All
-                </a>
+                </button>
               }
             >
-              <RecentGeneration
-                type="title"
-                title="Handmade Silver Ring - Bohemian Style"
-                timestamp="2 minutes ago"
-                status="completed"
-              />
-              <RecentGeneration
-                type="description"
-                title="Vintage Leather Wallet Description"
-                timestamp="15 minutes ago"
-                status="completed"
-              />
-              <RecentGeneration
-                type="tags"
-                title="Ceramic Plant Pot Tags"
-                timestamp="1 hour ago"
-                status="completed"
-              />
-              <RecentGeneration
-                type="title"
-                title="Custom Photo Frame Title"
-                timestamp="2 hours ago"
-                status="failed"
-              />
+              {loadingGenerations ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-center gap-3 py-3">
+                      <div className="w-10 h-10 bg-[var(--background)] animate-pulse rounded-lg" />
+                      <div className="flex-1 space-y-2">
+                        <div className="w-3/4 h-4 bg-[var(--background)] animate-pulse rounded" />
+                        <div className="w-1/2 h-3 bg-[var(--background)] animate-pulse rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentGenerations.length === 0 ? (
+                <div className="text-center py-8">
+                  <Sparkles className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3" />
+                  <p className="text-[var(--text-muted)]">No generations yet</p>
+                  <p className="text-[var(--text-muted)] text-sm mt-1">
+                    Start generating AI content for your products
+                  </p>
+                </div>
+              ) : (
+                recentGenerations.map((gen) => (
+                  <RecentGeneration
+                    key={gen.id}
+                    type={gen.type}
+                    title={gen.title}
+                    timestamp={gen.timestamp}
+                    status={gen.status}
+                  />
+                ))
+              )}
             </DashboardCard>
 
             {/* Tips Card */}
