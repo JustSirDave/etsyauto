@@ -684,3 +684,60 @@ export const notificationsApi = {
     });
   },
 };
+
+/**
+ * AI Generation API
+ */
+export interface AIStats {
+  total_generations: number;
+  success_rate: number;
+  avg_response_time_ms: number;
+  growth_percentage: number;
+  this_month_count: number;
+  last_month_count: number;
+}
+
+export interface AIGeneration {
+  id: number;
+  product_id: number;
+  type: 'title' | 'description' | 'tags';
+  title: string;
+  timestamp: string;
+  status: 'completed' | 'failed';
+  cost_tokens: number;
+  cost_usd_cents: number;
+}
+
+export interface AIGenerationResult {
+  ai_generation_id: number;
+  title: string;
+  description: string;
+  tags: string[];
+  policy_flags: any;
+  cost: {
+    tokens: number;
+    usd_cents: number;
+  };
+}
+
+export const aiApi = {
+  getStats: async (): Promise<AIStats> => {
+    return apiRequest<AIStats>('/api/ai/stats');
+  },
+
+  getRecentGenerations: async (limit: number = 10): Promise<{ generations: AIGeneration[]; total: number }> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    return apiRequest<{ generations: AIGeneration[]; total: number }>(`/api/ai/recent?${params.toString()}`);
+  },
+
+  generateContent: async (productId: number, options?: { model?: string; style?: string; tone?: string }): Promise<AIGenerationResult> => {
+    return apiRequest<AIGenerationResult>(`/api/products/${productId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        model: options?.model || 'gpt-4o-mini',
+        style: options?.style || 'friendly',
+        tone: options?.tone || 'helpful',
+      }),
+    });
+  },
+};
