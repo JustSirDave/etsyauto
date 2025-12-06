@@ -39,6 +39,7 @@ class Tenant(Base):
     # Relationships
     memberships = relationship("Membership", back_populates="tenant")
     shops = relationship("Shop", back_populates="tenant")
+    notifications = relationship("Notification", back_populates="tenant", cascade="all, delete-orphan")
     # products = relationship("Product", back_populates="tenant")
 
 
@@ -72,6 +73,7 @@ class User(Base):
 
     # Relationships
     memberships = relationship("Membership", back_populates="user")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
 
 
 class Membership(Base):

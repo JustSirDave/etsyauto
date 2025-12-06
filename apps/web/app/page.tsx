@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import OnboardingModal from '@/components/OnboardingModal';
-import { onboardingApi, shopsApi } from '@/lib/api';
+import { onboardingApi, shopsApi, dashboardApi, type DashboardStats, type DashboardOrder } from '@/lib/api';
 import {
   Package,
   Users,
@@ -225,6 +225,10 @@ function DashboardContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [shops, setShops] = useState<any[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
+  const [metrics, setMetrics] = useState<DashboardStats | null>(null);
+  const [loadingMetrics, setLoadingMetrics] = useState(true);
+  const [transactions, setTransactions] = useState<DashboardOrder[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
 
   useEffect(() => {
     if (user && !user.onboarding_completed) {
@@ -234,6 +238,8 @@ function DashboardContent() {
 
   useEffect(() => {
     loadShops();
+    loadMetrics();
+    loadTransactions();
   }, []);
 
   const loadShops = async () => {
@@ -246,6 +252,44 @@ function DashboardContent() {
       setShops([]);
     } finally {
       setLoadingShops(false);
+    }
+  };
+
+  const loadMetrics = async () => {
+    try {
+      setLoadingMetrics(true);
+      const data = await dashboardApi.getStats();
+      setMetrics(data);
+    } catch (error) {
+      console.error('Failed to load metrics:', error);
+      // Set default metrics on error
+      setMetrics({
+        total_products: 0,
+        total_customers: 0,
+        total_orders: 0,
+        active_listings: 0,
+        changes: {
+          products: 0,
+          customers: 0,
+          orders: 0,
+          listings: 0,
+        },
+      });
+    } finally {
+      setLoadingMetrics(false);
+    }
+  };
+
+  const loadTransactions = async () => {
+    try {
+      setLoadingTransactions(true);
+      const data = await dashboardApi.getRecentOrders(5);
+      setTransactions(data.orders);
+    } catch (error) {
+      console.error('Failed to load transactions:', error);
+      setTransactions([]);
+    } finally {
+      setLoadingTransactions(false);
     }
   };
 
@@ -277,23 +321,6 @@ function DashboardContent() {
   };
 
   const etsyShop = shops.find((s) => s.status === 'connected');
-
-  // Mock data for metrics (replace with real API data)
-  const metrics = {
-    totalProducts: 0,
-    totalCustomers: 0,
-    totalOrders: 0,
-    activeListings: 0,
-  };
-
-  // Mock transactions (replace with real API data)
-  const transactions = [
-    { orderId: 'ETSY001', customer: 'John Doe', date: '2025-10-17', amount: '$125.00', status: 'processing' as const },
-    { orderId: 'ETSY002', customer: 'Sarah Wilson', date: '2025-10-16', amount: '$89.99', status: 'paid' as const },
-    { orderId: 'ETSY003', customer: 'Mike Johnson', date: '2025-10-15', amount: '$234.50', status: 'paid' as const },
-    { orderId: 'ETSY004', customer: 'Emma Davis', date: '2025-10-14', amount: '$45.00', status: 'pending' as const },
-    { orderId: 'ETSY005', customer: 'James Brown', date: '2025-10-13', amount: '$178.00', status: 'refunded' as const },
-  ];
 
   return (
     <div className="space-y-6">
@@ -366,34 +393,42 @@ function DashboardContent() {
 
         {/* Right Column - Key Metrics 2x2 Grid */}
         <div className="grid grid-cols-2 gap-4 min-w-0">
-          <MetricCard
-            icon={Package}
-            value={metrics.totalProducts}
-            label="Total Products"
-            change={12}
-            iconBg="bg-[var(--primary)]"
-          />
-          <MetricCard
-            icon={Users}
-            value={metrics.totalCustomers}
-            label="Total Customers"
-            change={8}
-            iconBg="bg-[var(--info)]"
-          />
-          <MetricCard
-            icon={ShoppingCart}
-            value={metrics.totalOrders}
-            label="Total Orders"
-            change={15}
-            iconBg="bg-[var(--warning)]"
-          />
-          <MetricCard
-            icon={FileText}
-            value={metrics.activeListings}
-            label="Active Listings"
-            change={5}
-            iconBg="bg-[var(--success)]"
-          />
+          {loadingMetrics ? (
+            <div className="col-span-2 flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <>
+              <MetricCard
+                icon={Package}
+                value={metrics?.total_products || 0}
+                label="Total Products"
+                change={metrics?.changes.products || 0}
+                iconBg="bg-[var(--primary)]"
+              />
+              <MetricCard
+                icon={Users}
+                value={metrics?.total_customers || 0}
+                label="Total Customers"
+                change={metrics?.changes.customers || 0}
+                iconBg="bg-[var(--info)]"
+              />
+              <MetricCard
+                icon={ShoppingCart}
+                value={metrics?.total_orders || 0}
+                label="Total Orders"
+                change={metrics?.changes.orders || 0}
+                iconBg="bg-[var(--warning)]"
+              />
+              <MetricCard
+                icon={FileText}
+                value={metrics?.active_listings || 0}
+                label="Active Listings"
+                change={metrics?.changes.listings || 0}
+                iconBg="bg-[var(--success)]"
+              />
+            </>
+          )}
         </div>
       </div>
 
@@ -424,17 +459,29 @@ function DashboardContent() {
 
         {/* Transaction Rows */}
         <div>
-          {transactions.map((transaction) => (
-            <TransactionRow
-              key={transaction.orderId}
-              orderId={transaction.orderId}
-              customer={transaction.customer}
-              date={transaction.date}
-              amount={transaction.amount}
-              status={transaction.status}
-              onMessage={() => handleMessageCustomer(transaction.customer)}
-            />
-          ))}
+          {loadingTransactions ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : transactions.length === 0 ? (
+            <div className="text-center py-12">
+              <ShoppingCart className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
+              <p className="text-[var(--text-muted)]">No orders yet</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">Orders will appear here once you start selling</p>
+            </div>
+          ) : (
+            transactions.map((transaction) => (
+              <TransactionRow
+                key={transaction.order_id}
+                orderId={transaction.order_id}
+                customer={transaction.customer}
+                date={transaction.date}
+                amount={transaction.amount}
+                status={transaction.status as 'paid' | 'pending' | 'refunded' | 'processing'}
+                onMessage={() => handleMessageCustomer(transaction.customer)}
+              />
+            ))
+          )}
         </div>
       </div>
 

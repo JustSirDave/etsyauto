@@ -14,7 +14,7 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications
 
 # Initialize Sentry
 if settings.SENTRY_DSN:
@@ -69,9 +69,11 @@ app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboardin
 app.include_router(shops.router, prefix="/api/shops", tags=["Shops"])
 app.include_router(products.router, prefix="/api/products", tags=["Products"])
 app.include_router(team.router, prefix="/api/team", tags=["Team Management"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 # app.include_router(ai.router, prefix="/api/ai", tags=["AI Generation"])
 # app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
-# app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
 # app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
 # app.include_router(usage.router, prefix="/api/usage", tags=["Usage & Costs"])
 # app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])

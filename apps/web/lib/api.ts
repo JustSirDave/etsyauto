@@ -241,6 +241,19 @@ export const shopsApi = {
 /**
  * Products API
  */
+export interface Product {
+  id: number;
+  title_raw: string;
+  description_raw: string;
+  tags_raw: string[];
+  images: string[];
+  price: number | null;
+  supplier_name: string | null;
+  source: string;
+  batch_id: string | null;
+  created_at: string;
+}
+
 export const productsApi = {
   getAll: async (page: number = 1, limit: number = 20, batchId?: string) => {
     const params = new URLSearchParams({
@@ -253,13 +266,13 @@ export const productsApi = {
     }
 
     return apiRequest<{
-      products: any[];
+      products: Product[];
       total: number;
     }>(`/api/products/?${params.toString()}`);
   },
 
   getById: async (id: number) => {
-    return apiRequest<any>(`/api/products/${id}`);
+    return apiRequest<Product>(`/api/products/${id}`);
   },
 
   importSingle: async (data: any) => {
@@ -529,6 +542,109 @@ export const onboardingApi = {
   skip: async (): Promise<any> => {
     return apiRequest('/api/onboarding/skip', {
       method: 'POST',
+    });
+  },
+};
+
+/**
+ * Dashboard API
+ */
+export interface DashboardStats {
+  total_products: number;
+  total_customers: number;
+  total_orders: number;
+  active_listings: number;
+  changes: {
+    products: number;
+    customers: number;
+    orders: number;
+    listings: number;
+  };
+}
+
+export interface DashboardOrder {
+  order_id: string;
+  customer: string;
+  customer_email: string;
+  date: string;
+  amount: string;
+  status: string;
+  payment_status: string;
+}
+
+export const dashboardApi = {
+  getStats: async (): Promise<DashboardStats> => {
+    return apiRequest<DashboardStats>('/api/dashboard/stats');
+  },
+
+  getRecentOrders: async (limit: number = 5): Promise<{ orders: DashboardOrder[]; total: number }> => {
+    return apiRequest<{ orders: DashboardOrder[]; total: number }>(`/api/dashboard/recent-orders?limit=${limit}`);
+  },
+};
+
+/**
+ * Notifications API
+ */
+export interface Notification {
+  id: number;
+  type: 'info' | 'success' | 'warning' | 'error' | 'order' | 'listing' | 'system';
+  title: string;
+  message: string;
+  action_url?: string;
+  action_label?: string;
+  read: boolean;
+  read_at?: string;
+  created_at: string;
+}
+
+export const notificationsApi = {
+  getAll: async (skip: number = 0, limit: number = 50, unreadOnly: boolean = false): Promise<Notification[]> => {
+    const params = new URLSearchParams({
+      skip: String(skip),
+      limit: String(limit),
+      unread_only: String(unreadOnly),
+    });
+    return apiRequest<Notification[]>(`/api/notifications/?${params.toString()}`);
+  },
+
+  getUnreadCount: async (): Promise<{ count: number }> => {
+    return apiRequest<{ count: number }>('/api/notifications/unread-count');
+  },
+
+  markAsRead: async (notificationId: number): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/notifications/${notificationId}/read`, {
+      method: 'POST',
+    });
+  },
+
+  markAllAsRead: async (): Promise<{ message: string; count: number }> => {
+    return apiRequest<{ message: string; count: number }>('/api/notifications/mark-all-read', {
+      method: 'POST',
+    });
+  },
+
+  delete: async (notificationId: number): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/notifications/${notificationId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  deleteAll: async (): Promise<{ message: string; count: number }> => {
+    return apiRequest<{ message: string; count: number }>('/api/notifications/', {
+      method: 'DELETE',
+    });
+  },
+
+  create: async (notification: {
+    type: Notification['type'];
+    title: string;
+    message: string;
+    action_url?: string;
+    action_label?: string;
+  }): Promise<Notification> => {
+    return apiRequest<Notification>('/api/notifications/create', {
+      method: 'POST',
+      body: JSON.stringify(notification),
     });
   },
 };

@@ -382,6 +382,9 @@ async def get_current_user_info(current_user = Depends(get_current_user), db: Se
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Get tenant information
+    tenant = db.query(Tenant).filter(Tenant.id == int(current_user["tenant_id"])).first()
+
     return {
         "id": user.id,
         "email": user.email,
@@ -389,7 +392,10 @@ async def get_current_user_info(current_user = Depends(get_current_user), db: Se
         "email_verified": user.email_verified,
         "profile_picture_url": user.profile_picture_url,
         "tenant_id": current_user["tenant_id"],
-        "role": current_user["role"]
+        "tenant_name": tenant.name if tenant else None,
+        "tenant_description": tenant.description if tenant else None,
+        "role": current_user["role"],
+        "onboarding_completed": tenant.onboarding_completed if tenant else False
     }
 
 

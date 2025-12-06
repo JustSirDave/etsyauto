@@ -1,34 +1,77 @@
 'use client';
 
 /**
- * TopBar Component - Vuexy Style
+ * TopBar Component - Enhanced with Search, Language Switching, and Profile Settings
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
-import { ProfilePictureModal } from '@/components/profile/ProfilePictureModal';
+import { useLanguage } from '@/lib/language-context';
+import { ProfileSettingsModal } from '@/components/profile/ProfileSettingsModal';
+import { SearchModal } from '@/components/layout/SearchModal';
+import { NotificationPanel } from '@/components/layout/NotificationPanel';
+import { notificationsApi } from '@/lib/api';
 import {
   Search,
-  Bell,
-  Sun,
-  Moon,
-  Globe,
-  Grid3X3,
   ChevronDown,
   LogOut,
   User,
   Settings,
   BookOpen,
+  Globe,
+  Bell,
 } from 'lucide-react';
 
 export function TopBar() {
   const { user, logout } = useAuth();
+  const { language, setLanguage } = useLanguage();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const handleLogout = async () => {
     await logout();
   };
+
+  // Load unread notification count
+  useEffect(() => {
+    loadUnreadCount();
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(loadUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const loadUnreadCount = async () => {
+    try {
+      const data = await notificationsApi.getUnreadCount();
+      setUnreadCount(data.count);
+    } catch (error) {
+      console.error('Failed to load unread count:', error);
+    }
+  };
+
+  // Global keyboard shortcut for search (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowSearchModal(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const languages = [
+    { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'he', name: 'עברית', flag: '🇮🇱' },
+  ];
+
+  const currentLanguage = languages.find((lang) => lang.code === language) || languages[0];
 
   return (
     <>
@@ -37,11 +80,12 @@ export function TopBar() {
         <div className="flex-1 max-w-xl">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
-            <input
-              type="text"
-              placeholder="Search [CTRL + K]"
-              className="w-full pl-12 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
-            />
+            <button
+              onClick={() => setShowSearchModal(true)}
+              className="w-full pl-12 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-muted)] hover:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition text-left"
+            >
+              Search [CTRL + K]
+            </button>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 bg-[var(--card-bg)] border border-[var(--border-color)] rounded text-xs text-[var(--text-muted)]">
               ⌘ K
             </div>
@@ -50,26 +94,75 @@ export function TopBar() {
 
         {/* Right Side */}
         <div className="flex items-center gap-2">
-          {/* Language */}
-          <button className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors">
-            <span className="text-sm font-medium">EN</span>
-          </button>
+          {/* Language Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+              className="flex items-center gap-2 px-3 h-10 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
+              title="Change Language"
+            >
+              <Globe className="w-5 h-5" />
+              <span className="text-sm font-medium">{currentLanguage.code.toUpperCase()}</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
+            </button>
 
-          {/* Theme Toggle */}
-          <button className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors">
-            <Moon className="w-5 h-5" />
-          </button>
-
-          {/* Grid Menu */}
-          <button className="w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors">
-            <Grid3X3 className="w-5 h-5" />
-          </button>
+            {/* Language Dropdown */}
+            {showLanguageMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowLanguageMenu(false)}
+                />
+                <div className="absolute right-0 mt-2 w-48 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                  <div className="py-2">
+                    {languages.map((lang) => (
+                      <button
+                        key={lang.code}
+                        onClick={() => {
+                          setLanguage(lang.code as 'en' | 'he');
+                          setShowLanguageMenu(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                          language === lang.code
+                            ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        <span className="text-xl">{lang.flag}</span>
+                        <span className="font-medium">{lang.name}</span>
+                        {language === lang.code && (
+                          <span className="ml-auto text-[var(--primary)]">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
 
           {/* Notifications */}
-          <button className="relative w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-[var(--danger)] rounded-full" />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative w-10 h-10 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[var(--danger)] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            <NotificationPanel
+              isOpen={showNotifications}
+              onClose={() => setShowNotifications(false)}
+              unreadCount={unreadCount}
+              onCountChange={setUnreadCount}
+            />
+          </div>
 
           {/* User Menu */}
           <div className="relative">
@@ -126,9 +219,9 @@ export function TopBar() {
                           </div>
                         )}
                       </div>
-                      <div>
-                        <p className="text-[var(--text-primary)] font-semibold">{user?.name}</p>
-                        <p className="text-[var(--text-muted)] text-sm">{user?.email}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[var(--text-primary)] font-semibold truncate">{user?.name}</p>
+                        <p className="text-[var(--text-muted)] text-sm truncate">{user?.email}</p>
                       </div>
                     </div>
                   </div>
@@ -143,14 +236,14 @@ export function TopBar() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <User className="w-4 h-4" />
-                      <span>My Profile</span>
+                      <span>Profile Settings</span>
                     </button>
                     <a
                       href="/settings"
                       className="flex items-center gap-3 px-4 py-2.5 text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
-                      <span>Settings</span>
+                      <span>Shop Settings</span>
                     </a>
                     <a
                       href="/docs"
@@ -163,13 +256,13 @@ export function TopBar() {
 
                   {/* Logout */}
                   <div className="p-2 border-t border-[var(--border-color)]">
-            <button
-              onClick={handleLogout}
+                    <button
+                      onClick={handleLogout}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
+                    >
+                      <LogOut className="w-4 h-4" />
                       <span>Logout</span>
-            </button>
+                    </button>
                   </div>
                 </div>
               </>
@@ -178,9 +271,15 @@ export function TopBar() {
         </div>
       </header>
 
-      <ProfilePictureModal
+      {/* Modals */}
+      <ProfileSettingsModal
         isOpen={showProfileModal}
         onClose={() => setShowProfileModal(false)}
+      />
+
+      <SearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
       />
     </>
   );
