@@ -1,7 +1,7 @@
 """add tenant onboarding fields
 
 Revision ID: tenant_onboarding_001
-Revises: 
+Revises: 2f8a3c4d9e5b
 Create Date: 2025-12-02 17:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'tenant_onboarding_001'
-down_revision = None
+down_revision = '2f8a3c4d9e5b'
 branch_labels = None
 depends_on = None
 
