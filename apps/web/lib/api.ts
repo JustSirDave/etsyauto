@@ -372,16 +372,52 @@ export const listingsApi = {
 /**
  * Orders API
  */
+export interface Order {
+  id: number;
+  order_id: string;
+  etsy_receipt_id: string | null;
+  shop_id: number;
+  buyer_name: string;
+  buyer_email: string;
+  total_price: number;
+  currency: string;
+  status: string;
+  payment_status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrderStats {
+  pending_payment: number;
+  completed: number;
+  refunded: number;
+  failed: number;
+  total: number;
+}
+
 export const ordersApi = {
-  getAll: async (page: number = 1, limit: number = 20) => {
+  getStats: async (): Promise<OrderStats> => {
+    return apiRequest<OrderStats>('/api/orders/stats');
+  },
+
+  getAll: async (page: number = 1, limit: number = 20, status?: string, paymentStatus?: string) => {
     const params = new URLSearchParams({
       skip: String((page - 1) * limit),
       limit: String(limit),
     });
 
+    if (status) {
+      params.append('status', status);
+    }
+    if (paymentStatus) {
+      params.append('payment_status', paymentStatus);
+    }
+
     return apiRequest<{
-      orders: any[];
+      orders: Order[];
       total: number;
+      skip: number;
+      limit: number;
     }>(`/api/orders/?${params.toString()}`);
   },
 

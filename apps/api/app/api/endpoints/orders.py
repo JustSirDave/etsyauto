@@ -14,6 +14,52 @@ from app.models.tenancy import Order
 router = APIRouter()
 
 
+@router.get("/stats", tags=["Orders"])
+async def get_order_stats(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get order statistics for dashboard cards
+
+    Returns:
+        Statistics about order counts by payment and delivery status
+    """
+    tenant_id = int(current_user["tenant_id"])
+
+    # Get total order count
+    total_orders = db.query(Order).filter(Order.tenant_id == tenant_id).count()
+
+    # Count by payment status
+    pending_payment = db.query(Order).filter(
+        Order.tenant_id == tenant_id,
+        Order.payment_status == 'pending'
+    ).count()
+
+    completed = db.query(Order).filter(
+        Order.tenant_id == tenant_id,
+        Order.status.in_(['delivered', 'completed'])
+    ).count()
+
+    refunded = db.query(Order).filter(
+        Order.tenant_id == tenant_id,
+        Order.payment_status == 'refunded'
+    ).count()
+
+    failed = db.query(Order).filter(
+        Order.tenant_id == tenant_id,
+        Order.payment_status == 'failed'
+    ).count()
+
+    return {
+        "pending_payment": pending_payment,
+        "completed": completed,
+        "refunded": refunded,
+        "failed": failed,
+        "total": total_orders
+    }
+
+
 @router.get("/", tags=["Orders"])
 async def list_orders(
     skip: int = 0,

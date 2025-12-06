@@ -4,28 +4,15 @@
  * Orders Page - Vuexy Style
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, ExportButton, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
-import { Calendar, CheckCircle, RotateCcw, XCircle, CreditCard } from 'lucide-react';
+import { Calendar, CheckCircle, RotateCcw, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const mockOrders = [
-  { id: '#6979', date: 'Apr 15, 2023, 10:21', customer: { name: 'Cristine Easom', email: 'ceasom@example.com', initials: 'CE' }, payment: 'pending', status: 'delivered', method: { type: 'mastercard', last4: '2356' } },
-  { id: '#6624', date: 'Apr 17, 2023, 6:43', customer: { name: 'Fayre Screech', email: 'fscreech@example.com', initials: 'FS' }, payment: 'failed', status: 'delivered', method: { type: 'mastercard', last4: '2077' } },
-  { id: '#9305', date: 'Apr 17, 2023, 8:05', customer: { name: 'Pauline Pfaffe', email: 'ppfaffe@example.com', initials: 'PP' }, payment: 'cancelled', status: 'out_for_delivery', method: { type: 'paypal', email: '@gmail.com' } },
-  { id: '#8005', date: 'Apr 22, 2023, 3:01', customer: { name: 'Maurits Nealey', email: 'mnealey@example.com', initials: 'MN' }, payment: 'paid', status: 'dispatched', method: { type: 'mastercard', last4: '1555' } },
-  { id: '#5859', date: 'Apr 29, 2023, 9:52', customer: { name: 'Eydie Vogelein', email: 'evogelein@example.com', initials: 'EV' }, payment: 'cancelled', status: 'out_for_delivery', method: { type: 'paypal', email: '@gmail.com' } },
-];
-
-const statsData = [
-  { title: 'Pending Payment', value: 56, icon: <Calendar className="w-6 h-6" />, color: 'primary' },
-  { title: 'Completed', value: '12,689', icon: <CheckCircle className="w-6 h-6" />, color: 'success' },
-  { title: 'Refunded', value: 124, icon: <RotateCcw className="w-6 h-6" />, color: 'warning' },
-  { title: 'Failed', value: 32, icon: <XCircle className="w-6 h-6" />, color: 'danger' },
-];
+import { ordersApi, Order, OrderStats } from '@/lib/api';
+import { useToast } from '@/lib/toast-context';
 
 function PaymentStatus({ status }: { status: string }) {
   const styles: Record<string, { dot: string; text: string }> = {
@@ -44,12 +31,6 @@ function OrderStatus({ status }: { status: string }) {
   return <span className={cn('inline-flex px-2.5 py-1 rounded-md text-xs font-medium', styles[status] || styles.pending)}>{labels[status] || status}</span>;
 }
 
-function PaymentMethod({ method }: { method: { type: string; last4?: string; email?: string } }) {
-  if (method.type === 'mastercard') return <div className="flex items-center gap-2"><div className="w-8 h-5 bg-gradient-to-r from-red-500 to-orange-500 rounded flex items-center justify-center"><CreditCard className="w-3 h-3 text-white" /></div><span className="text-[var(--text-muted)] text-sm">...{method.last4}</span></div>;
-  if (method.type === 'paypal') return <div className="flex items-center gap-2"><div className="w-8 h-5 bg-blue-600 rounded flex items-center justify-center text-white text-[10px] font-bold">PP</div><span className="text-[var(--text-muted)] text-sm">...{method.email}</span></div>;
-  return null;
-}
-
 function CustomerAvatar({ customer }: { customer: { name: string; initials: string } }) {
   const colors = ['bg-[var(--primary)]', 'bg-[var(--success)]', 'bg-[var(--warning)]', 'bg-[var(--info)]', 'bg-[var(--danger)]'];
   const colorIndex = customer.name.charCodeAt(0) % colors.length;
@@ -58,13 +39,86 @@ function CustomerAvatar({ customer }: { customer: { name: string; initials: stri
 
 function OrdersContent() {
   const router = useRouter();
-  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const { showToast } = useToast();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [stats, setStats] = useState<OrderStats | null>(null);
+  const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  const toggleSelectAll = () => setSelectedOrders(selectedOrders.length === mockOrders.length ? [] : mockOrders.map(o => o.id));
-  const toggleSelect = (id: string) => setSelectedOrders(prev => prev.includes(id) ? prev.filter(o => o !== id) : [...prev, id]);
+  // Load stats
+  const loadStats = async () => {
+    try {
+      setLoadingStats(true);
+      const data = await ordersApi.getStats();
+      setStats(data);
+    } catch (error: any) {
+      console.error('Failed to load order stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // Load orders
+  const loadOrders = async () => {
+    try {
+      setLoading(true);
+      const data = await ordersApi.getAll(currentPage, pageSize);
+      setOrders(data.orders);
+      setTotal(data.total);
+    } catch (error: any) {
+      console.error('Failed to load orders:', error);
+      showToast(error.detail || 'Failed to load orders', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+  }, [currentPage, pageSize]);
+
+  // Filter orders by search query
+  const filteredOrders = orders.filter(order => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      order.order_id.toLowerCase().includes(query) ||
+      order.buyer_name.toLowerCase().includes(query) ||
+      order.buyer_email.toLowerCase().includes(query)
+    );
+  });
+
+  const toggleSelectAll = () => setSelectedOrders(selectedOrders.length === filteredOrders.length ? [] : filteredOrders.map(o => o.id));
+  const toggleSelect = (id: number) => setSelectedOrders(prev => prev.includes(id) ? prev.filter(o => o !== id) : [...prev, id]);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  };
+
+  const statsData = [
+    { title: 'Pending Payment', value: stats?.pending_payment || 0, icon: <Calendar className="w-6 h-6" />, color: 'primary' },
+    { title: 'Completed', value: stats?.completed || 0, icon: <CheckCircle className="w-6 h-6" />, color: 'success' },
+    { title: 'Refunded', value: stats?.refunded || 0, icon: <RotateCcw className="w-6 h-6" />, color: 'warning' },
+    { title: 'Failed', value: stats?.failed || 0, icon: <XCircle className="w-6 h-6" />, color: 'danger' },
+  ];
+
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
@@ -74,7 +128,11 @@ function OrdersContent() {
           <div key={i} className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-3xl font-bold text-[var(--text-primary)]">{stat.value}</p>
+                {loadingStats ? (
+                  <div className="w-16 h-9 bg-[var(--background)] animate-pulse rounded" />
+                ) : (
+                  <p className="text-3xl font-bold text-[var(--text-primary)]">{stat.value.toLocaleString()}</p>
+                )}
                 <p className="text-[var(--text-muted)] text-sm mt-1">{stat.title}</p>
               </div>
               <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', stat.color === 'primary' && 'bg-[var(--primary-bg)] text-[var(--primary)]', stat.color === 'success' && 'bg-[var(--success-bg)] text-[var(--success)]', stat.color === 'warning' && 'bg-[var(--warning-bg)] text-[var(--warning)]', stat.color === 'danger' && 'bg-[var(--danger-bg)] text-[var(--danger)]')}>{stat.icon}</div>
@@ -90,41 +148,60 @@ function OrdersContent() {
           <div className="flex items-center gap-3"><PageSizeDropdown value={pageSize} onChange={setPageSize} /><ExportButton /></div>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-[var(--border-color)]">
-                <th className="text-left py-4 px-5 w-12"><TableCheckbox checked={selectedOrders.length === mockOrders.length} indeterminate={selectedOrders.length > 0 && selectedOrders.length < mockOrders.length} onChange={toggleSelectAll} /></th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Order</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Date</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Customers</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Method</th>
-                <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockOrders.map((order) => (
-                <tr key={order.id} className="border-b border-[var(--border-color)] hover:bg-[var(--background)] transition-colors">
-                  <td className="py-4 px-5"><TableCheckbox checked={selectedOrders.includes(order.id)} onChange={() => toggleSelect(order.id)} /></td>
-                  <td className="py-4 px-5"><span className="font-medium text-[var(--primary)]">{order.id}</span></td>
-                  <td className="py-4 px-5 text-[var(--text-muted)] text-sm">{order.date}</td>
-                  <td className="py-4 px-5">
-                    <div className="flex items-center gap-3">
-                      <CustomerAvatar customer={order.customer} />
-                      <div><p className="font-medium text-[var(--text-primary)]">{order.customer.name}</p><p className="text-sm text-[var(--text-muted)]">{order.customer.email}</p></div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-5"><PaymentStatus status={order.payment} /></td>
-                  <td className="py-4 px-5"><OrderStatus status={order.status} /></td>
-                  <td className="py-4 px-5"><PaymentMethod method={order.method} /></td>
-                  <td className="py-4 px-5"><TableActions onView={() => router.push(`/orders/${order.id.replace('#', '')}`)} onDelete={() => console.log('Delete', order.id)} /></td>
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <p className="text-[var(--text-muted)] text-lg">No orders found</p>
+              {searchQuery && (
+                <p className="text-[var(--text-muted)] text-sm mt-2">Try adjusting your search query</p>
+              )}
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[var(--border-color)]">
+                  <th className="text-left py-4 px-5 w-12"><TableCheckbox checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0} indeterminate={selectedOrders.length > 0 && selectedOrders.length < filteredOrders.length} onChange={toggleSelectAll} /></th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Order</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Date</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Customer</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Amount</th>
+                  <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredOrders.map((order) => (
+                  <tr key={order.id} className="border-b border-[var(--border-color)] hover:bg-[var(--background)] transition-colors">
+                    <td className="py-4 px-5"><TableCheckbox checked={selectedOrders.includes(order.id)} onChange={() => toggleSelect(order.id)} /></td>
+                    <td className="py-4 px-5"><span className="font-medium text-[var(--primary)]">{order.order_id}</span></td>
+                    <td className="py-4 px-5 text-[var(--text-muted)] text-sm">{formatDate(order.created_at)}</td>
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-3">
+                        <CustomerAvatar customer={{ name: order.buyer_name, initials: order.buyer_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) }} />
+                        <div><p className="font-medium text-[var(--text-primary)]">{order.buyer_name}</p><p className="text-sm text-[var(--text-muted)]">{order.buyer_email}</p></div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-5"><PaymentStatus status={order.payment_status} /></td>
+                    <td className="py-4 px-5"><OrderStatus status={order.status} /></td>
+                    <td className="py-4 px-5">
+                      <span className="font-medium text-[var(--text-primary)]">
+                        {order.currency} {order.total_price.toFixed(2)}
+                      </span>
+                    </td>
+                    <td className="py-4 px-5"><TableActions onView={() => router.push(`/orders/${order.id}`)} onDelete={() => showToast('Delete functionality coming soon', 'info')} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-        <Pagination currentPage={currentPage} totalPages={10} totalItems={100} pageSize={pageSize} onPageChange={setCurrentPage} />
+        {!loading && filteredOrders.length > 0 && (
+          <Pagination currentPage={currentPage} totalPages={totalPages} totalItems={total} pageSize={pageSize} onPageChange={setCurrentPage} />
+        )}
       </DashboardCard>
     </div>
   );
