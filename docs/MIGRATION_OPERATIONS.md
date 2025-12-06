@@ -100,7 +100,7 @@ docker compose exec api alembic downgrade -1
 
 ```bash
 # Step 1: Audit current state
-docker compose -f docker-compose.prod.yml exec api python scripts/audit_db_state.py
+docker compose -f docker-compose.prod.yml exec api python /app/scripts/audit_db_state.py
 
 # Step 2: Backup database
 docker compose -f docker-compose.prod.yml exec db pg_dump -U postgres etsy_platform > backup_$(date +%Y%m%d_%H%M%S).sql
@@ -112,11 +112,11 @@ git pull origin main
 docker compose -f docker-compose.prod.yml build --no-cache api
 
 # Step 5: Run reconciliation (handles version mismatches)
-docker compose -f docker-compose.prod.yml exec api python scripts/reconcile_migrations.py
+docker compose -f docker-compose.prod.yml exec api python /app/scripts/reconcile_migrations.py
 
 # Step 6: Verify final state
 docker compose -f docker-compose.prod.yml exec api alembic current
-docker compose -f docker-compose.prod.yml exec api python scripts/audit_db_state.py
+docker compose -f docker-compose.prod.yml exec api python /app/scripts/audit_db_state.py
 
 # Step 7: Restart API to load new schema
 docker compose -f docker-compose.prod.yml restart api
