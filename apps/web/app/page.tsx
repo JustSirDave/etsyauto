@@ -59,29 +59,29 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="bg-[var(--card-bg)]/40 backdrop-blur-sm border border-[var(--border-color)]/50 rounded-2xl p-6 hover:border-[var(--border-color)] transition-all">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0 flex-1">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-emerald-500/10' : 'bg-slate-500/10'}`}>
+    <div className="flex-1 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)] min-w-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
             {isConnected ? (
-              <CheckCircle className="w-6 h-6 text-emerald-400" />
+              <CheckCircle className="w-5 h-5 text-[var(--success)]" />
             ) : (
-              <XCircle className="w-6 h-6 text-slate-400" />
+              <XCircle className="w-5 h-5 text-[var(--danger)]" />
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[var(--text-primary)] font-semibold text-base mb-1 truncate">{name}</p>
+            <p className="text-[var(--text-primary)] font-medium truncate text-sm">{name}</p>
             {isConnected ? (
-              <p className="text-emerald-400 text-sm truncate font-medium">{storeName || 'Connected'}</p>
+              <p className="text-[var(--success)] text-xs truncate">{storeName || 'Connected'}</p>
             ) : (
-              <p className="text-slate-400 text-sm font-medium">Not connected</p>
+              <p className="text-[var(--danger)] text-xs">Not Connected</p>
             )}
           </div>
         </div>
         {!isConnected && (
           <button
             onClick={onConnect}
-            className="px-5 py-2.5 bg-[var(--primary)] hover:bg-[var(--primary)]/80 text-white text-sm font-semibold rounded-xl transition-all hover:scale-105 flex-shrink-0"
+            className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
           >
             Connect
           </button>
@@ -108,17 +108,13 @@ function QuickActionButton({
   return (
     <a
       href={href}
-      className="group bg-[var(--card-bg)]/40 backdrop-blur-sm border border-[var(--border-color)]/50 rounded-2xl p-6 hover:border-[var(--primary)]/50 hover:bg-[var(--card-bg)]/60 transition-all"
+      className="flex flex-col p-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group h-full"
     >
-      <div className="flex items-start gap-4">
-        <div className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform`}>
-          <Icon className="w-6 h-6 text-[var(--primary)]" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[var(--text-primary)] font-semibold text-base mb-1">{label}</p>
-          <p className="text-[var(--text-muted)] text-sm">{subtitle}</p>
-        </div>
+      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
+        <Icon className="w-5 h-5 text-white" />
       </div>
+      <p className="text-[var(--text-primary)] font-medium text-sm">{label}</p>
+      <p className="text-[var(--text-muted)] text-xs">{subtitle}</p>
     </a>
   );
 }
@@ -140,19 +136,19 @@ function MetricCard({
   const isPositive = change >= 0;
 
   return (
-    <div className="bg-[var(--card-bg)]/40 backdrop-blur-sm border border-[var(--border-color)]/50 rounded-2xl p-6 hover:border-[var(--border-color)] transition-all">
-      <div className="flex items-center gap-4 mb-6">
-        <div className={`w-14 h-14 rounded-xl ${iconBg} flex items-center justify-center`}>
-          <Icon className="w-7 h-7 text-[var(--primary)]" />
+    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 h-full flex flex-col justify-between">
+      <div className="flex items-start justify-between mb-4">
+        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
+          <Icon className="w-6 h-6 text-white" />
         </div>
-        <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${isPositive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-          {isPositive ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+        <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+          {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
           {isPositive ? '+' : ''}{change}%
         </div>
       </div>
       <div>
-        <p className="text-4xl font-bold text-[var(--text-primary)] mb-2">{value}</p>
-        <p className="text-[var(--text-muted)] text-sm font-medium">{label}</p>
+        <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
+        <p className="text-[var(--text-muted)] text-sm">{label}</p>
       </div>
     </div>
   );
@@ -312,18 +308,18 @@ function DashboardContent() {
       </div>
 
       {/* Main Grid: Left (Connection Status + Quick Actions) / Right (KPIs) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Left Column */}
-        <div className="flex flex-col gap-4 min-w-0">
+        <div className="flex flex-col gap-3 min-w-0">
           {/* Connection Status Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Connection Status</h2>
             {loadingShops ? (
               <div className="flex items-center justify-center py-2">
                 <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+              <div className="flex gap-3">
                 <ConnectionItem
                   name="Etsy Shop"
                   status={etsyShop ? 'connected' : 'disconnected'}
@@ -340,9 +336,9 @@ function DashboardContent() {
           </div>
 
           {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Quick Actions</h2>
+            <div className="grid grid-cols-3 gap-3">
               <QuickActionButton
                 icon={Upload}
                 label="Import Products"
@@ -369,7 +365,7 @@ function DashboardContent() {
         </div>
 
         {/* Right Column - Key Metrics 2x2 Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+        <div className="grid grid-cols-2 gap-4 min-w-0">
           <MetricCard
             icon={Package}
             value={metrics.totalProducts}
