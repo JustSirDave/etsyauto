@@ -300,101 +300,103 @@ function DashboardContent() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <Suspense fallback={null}>
         <WelcomeHandler />
       </Suspense>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-[var(--text-primary)]">Dashboard</h1>
-          <p className="text-[var(--text-muted)] mt-2 text-sm">Monitor your shop performance and manage operations</p>
-        </div>
-      </div>
-
-      {/* Key Performance Indicators - Top Priority */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          icon={Package}
-          value={metrics.totalProducts}
-          label="Total Products"
-          change={12}
-          iconBg="bg-blue-500/10"
-        />
-        <MetricCard
-          icon={Users}
-          value={metrics.totalCustomers}
-          label="Total Customers"
-          change={8}
-          iconBg="bg-cyan-500/10"
-        />
-        <MetricCard
-          icon={ShoppingCart}
-          value={metrics.totalOrders}
-          label="Total Orders"
-          change={15}
-          iconBg="bg-amber-500/10"
-        />
-        <MetricCard
-          icon={FileText}
-          value={metrics.activeListings}
-          label="Active Listings"
-          change={5}
-          iconBg="bg-emerald-500/10"
-        />
-      </div>
-
-      {/* Connection Status - Secondary Priority */}
       <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Integration Status</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {loadingShops ? (
-            <div className="flex items-center justify-center py-8 col-span-2">
-              <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
+        <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
+      </div>
+
+      {/* Main Grid: Left (Connection Status + Quick Actions) / Right (KPIs) */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-5 items-start">
+        {/* Left Column */}
+        <div className="flex flex-col gap-4 min-w-0">
+          {/* Connection Status Card */}
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Connection Status</h2>
+            {loadingShops ? (
+              <div className="flex items-center justify-center py-2">
+                <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <ConnectionItem
+                  name="Etsy Shop"
+                  status={etsyShop ? 'connected' : 'disconnected'}
+                  storeName={etsyShop?.display_name || user?.tenant_name}
+                  onConnect={() => window.location.href = '/settings'}
+                />
+                <ConnectionItem
+                  name="Supplier API"
+                  status="disconnected"
+                  onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Quick Actions Card */}
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <QuickActionButton
+                icon={Upload}
+                label="Import Products"
+                subtitle="Upload CSV"
+                href="/products/import"
+                color="bg-[var(--primary)]"
+              />
+              <QuickActionButton
+                icon={Sparkles}
+                label="AI Content"
+                subtitle="Generate"
+                href="/ai"
+                color="bg-[var(--info)]"
+              />
+              <QuickActionButton
+                icon={LinkIcon}
+                label="Connect Etsy"
+                subtitle="Link shop"
+                href="/settings"
+                color="bg-[var(--success)]"
+              />
             </div>
-          ) : (
-            <>
-              <ConnectionItem
-                name="Etsy Shop"
-                status={etsyShop ? 'connected' : 'disconnected'}
-                storeName={etsyShop?.display_name || user?.tenant_name}
-                onConnect={() => window.location.href = '/settings'}
-              />
-              <ConnectionItem
-                name="Supplier API"
-                status="disconnected"
-                onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
-              />
-            </>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* Quick Actions - Tertiary Priority */}
-      <div>
-        <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <QuickActionButton
-            icon={Upload}
-            label="Import Products"
-            subtitle="Upload CSV file"
-            href="/products/import"
-            color="bg-blue-500/10"
+        {/* Right Column - Key Metrics 2x2 Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-0">
+          <MetricCard
+            icon={Package}
+            value={metrics.totalProducts}
+            label="Total Products"
+            change={12}
+            iconBg="bg-[var(--primary)]"
           />
-          <QuickActionButton
-            icon={Sparkles}
-            label="AI Content"
-            subtitle="Generate descriptions"
-            href="/ai"
-            color="bg-cyan-500/10"
+          <MetricCard
+            icon={Users}
+            value={metrics.totalCustomers}
+            label="Total Customers"
+            change={8}
+            iconBg="bg-[var(--info)]"
           />
-          <QuickActionButton
-            icon={LinkIcon}
-            label="Connect Etsy"
-            subtitle="Link your shop"
-            href="/settings"
-            color="bg-emerald-500/10"
+          <MetricCard
+            icon={ShoppingCart}
+            value={metrics.totalOrders}
+            label="Total Orders"
+            change={15}
+            iconBg="bg-[var(--warning)]"
+          />
+          <MetricCard
+            icon={FileText}
+            value={metrics.activeListings}
+            label="Active Listings"
+            change={5}
+            iconBg="bg-[var(--success)]"
           />
         </div>
       </div>
