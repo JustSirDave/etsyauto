@@ -155,6 +155,84 @@ export default function AIGenerationPage() {
     }
   };
 
+  // Handle Title Generation
+  const handleGenerateTitle = async () => {
+    if (!selectedProductId) {
+      showToast('Please select a product first to generate a title', 'error');
+      return;
+    }
+
+    try {
+      setGenerating(true);
+      const result = await aiApi.generateContent(selectedProductId);
+
+      showToast(
+        `Title generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
+        'success'
+      );
+
+      // Reload stats and recent generations
+      await Promise.all([loadStats(), loadRecentGenerations()]);
+    } catch (error: any) {
+      console.error('Title generation failed:', error);
+      showToast(error.detail || 'Failed to generate title', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Handle Description Generation
+  const handleGenerateDescription = async () => {
+    if (!selectedProductId) {
+      showToast('Please select a product first to generate a description', 'error');
+      return;
+    }
+
+    try {
+      setGenerating(true);
+      const result = await aiApi.generateContent(selectedProductId);
+
+      showToast(
+        `Description generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
+        'success'
+      );
+
+      // Reload stats and recent generations
+      await Promise.all([loadStats(), loadRecentGenerations()]);
+    } catch (error: any) {
+      console.error('Description generation failed:', error);
+      showToast(error.detail || 'Failed to generate description', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Handle Tag Optimization
+  const handleOptimizeTags = async () => {
+    if (!selectedProductId) {
+      showToast('Please select a product first to optimize tags', 'error');
+      return;
+    }
+
+    try {
+      setGenerating(true);
+      const result = await aiApi.generateContent(selectedProductId);
+
+      showToast(
+        `Tags optimized successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
+        'success'
+      );
+
+      // Reload stats and recent generations
+      await Promise.all([loadStats(), loadRecentGenerations()]);
+    } catch (error: any) {
+      console.error('Tag optimization failed:', error);
+      showToast(error.detail || 'Failed to optimize tags', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-[1600px] mx-auto space-y-6">
@@ -190,8 +268,9 @@ export default function AIGenerationPage() {
 
           {/* Quick Action: Title Generator */}
           <button
-            onClick={() => showToast('Title Generator coming soon', 'info')}
-            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left"
+            onClick={handleGenerateTitle}
+            disabled={generating || !selectedProductId}
+            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
@@ -199,15 +278,18 @@ export default function AIGenerationPage() {
               </div>
               <div>
                 <p className="text-lg font-semibold text-[var(--text-primary)]">Title Generator</p>
-                <p className="text-[var(--text-muted)] text-sm">Quick title creation</p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  {generating ? 'Generating...' : 'Quick title creation'}
+                </p>
               </div>
             </div>
           </button>
 
           {/* Quick Action: Description Writer */}
           <button
-            onClick={() => showToast('Description Writer coming soon', 'info')}
-            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left"
+            onClick={handleGenerateDescription}
+            disabled={generating || !selectedProductId}
+            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--success-bg)] flex items-center justify-center">
@@ -215,15 +297,18 @@ export default function AIGenerationPage() {
               </div>
               <div>
                 <p className="text-lg font-semibold text-[var(--text-primary)]">Description Writer</p>
-                <p className="text-[var(--text-muted)] text-sm">Generate descriptions</p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  {generating ? 'Generating...' : 'Generate descriptions'}
+                </p>
               </div>
             </div>
           </button>
 
           {/* Quick Action: Tag Optimizer */}
           <button
-            onClick={() => showToast('Tag Optimizer coming soon', 'info')}
-            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left"
+            onClick={handleOptimizeTags}
+            disabled={generating || !selectedProductId}
+            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--warning-bg)] flex items-center justify-center">
@@ -231,7 +316,9 @@ export default function AIGenerationPage() {
               </div>
               <div>
                 <p className="text-lg font-semibold text-[var(--text-primary)]">Tag Optimizer</p>
-                <p className="text-[var(--text-muted)] text-sm">Optimize product tags</p>
+                <p className="text-[var(--text-muted)] text-sm">
+                  {generating ? 'Optimizing...' : 'Optimize product tags'}
+                </p>
               </div>
             </div>
           </button>
