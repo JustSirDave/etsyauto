@@ -387,6 +387,12 @@ export interface Order {
   updated_at: string;
 }
 
+export interface OrderDetail extends Order {
+  shipping_address: any;
+  items: any[];
+  synced_at: string | null;
+}
+
 export interface OrderStats {
   pending_payment: number;
   completed: number;
@@ -421,8 +427,8 @@ export const ordersApi = {
     }>(`/api/orders/?${params.toString()}`);
   },
 
-  getById: async (id: number) => {
-    return apiRequest<any>(`/api/orders/${id}`);
+  getById: async (id: number): Promise<OrderDetail> => {
+    return apiRequest<OrderDetail>(`/api/orders/${id}`);
   },
 
   sync: async () => {
