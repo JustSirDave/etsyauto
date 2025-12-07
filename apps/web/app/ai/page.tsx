@@ -247,6 +247,16 @@ export default function AIGenerationPage() {
           </p>
         </div>
 
+        {/* Info Banner */}
+        {!selectedProductId && (
+          <div className="bg-[var(--warning-bg)] border border-[var(--warning)] rounded-lg p-3 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5 text-[var(--warning)] flex-shrink-0" />
+            <p className="text-sm text-[var(--warning)]">
+              Select a product below to enable AI generation features
+            </p>
+          </div>
+        )}
+
         {/* Stats and Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Total Generations Stat */}
