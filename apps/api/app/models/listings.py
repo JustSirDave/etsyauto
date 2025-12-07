@@ -92,17 +92,25 @@ class ListingJob(Base):
 
 
 class Schedule(Base):
-    """Publishing schedules for shops"""
+    """Automated task schedules"""
     __tablename__ = "schedules"
-    
+
     id = Column(BigInteger, primary_key=True, index=True)
     tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False)
-    
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True)  # Optional for non-shop tasks
+
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    type = Column(String(50), nullable=False)  # sync, generate, backup, report
     cron_expr = Column(String(100), nullable=False)
     daily_quota = Column(Integer, default=0)
-    active = Column(Integer, default=1)
-    
+    status = Column(String(20), default='active')  # active, paused, error
+
+    last_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    execution_count = Column(Integer, default=0)
+
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 

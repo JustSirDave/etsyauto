@@ -452,37 +452,93 @@ export const ordersApi = {
 /**
  * Schedules API
  */
+export interface Schedule {
+  id: number;
+  name: string;
+  description: string | null;
+  type: 'sync' | 'generate' | 'backup' | 'report';
+  cron_expr: string;
+  daily_quota: number;
+  status: 'active' | 'paused' | 'error';
+  shop_id: number | null;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  last_error: string | null;
+  execution_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleStats {
+  total: number;
+  active: number;
+  paused: number;
+  executions_today: number;
+}
+
+export interface ScheduleCreate {
+  name: string;
+  description?: string;
+  type: 'sync' | 'generate' | 'backup' | 'report';
+  cron_expr: string;
+  daily_quota?: number;
+  shop_id?: number;
+}
+
+export interface ScheduleUpdate {
+  name?: string;
+  description?: string;
+  type?: 'sync' | 'generate' | 'backup' | 'report';
+  cron_expr?: string;
+  daily_quota?: number;
+  shop_id?: number;
+  status?: 'active' | 'paused' | 'error';
+}
+
 export const schedulesApi = {
-  getAll: async () => {
-    return apiRequest<{ schedules: any[] }>('/api/schedules/');
+  getAll: async (status?: string): Promise<{ schedules: Schedule[]; stats: ScheduleStats }> => {
+    const params = status ? `?status=${status}` : '';
+    return apiRequest<{ schedules: Schedule[]; stats: ScheduleStats }>(`/api/schedules/${params}`);
   },
 
-  getById: async (id: number) => {
-    return apiRequest<any>(`/api/schedules/${id}`);
+  getById: async (id: number): Promise<Schedule> => {
+    return apiRequest<Schedule>(`/api/schedules/${id}`);
   },
 
-  create: async (data: any) => {
-    return apiRequest<any>('/api/schedules/', {
+  create: async (data: ScheduleCreate): Promise<{ id: number; name: string; message: string }> => {
+    return apiRequest<{ id: number; name: string; message: string }>('/api/schedules/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
-  update: async (id: number, data: any) => {
-    return apiRequest<any>(`/api/schedules/${id}`, {
+  update: async (id: number, data: ScheduleUpdate): Promise<{ id: number; message: string }> => {
+    return apiRequest<{ id: number; message: string }>(`/api/schedules/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
 
-  delete: async (id: number) => {
-    return apiRequest<void>(`/api/schedules/${id}`, {
+  delete: async (id: number): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/schedules/${id}`, {
       method: 'DELETE',
     });
   },
 
-  toggle: async (id: number) => {
-    return apiRequest<any>(`/api/schedules/${id}/toggle`, {
+  toggle: async (id: number): Promise<{ id: number; status: string; message: string }> => {
+    return apiRequest<{ id: number; status: string; message: string }>(`/api/schedules/${id}/toggle`, {
+      method: 'POST',
+    });
+  },
+
+  pauseAll: async (): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>('/api/schedules/pause-all', {
+      method: 'POST',
+    });
+  },
+
+  resumeAll: async (): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>('/api/schedules/resume-all', {
       method: 'POST',
     });
   },
