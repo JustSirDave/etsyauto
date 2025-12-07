@@ -39,13 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUser = async () => {
     try {
-      console.log('🔍 Loading user...');
       const currentUser = await authApi.getCurrentUser();
-      console.log('✅ User loaded:', currentUser);
       setUser(currentUser);
     } catch (err) {
       // No valid token, user not logged in
-      console.log('❌ Failed to load user:', err);
       removeAuthToken();
       setUser(null);
     } finally {
@@ -185,7 +182,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Post-login onboarding for new users
       if (response.user.is_new_user) {
-        console.log('New Google OAuth user detected - showing onboarding');
         // TODO: Show onboarding modal or redirect to onboarding flow
         // For now, redirect to dashboard with a welcome message
         router.push('/?welcome=true');
