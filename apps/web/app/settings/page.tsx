@@ -168,6 +168,71 @@ function SettingsContent() {
               </div>
             )}
           </DashboardCard>
+
+          {/* Role Descriptions */}
+          <DashboardCard>
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Team Roles</h2>
+              <p className="text-sm text-[var(--text-muted)] mt-1">Understanding access levels and permissions</p>
+            </div>
+            <div className="space-y-4">
+              <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('owner'))}>
+                  {getRoleIcon('owner')}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-[var(--text-primary)]">Owner</h3>
+                  </div>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Full access to all features including billing, team management, and shop connections. Can delete the workspace. Only one owner per workspace.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('admin'))}>
+                  {getRoleIcon('admin')}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-[var(--text-primary)]">Admin</h3>
+                  </div>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Can manage products, listings, and AI generation. Can invite and remove team members. Cannot access billing or delete the workspace.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('creator'))}>
+                  {getRoleIcon('creator')}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-[var(--text-primary)]">Creator</h3>
+                  </div>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Can create and edit products, generate AI content, and manage listings. Cannot invite team members or modify workspace settings.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('viewer'))}>
+                  {getRoleIcon('viewer')}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-[var(--text-primary)]">Viewer</h3>
+                  </div>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Read-only access to products, orders, and analytics. Cannot create, edit, or delete any content. Perfect for stakeholders who need visibility without editing permissions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </DashboardCard>
         </div>
       )}
 

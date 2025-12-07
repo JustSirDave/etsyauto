@@ -5,76 +5,22 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import {
   Sparkles,
-  Wand2,
-  FileText,
-  Image,
-  Tag,
-  TrendingUp,
   Zap,
-  Clock,
-  CheckCircle,
   AlertCircle,
-  ChevronRight,
   Play,
   Settings,
+  CheckCircle,
+  FileText,
+  Wand2,
+  Tag,
 } from 'lucide-react';
 import { aiApi, productsApi, AIStats, AIGeneration, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
-
-// AI Tool Card Component
-function AIToolCard({
-  title,
-  description,
-  icon: Icon,
-  iconBg,
-  status,
-  onClick,
-}: {
-  title: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  iconBg: string;
-  status?: 'available' | 'coming_soon';
-  onClick?: () => void;
-}) {
-  const isAvailable = status !== 'coming_soon';
-
-  return (
-    <button
-      onClick={isAvailable ? onClick : undefined}
-      disabled={!isAvailable}
-      className={`w-full text-left p-5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl transition-all duration-200 ${
-        isAvailable
-          ? 'hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 cursor-pointer'
-          : 'opacity-60 cursor-not-allowed'
-      }`}
-    >
-      <div className="flex items-start gap-4">
-        <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center flex-shrink-0`}>
-          <Icon className="w-6 h-6 text-white" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-[var(--text-primary)] font-semibold">{title}</h3>
-            {status === 'coming_soon' && (
-              <span className="px-2 py-0.5 bg-[var(--warning-bg)] text-[var(--warning)] text-xs font-medium rounded-full">
-                Coming Soon
-              </span>
-            )}
-          </div>
-          <p className="text-[var(--text-muted)] text-sm">{description}</p>
-        </div>
-        {isAvailable && (
-          <ChevronRight className="w-5 h-5 text-[var(--text-muted)]" />
-        )}
-      </div>
-    </button>
-  );
-}
 
 // Recent Generation Item
 function RecentGeneration({
@@ -124,6 +70,7 @@ function RecentGeneration({
 }
 
 export default function AIGenerationPage() {
+  const router = useRouter();
   const { showToast } = useToast();
   const [stats, setStats] = useState<AIStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
@@ -233,7 +180,7 @@ export default function AIGenerationPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-4 max-w-md">
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--primary-bg)] flex items-center justify-center">
@@ -249,94 +196,11 @@ export default function AIGenerationPage() {
               </div>
             </div>
           </div>
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[var(--success-bg)] flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-[var(--success)]" />
-              </div>
-              <div>
-                {loadingStats ? (
-                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
-                ) : (
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">{stats?.success_rate.toFixed(1) || 0}%</p>
-                )}
-                <p className="text-[var(--text-muted)] text-sm">Success Rate</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
-                <Clock className="w-5 h-5 text-[var(--info)]" />
-              </div>
-              <div>
-                {loadingStats ? (
-                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
-                ) : (
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">{((stats?.avg_response_time_ms || 0) / 1000).toFixed(1)}s</p>
-                )}
-                <p className="text-[var(--text-muted)] text-sm">Avg. Response Time</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[var(--warning-bg)] flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-[var(--warning)]" />
-              </div>
-              <div>
-                {loadingStats ? (
-                  <div className="w-16 h-8 bg-[var(--background)] animate-pulse rounded" />
-                ) : (
-                  <p className="text-2xl font-bold text-[var(--text-primary)]">
-                    {stats?.growth_percentage ? (stats.growth_percentage > 0 ? '+' : '') + stats.growth_percentage.toFixed(0) : 0}%
-                  </p>
-                )}
-                <p className="text-[var(--text-muted)] text-sm">This Month</p>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* AI Tools */}
+          {/* Content Generation */}
           <div className="lg:col-span-2 space-y-6">
-            <DashboardCard title="AI Tools" subtitle="Select a tool to get started">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <AIToolCard
-                  title="Title Generator"
-                  description="Generate SEO-optimized product titles"
-                  icon={FileText}
-                  iconBg="gradient-primary"
-                  status="available"
-                  onClick={() => showToast('Generate content using the form below', 'info')}
-                />
-                <AIToolCard
-                  title="Description Writer"
-                  description="Create compelling product descriptions"
-                  icon={Wand2}
-                  iconBg="gradient-info"
-                  status="available"
-                  onClick={() => showToast('Generate content using the form below', 'info')}
-                />
-                <AIToolCard
-                  title="Tag Optimizer"
-                  description="Generate relevant tags for better visibility"
-                  icon={Tag}
-                  iconBg="gradient-success"
-                  status="available"
-                  onClick={() => showToast('Generate content using the form below', 'info')}
-                />
-                <AIToolCard
-                  title="Image Enhancer"
-                  description="AI-powered image optimization"
-                  icon={Image}
-                  iconBg="gradient-warning"
-                  status="coming_soon"
-                />
-              </div>
-            </DashboardCard>
-
             {/* Quick Generate */}
             <DashboardCard title="Quick Generate" subtitle="Generate content for a product">
               <div className="space-y-4">
@@ -407,7 +271,7 @@ export default function AIGenerationPage() {
               subtitle="Your latest AI generations"
               action={
                 <button
-                  onClick={() => showToast('Generation history coming soon', 'info')}
+                  onClick={() => router.push('/ai/history')}
                   className="text-sm text-[var(--primary)] hover:underline"
                 >
                   View All

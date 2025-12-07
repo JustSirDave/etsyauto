@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { SearchInput, PageSizeDropdown, ExportButton, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
+import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
 import { Calendar, CheckCircle, RotateCcw, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ordersApi, Order, OrderStats } from '@/lib/api';
@@ -145,7 +145,7 @@ function OrdersContent() {
       <DashboardCard noPadding>
         <div className="p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-[var(--border-color)]">
           <div className="w-full sm:w-80"><SearchInput placeholder="Search Order" value={searchQuery} onChange={setSearchQuery} /></div>
-          <div className="flex items-center gap-3"><PageSizeDropdown value={pageSize} onChange={setPageSize} /><ExportButton /></div>
+          <div className="flex items-center gap-3"><PageSizeDropdown value={pageSize} onChange={setPageSize} /></div>
         </div>
         <div className="overflow-x-auto">
           {loading ? (
@@ -154,7 +154,7 @@ function OrdersContent() {
             </div>
           ) : filteredOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
-              <p className="text-[var(--text-muted)] text-lg">No orders found</p>
+              <p className="text-[var(--text-muted)] text-lg">No orders yet...</p>
               {searchQuery && (
                 <p className="text-[var(--text-muted)] text-sm mt-2">Try adjusting your search query</p>
               )}
