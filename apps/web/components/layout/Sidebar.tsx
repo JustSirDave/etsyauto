@@ -7,14 +7,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  Package, 
-  FileText, 
-  ShoppingCart, 
+import {
+  LayoutDashboard,
+  Package,
+  FileText,
+  ShoppingCart,
   Calendar,
   Settings,
-  BarChart3,
   Sparkles,
   ChevronLeft,
   ChevronRight,
@@ -57,12 +56,6 @@ const navigation: NavSection[] = [
     ],
   },
   {
-    title: 'ANALYTICS',
-    items: [
-  { name: 'Usage & Costs', href: '/usage', icon: BarChart3 },
-    ],
-  },
-  {
     title: 'SETTINGS',
     items: [
   { name: 'Settings', href: '/settings', icon: Settings },
@@ -101,8 +94,8 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out relative',
-        isCollapsed ? 'w-[80px]' : 'w-[260px]'
+        'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out relative overflow-hidden',
+        isCollapsed ? 'w-[70px]' : 'w-[240px]'
       )}
     >
       {/* Logo */}
