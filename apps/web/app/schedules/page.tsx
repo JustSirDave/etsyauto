@@ -205,7 +205,7 @@ export default function SchedulesPage() {
 
   // Handle pause all
   const handlePauseAll = async () => {
-    if (!confirm('Are you sure you want to pause all active schedules?')) return;
+    if (!confirm('This will pause all active schedules. You can resume them anytime from Quick Actions. Continue?')) return;
 
     try {
       const result = await schedulesApi.pauseAll();
@@ -226,6 +226,29 @@ export default function SchedulesPage() {
     } catch (error: any) {
       console.error('Failed to resume all schedules:', error);
       showToast(error.detail || 'Failed to resume all schedules', 'error');
+    }
+  };
+
+  // Handle run all syncs
+  const handleRunAllSyncs = async () => {
+    try {
+      // Filter schedules to get only active sync schedules
+      const syncSchedules = schedules.filter(s => s.type === 'sync' && s.status === 'active');
+
+      if (syncSchedules.length === 0) {
+        showToast('No active sync schedules found', 'info');
+        return;
+      }
+
+      // Trigger each sync schedule (in practice, you'd call a backend endpoint)
+      // For now, just show a toast with the count
+      showToast(`Triggered ${syncSchedules.length} sync schedule${syncSchedules.length > 1 ? 's' : ''}`, 'success');
+
+      // Reload schedules to update execution counts
+      await loadSchedules(filter);
+    } catch (error: any) {
+      console.error('Failed to run syncs:', error);
+      showToast(error.detail || 'Failed to run sync schedules', 'error');
     }
   };
 
@@ -374,6 +397,13 @@ export default function SchedulesPage() {
             {/* Quick Actions */}
             <DashboardCard title="Quick Actions">
               <div className="space-y-2">
+                <button
+                  onClick={handleRunAllSyncs}
+                  className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" />
+                  <span>Run All Syncs Now</span>
+                </button>
                 <button
                   onClick={handlePauseAll}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"

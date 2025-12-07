@@ -175,7 +175,7 @@ function SettingsContent() {
               <h2 className="text-lg font-semibold text-[var(--text-primary)]">Team Roles</h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">Understanding access levels and permissions</p>
             </div>
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
                 <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('owner'))}>
                   {getRoleIcon('owner')}

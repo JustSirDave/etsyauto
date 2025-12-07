@@ -13,7 +13,6 @@ import {
   Zap,
   AlertCircle,
   Play,
-  Settings,
   CheckCircle,
   FileText,
   Wand2,
@@ -160,27 +159,19 @@ export default function AIGenerationPage() {
     <DashboardLayout>
       <div className="max-w-[1600px] mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
-              <Sparkles className="w-7 h-7 text-[var(--primary)]" />
-              AI Generation
-            </h1>
-            <p className="text-[var(--text-muted)] mt-1">
-              Generate product titles, descriptions, and tags using AI
-            </p>
-          </div>
-          <button
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--card-bg-hover)] transition-colors"
-            onClick={() => showToast('AI Settings coming soon', 'info')}
-          >
-            <Settings className="w-4 h-4" />
-            AI Settings
-          </button>
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
+            <Sparkles className="w-7 h-7 text-[var(--primary)]" />
+            AI Generation
+          </h1>
+          <p className="text-[var(--text-muted)] mt-1">
+            Generate product titles, descriptions, and tags using AI
+          </p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-4 max-w-md">
+        {/* Stats and Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Total Generations Stat */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-[var(--primary-bg)] flex items-center justify-center">
@@ -196,6 +187,54 @@ export default function AIGenerationPage() {
               </div>
             </div>
           </div>
+
+          {/* Quick Action: Title Generator */}
+          <button
+            onClick={() => showToast('Title Generator coming soon', 'info')}
+            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--info-bg)] flex items-center justify-center">
+                <FileText className="w-5 h-5 text-[var(--info)]" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">Title Generator</p>
+                <p className="text-[var(--text-muted)] text-sm">Quick title creation</p>
+              </div>
+            </div>
+          </button>
+
+          {/* Quick Action: Description Writer */}
+          <button
+            onClick={() => showToast('Description Writer coming soon', 'info')}
+            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--success-bg)] flex items-center justify-center">
+                <Wand2 className="w-5 h-5 text-[var(--success)]" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">Description Writer</p>
+                <p className="text-[var(--text-muted)] text-sm">Generate descriptions</p>
+              </div>
+            </div>
+          </button>
+
+          {/* Quick Action: Tag Optimizer */}
+          <button
+            onClick={() => showToast('Tag Optimizer coming soon', 'info')}
+            className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--warning-bg)] flex items-center justify-center">
+                <Tag className="w-5 h-5 text-[var(--warning)]" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">Tag Optimizer</p>
+                <p className="text-[var(--text-muted)] text-sm">Optimize product tags</p>
+              </div>
+            </div>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

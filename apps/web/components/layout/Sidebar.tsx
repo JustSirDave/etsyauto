@@ -94,8 +94,8 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out relative overflow-hidden',
-        isCollapsed ? 'w-[70px]' : 'w-[240px]'
+        'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out relative overflow-x-hidden overflow-y-auto',
+        isCollapsed ? 'w-[60px]' : 'w-[240px]'
       )}
     >
       {/* Logo */}
@@ -129,7 +129,7 @@ export function Sidebar() {
       </button>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 custom-scrollbar">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2 custom-scrollbar">
         {navigation.map((section, sectionIndex) => (
           <div key={sectionIndex} className={cn(sectionIndex > 0 && 'mt-6')}>
             {section.title && !isCollapsed && (
