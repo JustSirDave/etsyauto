@@ -241,6 +241,16 @@ export const shopsApi = {
 /**
  * Products API
  */
+export interface ProductVariant {
+  sku?: string;
+  option1_name?: string;
+  option1_value?: string;
+  option2_name?: string;
+  option2_value?: string;
+  price?: number;
+  quantity?: number;
+}
+
 export interface Product {
   id: number;
   title_raw: string;
@@ -252,6 +262,7 @@ export interface Product {
   source: string;
   batch_id: string | null;
   created_at: string;
+  variants?: ProductVariant[];
 }
 
 export const productsApi = {
