@@ -69,17 +69,52 @@ def decode_token(token: str) -> dict:
     return payload
 
 
-def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
+def create_access_token(
+    user_id: int,
+    tenant_id: int,
+    role: str,
+    email: str = None,
+    name: str = None,
+    remember_me: bool = False,
+    **kwargs
+) -> str:
     """
-    Alias for create_token - creates an access token
+    Create an access token with user information
     
     Args:
-        data: Payload data to encode
-        expires_delta: Token expiration time
+        user_id: User ID
+        tenant_id: Tenant ID
+        role: User role
+        email: User email (optional)
+        name: User name (optional)
+        remember_me: Extend token lifetime if True
+        **kwargs: Additional claims to include
     
     Returns:
         Encoded JWT access token
     """
+    # Build token data
+    data = {
+        "sub": str(user_id),
+        "id": user_id,
+        "user_id": user_id,
+        "tenant_id": tenant_id,
+        "role": role,
+    }
+    
+    if email:
+        data["email"] = email
+    if name:
+        data["name"] = name
+    
+    # Add any additional claims
+    data.update(kwargs)
+    
+    # Extend expiry for remember_me
+    expires_delta = None
+    if remember_me:
+        expires_delta = timedelta(days=settings.REMEMBER_ME_TTL_DAYS)
+    
     return create_token(data, expires_delta)
 
 
