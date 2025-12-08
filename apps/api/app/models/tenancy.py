@@ -142,19 +142,33 @@ class OAuthToken(Base):
     
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     shop_id = Column(BigInteger, ForeignKey("shops.id"), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)  # Added for faster queries
     provider = Column(
         String(20),
         CheckConstraint("provider IN ('etsy', 'printful')"),
         nullable=False
     )
+    
+    # Encrypted tokens stored as BYTEA
     access_token = Column(BYTEA, nullable=False)  # Encrypted
     refresh_token = Column(BYTEA, nullable=True)  # Encrypted
+    
+    # Token metadata
     expires_at = Column(DateTime(timezone=True), nullable=False)
+    scopes = Column(Text, nullable=True)  # Space-separated scopes
+    
+    # Refresh tracking
+    last_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+    refresh_count = Column(Integer, default=0)
+    
+    # Timestamps
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
     __table_args__ = (
         UniqueConstraint('shop_id', 'provider', name='uq_shop_provider'),
+        Index('idx_oauth_tokens_tenant_shop', 'tenant_id', 'shop_id'),
+        Index('idx_oauth_tokens_expires_at', 'expires_at'),  # For scheduled refresh queries
     )
     
     # Relationships

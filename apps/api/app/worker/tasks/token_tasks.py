@@ -1,201 +1,261 @@
 """
 Celery Tasks for OAuth Token Management
-Handles automatic token refresh before expiry
+Scheduled token refresh and maintenance
 """
 import asyncio
+from datetime import datetime, timezone
+from celery import Task
+from sqlalchemy.orm import Session
+import redis
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Any
 
 from app.worker.celery_app import celery_app
-from app.core.database import SessionLocal
-from app.models.tenancy import OAuthToken, Shop
-from app.services.etsy_client import EtsyClient, EtsyAPIError
-from app.services.encryption import token_encryptor
+from app.core.database import get_db_session
+from app.core.config import settings
+from app.services.token_manager import TokenManager
+from app.models.tenancy import OAuthToken
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="app.worker.tasks.token_tasks.refresh_expiring_tokens")
-def refresh_expiring_tokens() -> Dict[str, Any]:
+class DatabaseTask(Task):
+    """Base task with database session"""
+    _db: Session = None
+    
+    @property
+    def db(self):
+        if self._db is None:
+            self._db = next(get_db_session())
+        return self._db
+    
+    def after_return(self, *args, **kwargs):
+        if self._db is not None:
+            self._db.close()
+            self._db = None
+
+
+@celery_app.task(base=DatabaseTask, bind=True, max_retries=3)
+def refresh_expiring_tokens(self):
     """
-    Periodic task to refresh OAuth tokens that are about to expire.
-
-    Runs every hour and refreshes tokens expiring in the next 24 hours.
-
-    Returns:
-        dict: Summary of refresh operations
+    Proactively refresh tokens expiring in the next 24 hours
+    
+    Runs every hour via Celery Beat
     """
-    db = SessionLocal()
-
+    logger.info("Starting proactive token refresh task")
+    
     try:
-        # Find tokens expiring in the next 24 hours (timezone-aware)
-        threshold = datetime.now(timezone.utc) + timedelta(hours=24)
-
-        expiring_tokens = (
-            db.query(OAuthToken)
-            .filter(
-                OAuthToken.provider == "etsy",
-                OAuthToken.expires_at <= threshold,
-                OAuthToken.expires_at > datetime.now(timezone.utc)  # Not already expired
-            )
-            .all()
+        # Create Redis client
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        
+        # Create token manager
+        token_manager = TokenManager(self.db, redis_client)
+        
+        # Get tokens expiring in next 24 hours
+        expiring_tokens = asyncio.run(
+            token_manager.get_tokens_expiring_soon(hours=24)
         )
-
-        results = {
-            "checked": len(expiring_tokens),
-            "refreshed": 0,
-            "failed": 0,
-            "errors": []
-        }
-
-        logger.info(f"Found {len(expiring_tokens)} tokens expiring within 24 hours")
-
+        
+        if not expiring_tokens:
+            logger.info("No tokens expiring in the next 24 hours")
+            return {
+                "status": "success",
+                "refreshed": 0,
+                "failed": 0,
+                "total": 0
+            }
+        
+        logger.info(f"Found {len(expiring_tokens)} tokens expiring soon")
+        
+        refreshed = 0
+        failed = 0
+        
         for token in expiring_tokens:
             try:
-                # Decrypt refresh token
-                refresh_token = token_encryptor.decrypt(token.refresh_token)
-
-                # Create Etsy client and refresh token
-                etsy_client = EtsyClient(db)
-                new_token_data = asyncio.run(etsy_client.refresh_access_token(refresh_token))
-
-                # Encrypt new tokens
-                encrypted_access = token_encryptor.encrypt(new_token_data["access_token"])
-
-                # Update token in database
-                token.access_token = encrypted_access
-
-                if "refresh_token" in new_token_data:
-                    # Some providers issue new refresh tokens
-                    encrypted_refresh = token_encryptor.encrypt(new_token_data["refresh_token"])
-                    token.refresh_token = encrypted_refresh
-
-                token.expires_at = datetime.now(timezone.utc) + timedelta(
-                    seconds=new_token_data.get("expires_in", 3600)
+                # Check if already refreshed recently (within last hour)
+                if token.last_refreshed_at:
+                    time_since_refresh = datetime.now(timezone.utc) - token.last_refreshed_at
+                    if time_since_refresh.total_seconds() < 3600:
+                        logger.info(f"Token for shop {token.shop_id} refreshed recently, skipping")
+                        continue
+                
+                logger.info(f"Refreshing token for shop {token.shop_id} (expires at {token.expires_at})")
+                
+                # Refresh token
+                new_token = asyncio.run(
+                    token_manager.refresh_token(
+                        tenant_id=token.tenant_id,
+                        shop_id=token.shop_id,
+                        provider=token.provider
+                    )
                 )
-
-                db.commit()
-
-                results["refreshed"] += 1
-                logger.info(f"Refreshed token for shop {token.shop_id}")
-
-            except EtsyAPIError as e:
-                results["failed"] += 1
-                results["errors"].append({
-                    "shop_id": token.shop_id,
-                    "error": str(e)
-                })
-                logger.error(f"Failed to refresh token for shop {token.shop_id}: {e}")
-
-                # Mark shop as having connection issues
-                shop = db.query(Shop).filter(Shop.id == token.shop_id).first()
-                if shop:
-                    shop.status = "token_refresh_failed"
-                    db.commit()
-
+                
+                if new_token:
+                    refreshed += 1
+                    logger.info(f"Successfully refreshed token for shop {token.shop_id}")
+                else:
+                    failed += 1
+                    logger.error(f"Failed to refresh token for shop {token.shop_id}")
+                    
             except Exception as e:
-                results["failed"] += 1
-                results["errors"].append({
-                    "shop_id": token.shop_id,
-                    "error": str(e)
-                })
-                logger.exception(f"Unexpected error refreshing token for shop {token.shop_id}: {e}")
-
-        logger.info(
-            f"Token refresh complete: {results['refreshed']} refreshed, "
-            f"{results['failed']} failed out of {results['checked']} checked"
-        )
-
-        return results
-
-    finally:
-        db.close()
-
-
-@celery_app.task(name="app.worker.tasks.token_tasks.refresh_token_for_shop")
-def refresh_token_for_shop(shop_id: int) -> Dict[str, Any]:
-    """
-    Manually refresh OAuth token for a specific shop.
-
-    Args:
-        shop_id: ID of the shop
-
-    Returns:
-        dict: Result of refresh operation
-    """
-    db = SessionLocal()
-
-    try:
-        # Find the shop's token
-        token = (
-            db.query(OAuthToken)
-            .filter(
-                OAuthToken.shop_id == shop_id,
-                OAuthToken.provider == "etsy"
-            )
-            .first()
-        )
-
-        if not token:
-            return {
-                "success": False,
-                "shop_id": shop_id,
-                "error": "No OAuth token found for shop"
-            }
-
-        # Decrypt refresh token
-        refresh_token = token_encryptor.decrypt(token.refresh_token)
-
-        # Create Etsy client and refresh token
-        etsy_client = EtsyClient(db)
-        new_token_data = asyncio.run(etsy_client.refresh_access_token(refresh_token))
-
-        # Encrypt new tokens
-        encrypted_access = token_encryptor.encrypt(new_token_data["access_token"])
-
-        # Update token in database
-        token.access_token = encrypted_access
-
-        if "refresh_token" in new_token_data:
-            encrypted_refresh = token_encryptor.encrypt(new_token_data["refresh_token"])
-            token.refresh_token = encrypted_refresh
-
-        token.expires_at = datetime.utcnow() + timedelta(
-            seconds=new_token_data.get("expires_in", 3600)
-        )
-
-        db.commit()
-
-        # Update shop status if needed
-        shop = db.query(Shop).filter(Shop.id == shop_id).first()
-        if shop and shop.status == "token_refresh_failed":
-            shop.status = "connected"
-            db.commit()
-
-        logger.info(f"Successfully refreshed token for shop {shop_id}")
-
-        return {
-            "success": True,
-            "shop_id": shop_id,
-            "expires_at": token.expires_at.isoformat()
+                failed += 1
+                logger.error(f"Error refreshing token for shop {token.shop_id}: {e}")
+                continue
+        
+        result = {
+            "status": "success",
+            "refreshed": refreshed,
+            "failed": failed,
+            "total": len(expiring_tokens)
         }
-
-    except EtsyAPIError as e:
-        logger.error(f"Failed to refresh token for shop {shop_id}: {e}")
-        return {
-            "success": False,
-            "shop_id": shop_id,
-            "error": str(e)
-        }
-
+        
+        logger.info(f"Token refresh complete: {result}")
+        return result
+        
     except Exception as e:
-        logger.exception(f"Unexpected error refreshing token for shop {shop_id}: {e}")
+        logger.error(f"Token refresh task failed: {e}")
+        raise self.retry(exc=e, countdown=300)  # Retry after 5 minutes
+
+
+@celery_app.task(base=DatabaseTask, bind=True, max_retries=3)
+def refresh_single_token(self, tenant_id: int, shop_id: int, provider: str = 'etsy'):
+    """
+    Refresh a single token (can be called manually)
+    
+    Args:
+        tenant_id: Tenant ID
+        shop_id: Shop ID
+        provider: OAuth provider
+    
+    Returns:
+        Dict with status and new expiry time
+    """
+    logger.info(f"Manual token refresh for shop {shop_id}")
+    
+    try:
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        token_manager = TokenManager(self.db, redis_client)
+        
+        new_token = asyncio.run(
+            token_manager.refresh_token(tenant_id, shop_id, provider)
+        )
+        
+        if new_token:
+            # Get updated token record
+            updated = self.db.query(OAuthToken).filter(
+                OAuthToken.tenant_id == tenant_id,
+                OAuthToken.shop_id == shop_id,
+                OAuthToken.provider == provider
+            ).first()
+            
+            return {
+                "status": "success",
+                "shop_id": shop_id,
+                "expires_at": updated.expires_at.isoformat() if updated else None,
+                "refresh_count": updated.refresh_count if updated else None
+            }
+        else:
+            return {
+                "status": "failed",
+                "shop_id": shop_id,
+                "error": "Token refresh returned None"
+            }
+            
+    except Exception as e:
+        logger.error(f"Single token refresh failed for shop {shop_id}: {e}")
+        raise self.retry(exc=e, countdown=60)  # Retry after 1 minute
+
+
+@celery_app.task(base=DatabaseTask, bind=True)
+def cleanup_expired_tokens(self):
+    """
+    Clean up tokens that have been expired for more than 30 days
+    
+    This is a maintenance task to keep the database clean
+    """
+    logger.info("Starting expired token cleanup task")
+    
+    try:
+        from datetime import timedelta
+        
+        # Delete tokens expired for more than 30 days with no refresh capability
+        threshold = datetime.now(timezone.utc) - timedelta(days=30)
+        
+        deleted = self.db.query(OAuthToken).filter(
+            OAuthToken.expires_at < threshold,
+            OAuthToken.refresh_token == None
+        ).delete(synchronize_session=False)
+        
+        self.db.commit()
+        
+        logger.info(f"Deleted {deleted} expired tokens")
+        
         return {
-            "success": False,
-            "shop_id": shop_id,
+            "status": "success",
+            "deleted": deleted
+        }
+        
+    except Exception as e:
+        logger.error(f"Token cleanup failed: {e}")
+        self.db.rollback()
+        return {
+            "status": "failed",
             "error": str(e)
         }
 
-    finally:
-        db.close()
+
+@celery_app.task(base=DatabaseTask, bind=True)
+def audit_token_health(self):
+    """
+    Audit token health and log statistics
+    
+    Provides visibility into token refresh patterns
+    """
+    logger.info("Starting token health audit")
+    
+    try:
+        from sqlalchemy import func
+        from datetime import timedelta
+        
+        now = datetime.now(timezone.utc)
+        
+        # Total tokens
+        total = self.db.query(func.count(OAuthToken.id)).scalar()
+        
+        # Expired tokens
+        expired = self.db.query(func.count(OAuthToken.id)).filter(
+            OAuthToken.expires_at < now
+        ).scalar()
+        
+        # Expiring in 24 hours
+        expiring_soon = self.db.query(func.count(OAuthToken.id)).filter(
+            OAuthToken.expires_at < now + timedelta(hours=24),
+            OAuthToken.expires_at >= now
+        ).scalar()
+        
+        # Tokens refreshed in last 24 hours
+        recently_refreshed = self.db.query(func.count(OAuthToken.id)).filter(
+            OAuthToken.last_refreshed_at >= now - timedelta(hours=24)
+        ).scalar()
+        
+        # Average refresh count
+        avg_refresh_count = self.db.query(func.avg(OAuthToken.refresh_count)).scalar() or 0
+        
+        stats = {
+            "total_tokens": total,
+            "expired": expired,
+            "expiring_in_24h": expiring_soon,
+            "refreshed_in_24h": recently_refreshed,
+            "avg_refresh_count": float(avg_refresh_count),
+            "timestamp": now.isoformat()
+        }
+        
+        logger.info(f"Token health audit: {stats}")
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Token health audit failed: {e}")
+        return {
+            "status": "failed",
+            "error": str(e)
+        }

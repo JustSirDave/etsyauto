@@ -6,10 +6,16 @@ import httpx
 from typing import Optional, Dict, Any, List
 from urllib.parse import urlencode
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+import redis
 from app.core.config import settings
 from app.models.tenancy import Shop, OAuthToken
 from app.services.rate_limiter import RateLimiter
+from app.services.token_manager import TokenManager
 from app.core.redis import get_redis_client
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Standard Etsy OAuth 2.0 scopes for listings
@@ -39,7 +45,7 @@ class EtsyRateLimitError(EtsyAPIError):
 
 class EtsyClient:
     """
-    Etsy Open API v3 Client with rate limiting and OAuth token management.
+    Etsy Open API v3 Client with automatic token refresh, rate limiting, and retry logic.
     """
 
     def __init__(self, db: Session, rate_limiter: Optional[RateLimiter] = None):
@@ -56,6 +62,10 @@ class EtsyClient:
             self.rate_limiter = get_rate_limiter(redis_client)
         else:
             self.rate_limiter = rate_limiter
+        
+        # Initialize token manager
+        redis_client = get_redis_client()
+        self.token_manager = TokenManager(db, redis_client)
 
     def get_authorization_url(self, state: str, code_challenge: str) -> str:
         """
@@ -146,55 +156,67 @@ class EtsyClient:
 
             return response.json()
 
-    async def _get_access_token(self, shop_id: int) -> str:
+    async def _get_access_token(self, shop_id: int, tenant_id: int) -> str:
         """
-        Get valid access token for a shop, refreshing if needed.
+        Get valid access token for a shop, automatically refreshing if needed.
+        
+        Uses TokenManager for automatic refresh with single-flight pattern.
+        
+        Args:
+            shop_id: Shop ID
+            tenant_id: Tenant ID
+        
+        Returns:
+            Valid access token
+        
+        Raises:
+            EtsyAPIError: If token not found or refresh failed
         """
-        shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
-        if not shop or not shop.oauth_token:
-            raise EtsyAPIError("Shop not connected or token not found")
-
-        token = shop.oauth_token
-
-        # Check if token needs refresh (if expires_at is close)
-        import datetime
-        if token.expires_at and token.expires_at <= datetime.datetime.utcnow():
-            # Token expired, refresh it
-            if not token.refresh_token:
-                raise EtsyAPIError("No refresh token available")
-
-            new_token_data = await self.refresh_access_token(token.refresh_token)
-
-            # Update token in database
-            token.access_token = new_token_data["access_token"]
-            if "refresh_token" in new_token_data:
-                token.refresh_token = new_token_data["refresh_token"]
-            token.expires_at = datetime.datetime.utcnow() + datetime.timedelta(
-                seconds=new_token_data.get("expires_in", 3600)
+        try:
+            token = await self.token_manager.get_token(
+                tenant_id=tenant_id,
+                shop_id=shop_id,
+                provider='etsy',
+                auto_refresh=True
             )
-            self.db.commit()
-
-        return token.access_token
+            
+            if not token:
+                raise EtsyAPIError("No valid OAuth token found. Please reconnect your shop.")
+            
+            return token
+            
+        except Exception as e:
+            logger.error(f"Failed to get access token for shop {shop_id}: {e}")
+            raise EtsyAPIError(f"Token retrieval failed: {str(e)}")
 
     async def _make_request(
         self,
         shop_id: int,
         method: str,
         endpoint: str,
+        retry_on_401: bool = True,
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Make rate-limited request to Etsy API.
+        Make rate-limited request to Etsy API with automatic token refresh on 401.
 
         Args:
             shop_id: Shop ID for rate limiting
             method: HTTP method (GET, POST, PUT, DELETE)
             endpoint: API endpoint path
+            retry_on_401: Retry request after refreshing token on 401 (default: True)
             **kwargs: Additional arguments for httpx request
 
         Returns:
             dict: API response JSON
         """
+        # Get shop to retrieve tenant_id
+        shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
+        if not shop:
+            raise EtsyAPIError("Shop not found")
+        
+        tenant_id = shop.tenant_id
+        
         # Acquire rate limit token
         if not await self.rate_limiter.acquire(shop_id):
             wait_time = await self.rate_limiter.get_wait_time(shop_id)
@@ -202,8 +224,8 @@ class EtsyClient:
                 f"Rate limit exceeded. Please wait {wait_time:.1f} seconds."
             )
 
-        # Get access token
-        access_token = await self._get_access_token(shop_id)
+        # Get access token (automatically refreshes if expired)
+        access_token = await self._get_access_token(shop_id, tenant_id)
 
         # Make request
         headers = kwargs.pop("headers", {})
@@ -219,6 +241,37 @@ class EtsyClient:
                 headers=headers,
                 **kwargs
             )
+
+            # Handle 401 - token might have expired between check and request
+            if response.status_code == 401 and retry_on_401:
+                logger.warning(f"Got 401 from Etsy API, forcing token refresh for shop {shop_id}")
+                
+                # Force token refresh
+                try:
+                    new_token = await self.token_manager.refresh_token(tenant_id, shop_id, 'etsy')
+                    
+                    # Retry request with new token
+                    headers["Authorization"] = f"Bearer {new_token}"
+                    response = await client.request(
+                        method=method,
+                        url=url,
+                        headers=headers,
+                        **kwargs
+                    )
+                    
+                    if response.status_code == 401:
+                        # Still 401 after refresh - token is invalid
+                        raise EtsyAPIError(
+                            "Authentication failed. Please reconnect your Etsy shop.",
+                            status_code=401
+                        )
+                        
+                except Exception as e:
+                    logger.error(f"Token refresh after 401 failed: {e}")
+                    raise EtsyAPIError(
+                        "Authentication failed. Please reconnect your Etsy shop.",
+                        status_code=401
+                    )
 
             if response.status_code == 429:
                 raise EtsyRateLimitError("Etsy API rate limit exceeded")

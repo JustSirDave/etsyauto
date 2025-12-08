@@ -11,11 +11,13 @@ import json
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
 from app.models.tenancy import Shop, OAuthToken
-from app.services.etsy_oauth import etsy_oauth
+from app.services.etsy_oauth import etsy_oauth, EtsyOAuthService
 from app.services.encryption import token_encryptor
+from app.services.token_manager import TokenManager
 from app.core.config import settings
+from app.core.security import check_rate_limit, rate_limit_key, SecurityHeaders
 
-# Redis client for PKCE state storage
+# Redis client for PKCE state storage and token management
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 router = APIRouter()
@@ -37,6 +39,16 @@ async def connect_etsy_shop(current_user = Depends(get_current_user)):
 
     Returns URL to redirect user to Etsy for authorization
     """
+    tenant_id = int(current_user["tenant_id"])
+    
+    # Rate limit: max 10 OAuth start attempts per tenant per hour
+    rl_key = rate_limit_key(tenant_id, 0, 'oauth_start')
+    if not check_rate_limit(redis_client, rl_key, max_attempts=10, window_seconds=3600):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many OAuth attempts. Please try again later."
+        )
+    
     auth_data = etsy_oauth.get_authorization_url()
 
     # Store code_verifier in Redis with state as key (expires in 10 minutes)
@@ -108,34 +120,18 @@ async def etsy_oauth_callback(
             db.add(shop)
             db.flush()
         
-        # Calculate token expiry (timezone-aware)
-        expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data["expires_in"])
+        # Use TokenManager to save encrypted tokens
+        token_manager = TokenManager(db, redis_client)
+        await token_manager.save_token(
+            tenant_id=int(current_user["tenant_id"]),
+            shop_id=shop.id,
+            access_token=token_data["access_token"],
+            refresh_token=token_data.get("refresh_token", ""),
+            expires_in=token_data["expires_in"],
+            provider="etsy",
+            scopes=" ".join(EtsyOAuthService.SCOPES)
+        )
         
-        # Encrypt tokens
-        encrypted_access = token_encryptor.encrypt(token_data["access_token"])
-        encrypted_refresh = token_encryptor.encrypt(token_data.get("refresh_token", ""))
-        
-        # Save or update OAuth tokens
-        existing_token = db.query(OAuthToken).filter(
-            OAuthToken.shop_id == shop.id,
-            OAuthToken.provider == "etsy"
-        ).first()
-        
-        if existing_token:
-            existing_token.access_token = encrypted_access
-            existing_token.refresh_token = encrypted_refresh
-            existing_token.expires_at = expires_at
-        else:
-            oauth_token = OAuthToken(
-                shop_id=shop.id,
-                provider="etsy",
-                access_token=encrypted_access,
-                refresh_token=encrypted_refresh,
-                expires_at=expires_at
-            )
-            db.add(oauth_token)
-        
-        db.commit()
         db.refresh(shop)
         
         return {
@@ -182,6 +178,66 @@ async def list_shops(
     }
 
 
+@router.post("/{shop_id}/refresh-token", tags=["Shops"])
+async def refresh_shop_token(
+    shop_id: int,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually refresh OAuth token for a shop
+    
+    Useful for testing or forcing a refresh
+    """
+    tenant_id = int(current_user["tenant_id"])
+    
+    # Rate limit: max 5 manual refresh attempts per shop per 10 minutes
+    rl_key = rate_limit_key(tenant_id, shop_id, 'manual_refresh')
+    if not check_rate_limit(redis_client, rl_key, max_attempts=5, window_seconds=600):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many refresh attempts. Please wait a few minutes."
+        )
+    
+    # Verify shop ownership
+    shop = db.query(Shop).filter(
+        Shop.id == shop_id,
+        Shop.tenant_id == tenant_id,
+        Shop.status == 'connected'
+    ).first()
+    
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found or not connected")
+    
+    try:
+        token_manager = TokenManager(db, redis_client)
+        new_token = await token_manager.refresh_token(tenant_id, shop_id, provider='etsy')
+        
+        if not new_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to refresh token"
+            )
+        
+        # Get updated token info
+        oauth_token = db.query(OAuthToken).filter(
+            OAuthToken.shop_id == shop_id,
+            OAuthToken.provider == 'etsy'
+        ).first()
+        
+        return {
+            "message": "Token refreshed successfully",
+            "expires_at": oauth_token.expires_at.isoformat(),
+            "refresh_count": oauth_token.refresh_count
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Token refresh failed: {str(e)}"
+        )
+
+
 @router.delete("/{shop_id}", tags=["Shops"])
 async def disconnect_shop(
     shop_id: int,
@@ -191,15 +247,21 @@ async def disconnect_shop(
     """
     Disconnect an Etsy shop
     """
+    tenant_id = int(current_user["tenant_id"])
+    
     shop = db.query(Shop).filter(
         Shop.id == shop_id,
-        Shop.tenant_id == int(current_user["tenant_id"])
+        Shop.tenant_id == tenant_id
     ).first()
     
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
     
-    # Update status instead of deleting
+    # Revoke and delete tokens
+    token_manager = TokenManager(db, redis_client)
+    await token_manager.revoke_token(tenant_id, shop_id, provider='etsy')
+    
+    # Update shop status
     shop.status = "revoked"
     db.commit()
     

@@ -1,85 +1,259 @@
 """
-Security utilities - JWT tokens and password hashing
+Security Utilities for OAuth and Token Management
+Provides logging sanitization and security helpers
 """
-import jwt
-import time
-import bcrypt
-from datetime import datetime, timedelta
-from typing import Dict, Any
-
-from app.core.config import settings
+import re
+from typing import Any, Dict
+import logging
 
 
-def hash_password(password: str) -> str:
-    """Hash a password for storing"""
-    # Convert password to bytes and hash with bcrypt
-    password_bytes = password.encode('utf-8')
-    salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode('utf-8')
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a password against a hash"""
-    password_bytes = plain_password.encode('utf-8')
-    hashed_bytes = hashed_password.encode('utf-8')
-    return bcrypt.checkpw(password_bytes, hashed_bytes)
-
-
-def create_access_token(user_id: int, tenant_id: int, role: str, shop_ids: list, remember_me: bool = False) -> str:
+class SanitizingFormatter(logging.Formatter):
     """
-    Create JWT access token
-
-    Args:
-        user_id: User ID
-        tenant_id: Tenant/Organization ID
-        role: User role (owner, admin, creator, viewer)
-        shop_ids: List of shop IDs user has access to
-        remember_me: If True, extends token expiry to 30 days
-
-    Returns:
-        Encoded JWT token string
+    Custom log formatter that sanitizes sensitive data
+    
+    Prevents OAuth tokens, API keys, and other secrets from appearing in logs
     """
-    now = int(time.time())
-
-    # Use extended TTL if remember_me is enabled
-    if remember_me:
-        ttl_seconds = settings.REMEMBER_ME_TTL_DAYS * 24 * 60 * 60  # Convert days to seconds
-    else:
-        ttl_seconds = settings.JWT_TTL_SECONDS
-
-    payload = {
-        "iss": settings.JWT_ISSUER,
-        "aud": settings.JWT_AUDIENCE,
-        "sub": str(user_id),
-        "tenant_id": str(tenant_id),
-        "role": role,
-        "shop_ids": shop_ids,
-        "iat": now,
-        "exp": now + ttl_seconds,
-        "remember_me": remember_me
+    
+    # Patterns to detect and redact
+    PATTERNS = {
+        'bearer_token': (r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', 'Bearer [REDACTED]'),
+        'access_token': (r'"access_token"\s*:\s*"[^"]*"', '"access_token": "[REDACTED]"'),
+        'refresh_token': (r'"refresh_token"\s*:\s*"[^"]*"', '"refresh_token": "[REDACTED]"'),
+        'api_key': (r'"api_key"\s*:\s*"[^"]*"', '"api_key": "[REDACTED]"'),
+        'client_secret': (r'"client_secret"\s*:\s*"[^"]*"', '"client_secret": "[REDACTED]"'),
+        'password': (r'"password"\s*:\s*"[^"]*"', '"password": "[REDACTED]"'),
+        'authorization': (r'Authorization:\s*[^\s]+', 'Authorization: [REDACTED]'),
+        'x_api_key': (r'x-api-key:\s*[^\s]+', 'x-api-key: [REDACTED]'),
+        # Match tokens that look like JWTs or OAuth tokens (long alphanumeric strings)
+        'long_token': (r'\b[A-Za-z0-9\-._~+/]{40,}\b', '[TOKEN_REDACTED]'),
     }
+    
+    def format(self, record: logging.LogRecord) -> str:
+        """Format log record with sensitive data redacted"""
+        # Format the original message
+        original_message = super().format(record)
+        
+        # Apply all sanitization patterns
+        sanitized_message = original_message
+        for pattern_name, (pattern, replacement) in self.PATTERNS.items():
+            sanitized_message = re.sub(pattern, replacement, sanitized_message, flags=re.IGNORECASE)
+        
+        return sanitized_message
 
-    return jwt.encode(payload, settings.JWT_PRIVATE_KEY, algorithm=settings.JWT_ALGORITHM)
 
-
-def decode_token(token: str) -> Dict[str, Any]:
+def sanitize_dict(data: Dict[str, Any], sensitive_keys: list = None) -> Dict[str, Any]:
     """
-    Decode and verify JWT token
+    Recursively sanitize a dictionary by redacting sensitive keys
     
     Args:
-        token: JWT token string
+        data: Dictionary to sanitize
+        sensitive_keys: List of keys to redact (default: common sensitive keys)
     
     Returns:
-        Decoded payload dictionary
-    
-    Raises:
-        jwt.InvalidTokenError: If token is invalid or expired
+        Sanitized dictionary with sensitive values replaced with '[REDACTED]'
     """
-    return jwt.decode(
-        token, 
-        settings.JWT_PUBLIC_KEY, 
-        algorithms=[settings.JWT_ALGORITHM],
-        audience=settings.JWT_AUDIENCE,
-        issuer=settings.JWT_ISSUER
-    )
+    if sensitive_keys is None:
+        sensitive_keys = [
+            'access_token', 'refresh_token', 'token', 'api_key', 'secret',
+            'client_secret', 'password', 'authorization', 'bearer',
+            'private_key', 'encryption_key', 'jwt'
+        ]
+    
+    if not isinstance(data, dict):
+        return data
+    
+    sanitized = {}
+    for key, value in data.items():
+        # Check if key matches sensitive pattern
+        is_sensitive = any(
+            sensitive_key.lower() in key.lower() 
+            for sensitive_key in sensitive_keys
+        )
+        
+        if is_sensitive:
+            # Redact sensitive values
+            if value:
+                sanitized[key] = '[REDACTED]'
+            else:
+                sanitized[key] = value
+        elif isinstance(value, dict):
+            # Recursively sanitize nested dictionaries
+            sanitized[key] = sanitize_dict(value, sensitive_keys)
+        elif isinstance(value, list):
+            # Sanitize lists
+            sanitized[key] = [
+                sanitize_dict(item, sensitive_keys) if isinstance(item, dict) else item
+                for item in value
+            ]
+        else:
+            sanitized[key] = value
+    
+    return sanitized
+
+
+def mask_token(token: str, visible_chars: int = 4) -> str:
+    """
+    Mask a token for display purposes
+    
+    Args:
+        token: Token to mask
+        visible_chars: Number of characters to show at start and end
+    
+    Returns:
+        Masked token like "sk_t...xyz" or "[EMPTY]"
+    
+    Example:
+        mask_token("sk_test_abc123xyz789") -> "sk_t...x789"
+    """
+    if not token:
+        return "[EMPTY]"
+    
+    if len(token) <= visible_chars * 2:
+        return "*" * len(token)
+    
+    return f"{token[:visible_chars]}...{token[-visible_chars:]}"
+
+
+def validate_redirect_uri(redirect_uri: str, allowed_domains: list) -> bool:
+    """
+    Validate OAuth redirect URI against allowed domains
+    
+    Prevents open redirect vulnerabilities
+    
+    Args:
+        redirect_uri: URI to validate
+        allowed_domains: List of allowed domain patterns
+    
+    Returns:
+        True if valid, False otherwise
+    """
+    from urllib.parse import urlparse
+    
+    if not redirect_uri:
+        return False
+    
+    try:
+        parsed = urlparse(redirect_uri)
+        
+        # Must be HTTPS in production (or localhost for dev)
+        if parsed.scheme not in ['https', 'http']:
+            return False
+        
+        # Allow localhost for development
+        if parsed.hostname in ['localhost', '127.0.0.1', '::1']:
+            return True
+        
+        # Check against allowed domains
+        for allowed_domain in allowed_domains:
+            if parsed.hostname == allowed_domain or parsed.hostname.endswith(f'.{allowed_domain}'):
+                return True
+        
+        return False
+        
+    except Exception:
+        return False
+
+
+def validate_state_token(state: str) -> bool:
+    """
+    Validate OAuth state token format
+    
+    State should be a URL-safe random string
+    
+    Args:
+        state: State token to validate
+    
+    Returns:
+        True if valid format, False otherwise
+    """
+    if not state:
+        return False
+    
+    # Should be at least 16 characters
+    if len(state) < 16:
+        return False
+    
+    # Should only contain URL-safe characters
+    if not re.match(r'^[A-Za-z0-9\-_]+$', state):
+        return False
+    
+    return True
+
+
+class SecurityHeaders:
+    """
+    Security headers for API responses
+    
+    Use these to add security headers to OAuth responses
+    """
+    
+    @staticmethod
+    def get_oauth_headers() -> Dict[str, str]:
+        """Get security headers for OAuth endpoints"""
+        return {
+            'X-Content-Type-Options': 'nosniff',
+            'X-Frame-Options': 'DENY',
+            'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+            'Pragma': 'no-cache',
+            'Referrer-Policy': 'no-referrer'
+        }
+    
+    @staticmethod
+    def get_api_headers() -> Dict[str, str]:
+        """Get security headers for API endpoints"""
+        return {
+            'X-Content-Type-Options': 'nosniff',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+        }
+
+
+def rate_limit_key(tenant_id: int, shop_id: int, operation: str) -> str:
+    """
+    Generate Redis key for rate limiting OAuth operations
+    
+    Args:
+        tenant_id: Tenant ID
+        shop_id: Shop ID
+        operation: Operation name (e.g., 'token_refresh', 'oauth_start')
+    
+    Returns:
+        Redis key for rate limiting
+    """
+    return f"rate_limit:{operation}:{tenant_id}:{shop_id}"
+
+
+def check_rate_limit(redis_client, key: str, max_attempts: int, window_seconds: int) -> bool:
+    """
+    Check if rate limit is exceeded
+    
+    Args:
+        redis_client: Redis client instance
+        key: Rate limit key
+        max_attempts: Maximum attempts allowed
+        window_seconds: Time window in seconds
+    
+    Returns:
+        True if allowed, False if rate limit exceeded
+    """
+    try:
+        current = redis_client.get(key)
+        
+        if current is None:
+            # First attempt
+            redis_client.setex(key, window_seconds, 1)
+            return True
+        
+        current = int(current)
+        
+        if current >= max_attempts:
+            # Rate limit exceeded
+            return False
+        
+        # Increment counter
+        redis_client.incr(key)
+        return True
+        
+    except Exception:
+        # Fail open (allow the request if Redis is down)
+        return True

@@ -42,3 +42,22 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_db_session():
+    """
+    Generator for Celery tasks to get database session
+    
+    Usage:
+        db = next(get_db_session())
+        try:
+            # Use db
+            ...
+        finally:
+            db.close()
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
