@@ -3,7 +3,7 @@ SQLAlchemy Models - Core Tenancy & Authentication
 """
 from datetime import datetime
 from sqlalchemy import (
-    Column, BigInteger, String, Text, Boolean, DateTime, 
+    Column, BigInteger, String, Text, Boolean, DateTime, Integer,
     ForeignKey, CheckConstraint, UniqueConstraint, Index
 )
 from sqlalchemy.orm import relationship
