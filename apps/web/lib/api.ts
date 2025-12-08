@@ -329,6 +329,13 @@ export const productsApi = {
     });
   },
 
+  update: async (productId: number, data: any) => {
+    return apiRequest<any>(`/api/products/${productId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
   delete: async (productId: number) => {
     return apiRequest<void>(`/api/products/${productId}`, {
       method: 'DELETE',
@@ -542,28 +549,14 @@ export const schedulesApi = {
       method: 'POST',
     });
   },
-};
 
-/**
- * Usage & Costs API
- */
-export const usageApi = {
-  getSummary: async () => {
-    return apiRequest<any>('/api/usage/summary');
-  },
-
-  getHistory: async (page: number = 1, limit: number = 50) => {
-    const params = new URLSearchParams({
-      skip: String((page - 1) * limit),
-      limit: String(limit),
+  runAllSyncs: async (): Promise<{ message: string; triggered_count: number }> => {
+    return apiRequest<{ message: string; triggered_count: number }>('/api/schedules/run-all-syncs', {
+      method: 'POST',
     });
-
-    return apiRequest<{
-      costs: any[];
-      total: number;
-    }>(`/api/usage/history?${params.toString()}`);
   },
 };
+
 
 /**
  * Team Management API

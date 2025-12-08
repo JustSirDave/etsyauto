@@ -60,6 +60,7 @@ function OrderDetailContent() {
   const { showToast } = useToast();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const orderId = typeof params?.id === 'string' ? parseInt(params.id, 10) : null;
 
@@ -82,6 +83,21 @@ function OrderDetailContent() {
       router.push('/orders');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncOrder = async () => {
+    try {
+      setSyncing(true);
+      showToast('Syncing order from Etsy...', 'info');
+      await ordersApi.sync();
+      showToast('Order synced successfully!', 'success');
+      await loadOrder();
+    } catch (error: any) {
+      console.error('Failed to sync order:', error);
+      showToast(error.detail || 'Failed to sync order', 'error');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -130,11 +146,12 @@ function OrderDetailContent() {
         </button>
 
         <button
-          onClick={() => showToast('Sync functionality coming soon', 'info')}
-          className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors"
+          onClick={handleSyncOrder}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <RefreshCcw className="w-4 h-4" />
-          <span>Sync Order</span>
+          <RefreshCcw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+          <span>{syncing ? 'Syncing...' : 'Sync Order'}</span>
         </button>
       </div>
 

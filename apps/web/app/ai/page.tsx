@@ -157,14 +157,20 @@ export default function AIGenerationPage() {
 
   // Handle Title Generation
   const handleGenerateTitle = async () => {
+    console.log('[AI Generation] Title generation started');
+    console.log('[AI Generation] Selected product ID:', selectedProductId);
+
     if (!selectedProductId) {
+      console.warn('[AI Generation] No product selected');
       showToast('Please select a product first to generate a title', 'error');
       return;
     }
 
     try {
       setGenerating(true);
+      console.log('[AI Generation] Calling API for product:', selectedProductId);
       const result = await aiApi.generateContent(selectedProductId);
+      console.log('[AI Generation] API response received:', result);
 
       showToast(
         `Title generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
@@ -174,10 +180,17 @@ export default function AIGenerationPage() {
       // Reload stats and recent generations
       await Promise.all([loadStats(), loadRecentGenerations()]);
     } catch (error: any) {
-      console.error('Title generation failed:', error);
-      showToast(error.detail || 'Failed to generate title', 'error');
+      console.error('[AI Generation] Title generation failed:', error);
+      console.error('[AI Generation] Error details:', {
+        message: error.message,
+        detail: error.detail,
+        status: error.status,
+        fullError: error
+      });
+      showToast(error.detail || error.message || 'Failed to generate title', 'error');
     } finally {
       setGenerating(false);
+      console.log('[AI Generation] Title generation completed');
     }
   };
 
@@ -279,7 +292,7 @@ export default function AIGenerationPage() {
           {/* Quick Action: Title Generator */}
           <button
             onClick={handleGenerateTitle}
-            disabled={generating || !selectedProductId}
+            disabled={generating}
             className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
@@ -298,7 +311,7 @@ export default function AIGenerationPage() {
           {/* Quick Action: Description Writer */}
           <button
             onClick={handleGenerateDescription}
-            disabled={generating || !selectedProductId}
+            disabled={generating}
             className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
@@ -317,7 +330,7 @@ export default function AIGenerationPage() {
           {/* Quick Action: Tag Optimizer */}
           <button
             onClick={handleOptimizeTags}
-            disabled={generating || !selectedProductId}
+            disabled={generating}
             className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">

@@ -92,33 +92,11 @@ export function Sidebar() {
   };
 
   return (
-    <div
-      className={cn(
-        'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out relative overflow-x-hidden overflow-y-auto',
-        isCollapsed ? 'w-[60px]' : 'w-[240px]'
-      )}
-    >
-      {/* Logo */}
-      <div className={cn(
-        'h-16 flex items-center border-b border-[var(--border-color)]',
-        isCollapsed ? 'justify-center px-2' : 'px-6'
-      )}>
-        <Link href="/" className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30 flex-shrink-0">
-            <span className="text-white font-bold text-lg">E</span>
-          </div>
-          {!isCollapsed && (
-            <span className="text-[var(--text-primary)] font-bold text-xl tracking-tight">
-              Etsy Auto
-            </span>
-          )}
-        </Link>
-      </div>
-
-      {/* Collapse Toggle Button */}
+    <div className="relative">
+      {/* Collapse Toggle Button - Outside main container */}
       <button
         onClick={toggleSidebar}
-        className="absolute -right-3 top-20 w-6 h-6 bg-[var(--primary)] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[var(--primary-dark)] transition-colors z-10"
+        className="absolute right-0 top-20 translate-x-1/2 w-6 h-6 bg-[var(--primary)] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[var(--primary-dark)] transition-colors z-50"
         title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
       >
         {isCollapsed ? (
@@ -127,6 +105,29 @@ export function Sidebar() {
           <ChevronLeft className="w-4 h-4" />
         )}
       </button>
+
+      <div
+        className={cn(
+          'h-screen flex flex-col bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] transition-all duration-300 ease-in-out overflow-y-auto',
+          isCollapsed ? 'w-[60px]' : 'w-[240px]'
+        )}
+      >
+        {/* Logo */}
+        <div className={cn(
+          'h-16 flex items-center border-b border-[var(--border-color)]',
+          isCollapsed ? 'justify-center px-2' : 'px-6'
+        )}>
+          <Link href="/" className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30 flex-shrink-0">
+              <span className="text-white font-bold text-lg">E</span>
+            </div>
+            {!isCollapsed && (
+              <span className="text-[var(--text-primary)] font-bold text-xl tracking-tight">
+                Etsy Auto
+              </span>
+            )}
+          </Link>
+        </div>
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-2 custom-scrollbar">
@@ -234,6 +235,7 @@ export function Sidebar() {
         <p className="text-xs text-[var(--text-muted)]">
           {isCollapsed ? 'v1.0' : 'Etsy Auto v1.0.0'}
         </p>
+      </div>
       </div>
     </div>
   );

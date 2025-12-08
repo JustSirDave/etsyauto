@@ -300,6 +300,41 @@ async def generate_ai_content(
     }
 
 
+@router.put("/{product_id}", tags=["Products"])
+async def update_product(
+    product_id: int,
+    request: ProductImportRequest,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update an existing product
+    """
+    product = db.query(Product).filter(
+        Product.id == product_id,
+        Product.tenant_id == int(current_user["tenant_id"])
+    ).first()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Update fields
+    product.title_raw = request.title_raw
+    product.description_raw = request.description_raw
+    product.tags_raw = request.tags_raw
+    product.images = request.images
+    product.variants = request.variants
+    product.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(product)
+    
+    return {
+        "message": "Product updated successfully",
+        "product_id": product.id
+    }
+
+
 @router.delete("/{product_id}", tags=["Products"])
 async def delete_product(
     product_id: int,

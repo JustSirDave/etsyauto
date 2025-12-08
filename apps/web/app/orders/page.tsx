@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
-import { Calendar, CheckCircle, RotateCcw, XCircle } from 'lucide-react';
+import { Calendar, CheckCircle, RotateCcw, XCircle, RefreshCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ordersApi, Order, OrderStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
@@ -49,6 +49,24 @@ function OrdersContent() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+
+  // Sync orders from Etsy
+  const handleSyncOrders = async () => {
+    try {
+      setSyncing(true);
+      showToast('Syncing orders from Etsy...', 'info');
+      await ordersApi.sync();
+      showToast('Orders synced successfully!', 'success');
+      await loadOrders();
+      await loadStats();
+    } catch (error: any) {
+      console.error('Failed to sync orders:', error);
+      showToast(error.detail || 'Failed to sync orders', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Load stats
   const loadStats = async () => {
@@ -145,7 +163,17 @@ function OrdersContent() {
       <DashboardCard noPadding>
         <div className="p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-[var(--border-color)]">
           <div className="w-full sm:w-80"><SearchInput placeholder="Search Order" value={searchQuery} onChange={setSearchQuery} /></div>
-          <div className="flex items-center gap-3"><PageSizeDropdown value={pageSize} onChange={setPageSize} /></div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSyncOrders}
+              disabled={syncing}
+              className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCcw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+              <span>{syncing ? 'Syncing...' : 'Sync Orders'}</span>
+            </button>
+            <PageSizeDropdown value={pageSize} onChange={setPageSize} />
+          </div>
         </div>
         <div className="overflow-x-auto">
           {loading ? (

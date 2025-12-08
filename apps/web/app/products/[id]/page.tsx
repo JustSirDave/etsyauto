@@ -11,6 +11,7 @@ import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { ArrowLeft, Package, Calendar, Tag, DollarSign, Sparkles, Trash2, Edit } from 'lucide-react';
 import { productsApi, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { EditProductModal } from '@/components/products/EditProductModal';
 
 function ProductDetailContent() {
   const router = useRouter();
@@ -20,6 +21,7 @@ function ProductDetailContent() {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const productId = typeof params?.id === 'string' ? parseInt(params.id, 10) : null;
 
@@ -143,7 +145,7 @@ function ProductDetailContent() {
           </button>
 
           <button
-            onClick={() => showToast('Edit functionality coming soon', 'info')}
+            onClick={() => setShowEditModal(true)}
             className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors"
           >
             <Edit className="w-4 h-4" />
@@ -306,6 +308,17 @@ function ProductDetailContent() {
           )}
         </div>
       </div>
+
+      {/* Edit Product Modal */}
+      {product && (
+        <EditProductModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => loadProduct()}
+          product={product}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }

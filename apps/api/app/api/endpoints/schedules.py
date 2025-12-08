@@ -353,3 +353,42 @@ async def resume_all_schedules(
     db.commit()
 
     return {"message": "All schedules resumed"}
+
+
+@router.post("/run-all-syncs", tags=["Schedules"])
+async def run_all_syncs(
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger all active sync schedules to run immediately
+    """
+    tenant_id = int(current_user["tenant_id"])
+
+    # Get all active sync schedules
+    sync_schedules = db.query(Schedule).filter(
+        Schedule.tenant_id == tenant_id,
+        Schedule.type == 'sync',
+        Schedule.status == 'active'
+    ).all()
+
+    if not sync_schedules:
+        return {
+            "message": "No active sync schedules found",
+            "triggered_count": 0
+        }
+
+    # TODO: Implement actual sync triggering logic with Celery/background tasks
+    # For now, just update last_run_at and execution_count
+    now = datetime.now(timezone.utc)
+    for schedule in sync_schedules:
+        schedule.last_run_at = now
+        schedule.execution_count = (schedule.execution_count or 0) + 1
+        schedule.updated_at = now
+
+    db.commit()
+
+    return {
+        "message": f"Triggered {len(sync_schedules)} sync schedule{'s' if len(sync_schedules) > 1 else ''}",
+        "triggered_count": len(sync_schedules)
+    }

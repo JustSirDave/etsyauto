@@ -76,15 +76,28 @@ class ListingJob(Base):
     ai_generation_id = Column(BigInteger, ForeignKey('ai_generations.id'))
     
     idempotency_key = Column(String(255), unique=True)
-    state = Column(
+    
+    # Status tracking
+    status = Column(
         String(20), 
-        CheckConstraint("state IN ('queued','drafting','publishing','verifying','done','failed')"),
-        default='queued'
+        CheckConstraint("status IN ('pending','scheduled','processing','completed','failed','cancelled')"),
+        default='pending'
     )
     
+    # Error tracking
     error_code = Column(String(100))
+    error_message = Column(Text)
     error_detail = Column(JSONB)
-    attempts = Column(Integer, default=0)
+    
+    # Retry tracking
+    retry_count = Column(Integer, default=0)
+    
+    # Timestamps
+    scheduled_for = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Etsy info
     etsy_listing_id = Column(String(50))
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

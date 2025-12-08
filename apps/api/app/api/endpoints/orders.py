@@ -184,14 +184,146 @@ async def sync_orders(
     2. Update existing orders
     3. Create new orders
     4. Return sync summary
-
-    Note: This is a placeholder - full implementation requires
-    Etsy API integration with Shop oauth tokens
     """
-    # TODO: Implement actual Etsy API sync
-    # For now, return a placeholder response
-    return {
-        "message": "Order sync initiated",
-        "status": "in_progress",
-        "note": "Full implementation requires Etsy API integration"
+    from app.models.tenancy import Shop
+    from app.services.etsy_client import EtsyClient
+    from app.core.redis import get_redis_client
+    from app.services.rate_limiter import get_rate_limiter
+    
+    tenant_id = int(current_user["tenant_id"])
+    
+    # Get all connected shops for this tenant
+    shops = db.query(Shop).filter(
+        Shop.tenant_id == tenant_id,
+        Shop.status == 'connected'
+    ).all()
+    
+    if not shops:
+        raise HTTPException(
+            status_code=400,
+            detail="No connected shops found. Please connect an Etsy shop first."
+        )
+    
+    # Initialize Etsy client
+    redis_client = get_redis_client()
+    rate_limiter = get_rate_limiter(redis_client)
+    etsy_client = EtsyClient(db, rate_limiter)
+    
+    total_synced = 0
+    total_new = 0
+    total_updated = 0
+    errors = []
+    
+    # Sync orders from each shop
+    for shop in shops:
+        try:
+            # Fetch receipts (orders) from Etsy
+            receipts_response = await etsy_client.get_shop_receipts(
+                shop_id=shop.id,
+                etsy_shop_id=shop.etsy_shop_id,
+                limit=100  # Fetch last 100 orders
+            )
+            
+            receipts = receipts_response.get("results", [])
+            
+            for receipt in receipts:
+                receipt_id = str(receipt.get("receipt_id"))
+                
+                # Check if order already exists
+                existing_order = db.query(Order).filter(
+                    Order.etsy_receipt_id == receipt_id
+                ).first()
+                
+                # Extract order data
+                buyer_name = f"{receipt.get('name', '')}".strip() or "Unknown"
+                buyer_email = receipt.get('buyer_email', 'unknown@example.com')
+                total_price = float(receipt.get('grandtotal', {}).get('amount', 0)) / 100  # Convert cents to dollars
+                currency = receipt.get('grandtotal', {}).get('currency_code', 'USD')
+                
+                # Map Etsy status to our status
+                etsy_status = receipt.get('status', '').lower()
+                if etsy_status in ['paid', 'completed']:
+                    order_status = 'completed'
+                elif etsy_status in ['open', 'pending']:
+                    order_status = 'pending'
+                else:
+                    order_status = 'pending'
+                
+                # Map payment status
+                payment_method = receipt.get('payment_method', '').lower()
+                if 'paid' in payment_method or etsy_status == 'paid':
+                    payment_status = 'paid'
+                else:
+                    payment_status = 'pending'
+                
+                # Extract shipping address
+                shipping_address = {}
+                if 'formatted_address' in receipt:
+                    shipping_address = {
+                        "name": receipt.get('name'),
+                        "address1": receipt.get('first_line'),
+                        "address2": receipt.get('second_line'),
+                        "city": receipt.get('city'),
+                        "state": receipt.get('state'),
+                        "zip": receipt.get('zip'),
+                        "country": receipt.get('country_iso')
+                    }
+                
+                if existing_order:
+                    # Update existing order
+                    existing_order.buyer_name = buyer_name
+                    existing_order.buyer_email = buyer_email
+                    existing_order.total_price = total_price
+                    existing_order.currency = currency
+                    existing_order.status = order_status
+                    existing_order.payment_status = payment_status
+                    existing_order.shipping_address = shipping_address
+                    existing_order.synced_at = datetime.now(timezone.utc)
+                    existing_order.updated_at = datetime.now(timezone.utc)
+                    total_updated += 1
+                else:
+                    # Create new order
+                    new_order = Order(
+                        tenant_id=tenant_id,
+                        shop_id=shop.id,
+                        etsy_receipt_id=receipt_id,
+                        order_id=f"ETSY-{receipt_id}",
+                        buyer_name=buyer_name,
+                        buyer_email=buyer_email,
+                        total_price=total_price,
+                        currency=currency,
+                        status=order_status,
+                        payment_status=payment_status,
+                        shipping_address=shipping_address,
+                        synced_at=datetime.now(timezone.utc)
+                    )
+                    db.add(new_order)
+                    total_new += 1
+                
+                total_synced += 1
+            
+            db.commit()
+            
+        except Exception as e:
+            errors.append({
+                "shop_id": shop.id,
+                "shop_name": shop.display_name,
+                "error": str(e)
+            })
+            continue
+    
+    # Prepare response
+    response = {
+        "message": f"Successfully synced {total_synced} orders",
+        "total_synced": total_synced,
+        "new_orders": total_new,
+        "updated_orders": total_updated,
+        "shops_processed": len(shops),
+        "status": "completed"
     }
+    
+    if errors:
+        response["errors"] = errors
+        response["status"] = "completed_with_errors"
+    
+    return response

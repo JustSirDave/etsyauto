@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { schedulesApi, Schedule, ScheduleStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { ConfirmActionModal } from '@/components/schedules/ConfirmActionModal';
+import { NewScheduleModal } from '@/components/schedules/NewScheduleModal';
 
 // Helper function to format relative time
 function formatRelativeTime(dateStr: string | null): string {
@@ -156,6 +158,23 @@ export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [stats, setStats] = useState<ScheduleStats>({ total: 0, active: 0, paused: 0, executions_today: 0 });
   const [loading, setLoading] = useState(true);
+  
+  // Modal states
+  const [showNewScheduleModal, setShowNewScheduleModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+    confirmText?: string;
+    confirmButtonClass?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    action: () => {},
+  });
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // Load schedules from API
   const loadSchedules = async (statusFilter?: string) => {
@@ -204,52 +223,113 @@ export default function SchedulesPage() {
   };
 
   // Handle pause all
-  const handlePauseAll = async () => {
-    if (!confirm('This will pause all active schedules. You can resume them anytime from Quick Actions. Continue?')) return;
-
-    try {
-      const result = await schedulesApi.pauseAll();
-      showToast(result.message, 'success');
-      await loadSchedules(filter);
-    } catch (error: any) {
-      console.error('Failed to pause all schedules:', error);
-      showToast(error.detail || 'Failed to pause all schedules', 'error');
+  const handlePauseAll = () => {
+    const activeCount = schedules.filter(s => s.status === 'active').length;
+    
+    if (activeCount === 0) {
+      showToast('No active schedules to pause', 'info');
+      return;
     }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Pause All Schedules',
+      message: `This will pause ${activeCount} active schedule${activeCount > 1 ? 's' : ''}. You can resume them anytime from Quick Actions. Continue?`,
+      confirmText: 'Pause All',
+      confirmButtonClass: 'bg-[var(--warning)] hover:opacity-90',
+      action: async () => {
+        try {
+          setIsProcessingAction(true);
+          const result = await schedulesApi.pauseAll();
+          showToast(result.message, 'success');
+          await loadSchedules(filter);
+        } catch (error: any) {
+          console.error('Failed to pause all schedules:', error);
+          showToast(error.detail || 'Failed to pause all schedules', 'error');
+        } finally {
+          setIsProcessingAction(false);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
   // Handle resume all
-  const handleResumeAll = async () => {
-    try {
-      const result = await schedulesApi.resumeAll();
-      showToast(result.message, 'success');
-      await loadSchedules(filter);
-    } catch (error: any) {
-      console.error('Failed to resume all schedules:', error);
-      showToast(error.detail || 'Failed to resume all schedules', 'error');
+  const handleResumeAll = () => {
+    const pausedCount = schedules.filter(s => s.status === 'paused').length;
+    
+    if (pausedCount === 0) {
+      showToast('No paused schedules to resume', 'info');
+      return;
     }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Resume All Schedules',
+      message: `This will resume ${pausedCount} paused schedule${pausedCount > 1 ? 's' : ''}. They will start running according to their schedules. Continue?`,
+      confirmText: 'Resume All',
+      confirmButtonClass: 'bg-[var(--success)] hover:opacity-90',
+      action: async () => {
+        try {
+          setIsProcessingAction(true);
+          const result = await schedulesApi.resumeAll();
+          showToast(result.message, 'success');
+          await loadSchedules(filter);
+        } catch (error: any) {
+          console.error('Failed to resume all schedules:', error);
+          showToast(error.detail || 'Failed to resume all schedules', 'error');
+        } finally {
+          setIsProcessingAction(false);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
   };
 
   // Handle run all syncs
-  const handleRunAllSyncs = async () => {
-    try {
-      // Filter schedules to get only active sync schedules
-      const syncSchedules = schedules.filter(s => s.type === 'sync' && s.status === 'active');
+  const handleRunAllSyncs = () => {
+    const syncSchedules = schedules.filter(s => s.type === 'sync' && s.status === 'active');
 
-      if (syncSchedules.length === 0) {
-        showToast('No active sync schedules found', 'info');
-        return;
-      }
-
-      // Trigger each sync schedule (in practice, you'd call a backend endpoint)
-      // For now, just show a toast with the count
-      showToast(`Triggered ${syncSchedules.length} sync schedule${syncSchedules.length > 1 ? 's' : ''}`, 'success');
-
-      // Reload schedules to update execution counts
-      await loadSchedules(filter);
-    } catch (error: any) {
-      console.error('Failed to run syncs:', error);
-      showToast(error.detail || 'Failed to run sync schedules', 'error');
+    if (syncSchedules.length === 0) {
+      showToast('No active sync schedules found', 'info');
+      return;
     }
+
+    setConfirmModal({
+      isOpen: true,
+      title: 'Run All Syncs Now',
+      message: `This will immediately trigger ${syncSchedules.length} active sync schedule${syncSchedules.length > 1 ? 's' : ''}. This may take a few moments to complete. Continue?`,
+      confirmText: 'Run Now',
+      confirmButtonClass: 'bg-[var(--primary)] hover:opacity-90',
+      action: async () => {
+        try {
+          setIsProcessingAction(true);
+          const result = await schedulesApi.runAllSyncs();
+          showToast(result.message, 'success');
+          await loadSchedules(filter);
+        } catch (error: any) {
+          console.error('Failed to run syncs:', error);
+          showToast(error.detail || 'Failed to run sync schedules', 'error');
+        } finally {
+          setIsProcessingAction(false);
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      },
+    });
+  };
+
+  // Handle view calendar
+  const handleViewCalendar = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Calendar View',
+      message: 'Calendar view is coming soon! This feature will allow you to visualize all your schedules in a calendar format.',
+      confirmText: 'Got it',
+      confirmButtonClass: 'bg-[var(--primary)] hover:opacity-90',
+      action: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
   return (
@@ -267,7 +347,7 @@ export default function SchedulesPage() {
             </p>
           </div>
           <button
-            onClick={() => showToast('New Schedule modal coming soon', 'info')}
+            onClick={() => setShowNewScheduleModal(true)}
             className="flex items-center gap-2 px-4 py-2.5 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 transition shadow-lg shadow-[var(--primary)]/25"
           >
             <Plus className="w-5 h-5" />
@@ -419,7 +499,7 @@ export default function SchedulesPage() {
                   <span>Resume All Schedules</span>
                 </button>
                 <button
-                  onClick={() => showToast('Calendar view coming soon', 'info')}
+                  onClick={handleViewCalendar}
                   className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
                 >
                   <Calendar className="w-5 h-5" />
@@ -447,6 +527,25 @@ export default function SchedulesPage() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <ConfirmActionModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => !isProcessingAction && setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.action}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        confirmButtonClass={confirmModal.confirmButtonClass}
+        isProcessing={isProcessingAction}
+      />
+
+      <NewScheduleModal
+        isOpen={showNewScheduleModal}
+        onClose={() => setShowNewScheduleModal(false)}
+        onSuccess={() => loadSchedules(filter)}
+        showToast={showToast}
+      />
     </DashboardLayout>
   );
 }
