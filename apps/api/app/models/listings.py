@@ -20,6 +20,7 @@ class Product(Base):
     tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
     
     # Raw product data
+    sku = Column(String(255), nullable=True, index=True)  # Product SKU
     title_raw = Column(Text)
     description_raw = Column(Text)
     tags_raw = Column(JSONB)
@@ -31,6 +32,7 @@ class Product(Base):
     supplier_product_id = Column(String(255))
     price = Column(Integer)
     compare_at_price = Column(Integer)
+    quantity = Column(Integer, nullable=True)  # Available quantity
     
     # Import tracking
     source = Column(String(50), CheckConstraint("source IN ('csv','json','api','manual')"), default='manual')

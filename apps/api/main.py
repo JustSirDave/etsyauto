@@ -14,7 +14,7 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, metrics
 
 # Initialize Sentry
 if settings.SENTRY_DSN:
@@ -79,6 +79,7 @@ app.include_router(ai.router, prefix="/api/ai", tags=["AI Generation"])
 app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
 app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])
+app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics & Monitoring"])
 
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()

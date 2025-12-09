@@ -20,6 +20,7 @@ from app.models.listings import (
     Product, AIGeneration, ListingJob, Schedule, Order,
     UsageCost, AuditLog, WebhookEvent
 )
+from app.models.notifications import Notification  # Must import for relationships
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

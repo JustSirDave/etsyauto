@@ -31,10 +31,11 @@ ETSY_SCOPES = [
 
 class EtsyAPIError(Exception):
     """Base exception for Etsy API errors"""
-    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[Dict] = None):
+    def __init__(self, message: str, status_code: Optional[int] = None, response: Optional[Dict] = None, headers: Optional[Dict] = None):
         self.message = message
         self.status_code = status_code
         self.response = response
+        self.headers = headers or {}
         super().__init__(self.message)
 
 

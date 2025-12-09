@@ -8,11 +8,14 @@ from datetime import datetime
 
 class ProductImportRequest(BaseModel):
     """Single product import"""
+    sku: Optional[str] = None
     title_raw: str
     description_raw: Optional[str] = None
     tags_raw: Optional[List[str]] = None
     images: Optional[List[str]] = None
     variants: Optional[Dict] = None
+    price: Optional[int] = None
+    quantity: Optional[int] = None
 
 
 class ProductImportBatchRequest(BaseModel):
@@ -24,10 +27,13 @@ class ProductImportBatchRequest(BaseModel):
 class ProductResponse(BaseModel):
     """Product response"""
     id: int
+    sku: Optional[str]
     title_raw: Optional[str]
     description_raw: Optional[str]
     tags_raw: Optional[List[str]]
     images: Optional[List[str]]
+    price: Optional[int]
+    quantity: Optional[int]
     source: str
     ingest_batch_id: Optional[str]
     created_at: datetime

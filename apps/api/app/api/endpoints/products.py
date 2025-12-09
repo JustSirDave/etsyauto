@@ -38,11 +38,14 @@ async def import_product(
     """
     product = Product(
         tenant_id=int(current_user["tenant_id"]),
+        sku=request.sku,
         title_raw=request.title_raw,
         description_raw=request.description_raw,
         tags_raw=request.tags_raw,
         images=request.images,
         variants=request.variants,
+        price=request.price,
+        quantity=request.quantity,
         source='manual'
     )
     
@@ -71,11 +74,14 @@ async def import_batch(
     for item in request.products:
         product = Product(
             tenant_id=int(current_user["tenant_id"]),
+            sku=item.sku,
             title_raw=item.title_raw,
             description_raw=item.description_raw,
             tags_raw=item.tags_raw,
             images=item.images,
             variants=item.variants,
+            price=item.price,
+            quantity=item.quantity,
             source='json',
             ingest_batch_id=batch_id
         )
@@ -100,8 +106,8 @@ async def import_csv(
     """
     Import products from CSV file
     
-    CSV Format:
-    title,description,tags,images,price,supplier
+    CSV Format (expected columns):
+    sku,title,description,price,quantity
     """
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be CSV")
@@ -115,10 +121,10 @@ async def import_csv(
     products = []
     
     for row in csv_reader:
-        # Parse tags (pipe-separated)
+        # Parse tags (pipe-separated, optional)
         tags = row.get('tags', '').split('|') if row.get('tags') else []
         
-        # Parse images (pipe-separated URLs)
+        # Parse images (pipe-separated URLs, optional)
         images = row.get('images', '').split('|') if row.get('images') else []
         
         # Parse price (convert to cents)
@@ -129,13 +135,23 @@ async def import_csv(
             except:
                 pass
         
+        # Parse quantity
+        quantity = None
+        if row.get('quantity'):
+            try:
+                quantity = int(row['quantity'])
+            except:
+                pass
+        
         product = Product(
             tenant_id=int(current_user["tenant_id"]),
+            sku=row.get('sku'),
             title_raw=row.get('title', ''),
             description_raw=row.get('description', ''),
             tags_raw=tags,
             images=images,
             price=price,
+            quantity=quantity,
             supplier_name=row.get('supplier'),
             supplier_product_id=row.get('supplier_product_id'),
             source='csv',

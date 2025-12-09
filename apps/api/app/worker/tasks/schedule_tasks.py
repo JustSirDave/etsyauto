@@ -3,6 +3,7 @@ Celery Tasks for Schedule Management
 Handles automated listing publication based on schedules
 """
 import logging
+import hashlib
 from datetime import datetime, timedelta
 from typing import Dict, Any, List
 
@@ -165,10 +166,19 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
             logger.info(f"Product {product.id} already has a pending job, skipping")
             continue
 
+        # Generate idempotency key for this job
+        # Format: {tenant_id}:{shop_id}:{product_id}:{timestamp_hash}
+        timestamp_component = datetime.utcnow().isoformat()
+        idempotency_key = hashlib.sha256(
+            f"{shop.tenant_id}:{shop.id}:{product.id}:{timestamp_component}".encode()
+        ).hexdigest()[:32]  # First 32 chars of hash
+        
         # Create new listing job
         job = ListingJob(
+            tenant_id=shop.tenant_id,
             product_id=product.id,
             shop_id=shop.id,
+            idempotency_key=idempotency_key,
             status="pending",
             retry_count=0
         )
