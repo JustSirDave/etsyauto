@@ -112,7 +112,8 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
 
   const getNotificationIcon = (type: Notification['type']) => {
     const iconClasses = 'w-5 h-5';
-    switch (type) {
+    const typeStr = typeof type === 'string' ? type.toLowerCase() : type;
+    switch (typeStr) {
       case 'success':
         return <CheckCircle className={`${iconClasses} text-[var(--success)]`} />;
       case 'error':
@@ -123,6 +124,8 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
         return <ShoppingCart className={`${iconClasses} text-[var(--info)]`} />;
       case 'listing':
         return <FileText className={`${iconClasses} text-[var(--primary)]`} />;
+      case 'team':
+        return <CheckCircle className={`${iconClasses} text-[var(--success)]`} />;
       case 'system':
         return <SettingsIcon className={`${iconClasses} text-[var(--text-muted)]`} />;
       default:
@@ -291,7 +294,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
           <div className="p-3 border-t border-[var(--border-color)] bg-[var(--background)] text-center">
             <button
               onClick={() => {
-                router.push('/notifications');
+                router.push('/settings?tab=notifications');
                 onClose();
               }}
               className="text-sm text-[var(--primary)] hover:underline font-medium"

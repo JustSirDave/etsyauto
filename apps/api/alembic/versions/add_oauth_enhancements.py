@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_oauth_enhancements'
-down_revision = None  # Set this to your latest migration
+down_revision = 'tenant_onboarding_001'  # Points to the current head
 branch_label = None
 depends_on = None
 

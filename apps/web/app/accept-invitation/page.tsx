@@ -20,6 +20,8 @@ function AcceptInvitationContent() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [invitationData, setInvitationData] = useState<any>(null);
+  const [mode, setMode] = useState<'new' | 'existing'>('new'); // new user or existing user
+  const [loginPassword, setLoginPassword] = useState(''); // for existing users
 
   useEffect(() => {
     if (!token) {
@@ -33,32 +35,47 @@ function AcceptInvitationContent() {
       return;
     }
 
-    // Validate passwords if provided
-    if (password && password !== confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
-    if (password && password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      return;
+    // Validate based on mode
+    if (mode === 'new') {
+      // New user - validate password fields
+      if (!password || !confirmPassword) {
+        setError('Please enter and confirm your password');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters long');
+        return;
+      }
+    } else {
+      // Existing user - validate login password
+      if (!loginPassword) {
+        setError('Please enter your password to continue');
+        return;
+      }
     }
 
     try {
       setLoading(true);
       setError(null);
 
-      // Use relative URL to avoid CORS issues
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-      const response = await fetch(`${apiUrl}/api/team/invitations/accept`, {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined 
+        ? process.env.NEXT_PUBLIC_API_URL 
+        : 'http://localhost:8080';
+      
+      const response = await fetch(`${API_BASE_URL}/api/team/invitations/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Important for CORS
+        credentials: 'include',
         body: JSON.stringify({
           token,
-          password: password || null,
+          password: mode === 'new' ? password : null,
+          existing_password: mode === 'existing' ? loginPassword : null,
         }),
       });
 
@@ -152,44 +169,106 @@ function AcceptInvitationContent() {
             </div>
           )}
 
-          {/* Password Fields for New Users */}
-          <div className="space-y-4 mb-6">
-            <p className="text-sm text-dark-muted">
-              If you're a new user, please set a password for your account:
-            </p>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
-                Password (optional for existing users)
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  placeholder="Enter password (min 8 characters)"
-                />
-              </div>
+          {/* Mode Selection */}
+          <div className="mb-6">
+            <div className="flex gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => setMode('new')}
+                className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+                  mode === 'new'
+                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/50'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                }`}
+                disabled={loading}
+              >
+                New to Platform
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('existing')}
+                className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+                  mode === 'existing'
+                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/50'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                }`}
+                disabled={loading}
+              >
+                I Have an Account
+              </button>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-2">
-                Confirm Password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  placeholder="Confirm password"
-                />
-              </div>
-            </div>
+            
+            {mode === 'new' ? (
+              <p className="text-sm text-dark-muted">
+                Set a password for your new account to complete the invitation.
+              </p>
+            ) : (
+              <p className="text-sm text-dark-muted">
+                Sign in with your existing password to accept the invitation.
+              </p>
+            )}
           </div>
+
+          {/* Conditional Fields Based on Mode */}
+          {mode === 'new' ? (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    placeholder="Enter password (min 8 characters)"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    placeholder="Confirm password"
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-400 mb-2">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    placeholder="Enter your existing password"
+                    disabled={loading}
+                  />
+                </div>
+                <p className="text-xs text-dark-muted mt-2">
+                  Use the password from your existing account.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Accept Button */}
           <button

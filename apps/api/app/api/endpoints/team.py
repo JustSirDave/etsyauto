@@ -3,7 +3,8 @@ Team Management Endpoints
 Manage tenant memberships, roles, and invitations
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import List
@@ -14,10 +15,19 @@ from ...core.database import get_db
 from ...models.tenancy import User, Tenant, Membership
 from ...models.notifications import Notification, NotificationType
 from ..dependencies import get_current_user, require_role
-from ...core.security import hash_password
+from ...core.security import hash_password, verify_password
 from ...services.email_service import email_service
+from ...core.config import settings
 
 router = APIRouter()
+
+# CORS headers for responses
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": ", ".join(settings.CORS_ORIGINS),
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Allow-Credentials": "true",
+}
 
 
 # Request/Response Models
@@ -42,7 +52,8 @@ class UpdateRoleRequest(BaseModel):
 
 class AcceptInvitationRequest(BaseModel):
     token: str
-    password: str | None = None  # Only required for new users
+    password: str | None = None  # For new users creating account
+    existing_password: str | None = None  # For existing users logging in
 
 
 class MemberResponse(BaseModel):
@@ -227,6 +238,12 @@ async def invite_team_member(
         }
 
 
+@router.options("/invitations/accept")
+async def accept_invitation_preflight():
+    """Handle CORS preflight for invitation acceptance"""
+    return Response(status_code=200, headers=CORS_HEADERS)
+
+
 @router.post("/invitations/accept")
 async def accept_invitation(
     request: AcceptInvitationRequest,
@@ -236,8 +253,8 @@ async def accept_invitation(
     Accept a team invitation
     Available to: anyone with a valid invitation token
 
-    For new users, a password must be provided.
-    For existing users, password is optional.
+    For new users: `password` must be provided to create account.
+    For existing users: `existing_password` can be provided to verify identity.
     """
     # Find membership by invitation token
     membership = db.query(Membership).filter(
@@ -267,7 +284,7 @@ async def accept_invitation(
             detail="User not found"
         )
 
-    # If user doesn't have a password (new user), require password in request
+    # Handle new users (no password set yet)
     if not user.password_hash:
         if not request.password:
             raise HTTPException(
@@ -278,51 +295,78 @@ async def accept_invitation(
         # Set password for new user
         user.password_hash = hash_password(request.password)
         user.email_verified = True  # Auto-verify email for invited users
+    
+    # Handle existing users (password already set)
+    else:
+        # If existing_password is provided, verify it
+        if request.existing_password:
+            if not verify_password(request.existing_password, user.password_hash):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect password"
+                )
+        # If they provide a new password, update it (optional)
+        elif request.password:
+            user.password_hash = hash_password(request.password)
 
     # Update membership status
     membership.invitation_status = 'accepted'
     membership.accepted_at = datetime.now(timezone.utc)
-    membership.invitation_token = None  # Clear token after use
-    membership.invitation_token_expires = None
-
-    db.commit()
-
-    # Get tenant info for response
+    
+    # Get tenant info
     tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
 
-    # Create notifications for all owners and admins
-    # Get all owners and admins in the tenant
-    owner_admin_memberships = db.query(Membership).filter(
-        Membership.tenant_id == membership.tenant_id,
-        Membership.role.in_(['owner', 'admin']),
-        Membership.invitation_status == 'accepted'
-    ).all()
+    try:
+        # Create notifications for all owners and admins
+        owner_admin_memberships = db.query(Membership).filter(
+            Membership.tenant_id == membership.tenant_id,
+            Membership.role.in_(['owner', 'admin']),
+            Membership.invitation_status == 'accepted'
+        ).all()
 
-    # Create a notification for each owner/admin
-    for admin_membership in owner_admin_memberships:
-        notification = Notification(
-            user_id=admin_membership.user_id,
-            tenant_id=membership.tenant_id,
-            type=NotificationType.TEAM,
-            title="New Team Member",
-            message=f"{user.name or user.email} has accepted the invitation and joined your team as {membership.role}.",
-            action_url="/settings?tab=team",
-            action_label="View Team",
-            read=False,
-            created_at=datetime.now(timezone.utc)
+        # Create a notification for each owner/admin
+        for admin_membership in owner_admin_memberships:
+            notification = Notification(
+                user_id=admin_membership.user_id,
+                tenant_id=membership.tenant_id,
+                type=NotificationType.TEAM,
+                title="New Team Member",
+                message=f"{user.name or user.email} has accepted the invitation and joined your team as {membership.role}.",
+                action_url="/settings?tab=team",
+                action_label="View Team",
+                read=False,
+                created_at=datetime.now(timezone.utc)
+            )
+            db.add(notification)
+        
+        # Clear token ONLY after all operations succeed
+        membership.invitation_token = None
+        membership.invitation_token_expires = None
+        
+        # Single commit at the end - all or nothing
+        db.commit()
+
+        # Return response with explicit CORS headers
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": "Invitation accepted successfully",
+                "user_id": user.id,
+                "email": user.email,
+                "tenant_id": tenant.id,
+                "tenant_name": tenant.name,
+                "role": membership.role
+            },
+            headers=CORS_HEADERS
         )
-        db.add(notification)
-
-    db.commit()
-
-    return {
-        "message": "Invitation accepted successfully",
-        "user_id": user.id,
-        "email": user.email,
-        "tenant_id": tenant.id,
-        "tenant_name": tenant.name,
-        "role": membership.role
-    }
+        
+    except Exception as e:
+        # Rollback on any error - token remains valid for retry
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to accept invitation: {str(e)}"
+        )
 
 
 @router.patch("/members/{user_id}/role")

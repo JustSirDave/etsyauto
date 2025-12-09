@@ -2,7 +2,7 @@
 Notification Models
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy import Column, Integer, BigInteger, String, Boolean, DateTime, ForeignKey, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import enum
@@ -12,14 +12,14 @@ from app.core.database import Base
 
 class NotificationType(str, enum.Enum):
     """Notification types"""
-    INFO = "info"
-    SUCCESS = "success"
-    WARNING = "warning"
-    ERROR = "error"
-    ORDER = "order"
-    LISTING = "listing"
-    TEAM = "team"
-    SYSTEM = "system"
+    INFO = "INFO"
+    SUCCESS = "SUCCESS"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    ORDER = "ORDER"
+    LISTING = "LISTING"
+    TEAM = "TEAM"
+    SYSTEM = "SYSTEM"
 
 
 class Notification(Base):
@@ -36,11 +36,11 @@ class Notification(Base):
     """
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True, index=True)
 
-    # User and tenant
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
+    # User and tenant (changed to BigInteger to match User and Tenant models)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Notification content
     type = Column(SQLEnum(NotificationType), nullable=False, default=NotificationType.INFO)

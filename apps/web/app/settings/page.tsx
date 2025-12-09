@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { shopsApi, teamApi, type Shop, type ApiError, type TeamMember } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -21,7 +22,10 @@ type TabType = 'connections' | 'team' | 'notifications';
 
 function SettingsContent() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabType>('connections');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab') as TabType | null;
+  const [activeTab, setActiveTab] = useState<TabType>(tabParam || 'connections');
   const [shops, setShops] = useState<Shop[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +50,13 @@ function SettingsContent() {
 
   useEffect(() => { loadShops(); }, []);
   useEffect(() => { if (activeTab === 'team') loadTeamMembers(); }, [activeTab]);
+  
+  // Update active tab when URL parameter changes
+  useEffect(() => {
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   const loadShops = async () => {
     try { setIsLoading(true); setError(null); const data = await shopsApi.getAll(); setShops(Array.isArray(data) ? data : []); }
@@ -184,7 +195,14 @@ function SettingsContent() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-[var(--border-color)]">
         {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative', activeTab === tab.id ? 'text-[var(--primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]')}>
+          <button 
+            key={tab.id} 
+            onClick={() => {
+              setActiveTab(tab.id);
+              router.push(`/settings?tab=${tab.id}`);
+            }} 
+            className={cn('flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors relative', activeTab === tab.id ? 'text-[var(--primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]')}
+          >
             <tab.icon className="w-4 h-4" />{tab.label}
             {activeTab === tab.id && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--primary)]" />}
           </button>
@@ -408,5 +426,15 @@ function SettingsContent() {
 }
 
 export default function SettingsPage() {
-  return <DashboardLayout><SettingsContent /></DashboardLayout>;
+  return (
+    <DashboardLayout>
+      <React.Suspense fallback={
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 text-[var(--primary)] animate-spin" />
+        </div>
+      }>
+        <SettingsContent />
+      </React.Suspense>
+    </DashboardLayout>
+  );
 }
