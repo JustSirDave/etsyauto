@@ -12,6 +12,7 @@ import secrets
 
 from ...core.database import get_db
 from ...models.tenancy import User, Tenant, Membership
+from ...models.notifications import Notification, NotificationType
 from ..dependencies import get_current_user, require_role
 from ...core.security import hash_password
 from ...services.email_service import email_service
@@ -288,6 +289,31 @@ async def accept_invitation(
 
     # Get tenant info for response
     tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+
+    # Create notifications for all owners and admins
+    # Get all owners and admins in the tenant
+    owner_admin_memberships = db.query(Membership).filter(
+        Membership.tenant_id == membership.tenant_id,
+        Membership.role.in_(['owner', 'admin']),
+        Membership.invitation_status == 'accepted'
+    ).all()
+
+    # Create a notification for each owner/admin
+    for admin_membership in owner_admin_memberships:
+        notification = Notification(
+            user_id=admin_membership.user_id,
+            tenant_id=membership.tenant_id,
+            type=NotificationType.TEAM,
+            title="New Team Member",
+            message=f"{user.name or user.email} has accepted the invitation and joined your team as {membership.role}.",
+            action_url="/settings?tab=team",
+            action_label="View Team",
+            read=False,
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(notification)
+
+    db.commit()
 
     return {
         "message": "Invitation accepted successfully",

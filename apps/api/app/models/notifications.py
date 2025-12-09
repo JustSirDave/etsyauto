@@ -18,6 +18,7 @@ class NotificationType(str, enum.Enum):
     ERROR = "error"
     ORDER = "order"
     LISTING = "listing"
+    TEAM = "team"
     SYSTEM = "system"
 
 
