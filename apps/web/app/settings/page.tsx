@@ -9,6 +9,8 @@ import { useAuth } from '@/lib/auth-context';
 import { shopsApi, teamApi, type Shop, type ApiError, type TeamMember } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
+import { ConfirmModal } from '@/components/modals/ConfirmModal';
+import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
   Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, XCircle,
   AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X,
@@ -29,6 +31,18 @@ function SettingsContent() {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'creator' });
   const [inviting, setInviting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [memberToDelete, setMemberToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [shopToDisconnect, setShopToDisconnect] = useState<{ id: number; name: string } | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [notification, setNotification] = useState<{
+    show: boolean;
+    type: 'success' | 'error' | 'warning' | 'info';
+    title: string;
+    message: string;
+  }>({ show: false, type: 'success', title: '', message: '' });
 
   useEffect(() => { loadShops(); }, []);
   useEffect(() => { if (activeTab === 'team') loadTeamMembers(); }, [activeTab]);
@@ -44,9 +58,35 @@ function SettingsContent() {
     catch (err) { setError((err as ApiError).detail || 'Failed'); setConnectingEtsy(false); }
   };
 
-  const handleDisconnectShop = async (shopId: number) => {
-    if (!confirm('Disconnect this shop?')) return;
-    try { await shopsApi.disconnect(shopId); await loadShops(); } catch (err) { setError((err as ApiError).detail || 'Failed'); }
+  const handleDisconnectShop = async (shopId: number, shopName: string) => {
+    setShopToDisconnect({ id: shopId, name: shopName });
+    setShowDisconnectModal(true);
+  };
+
+  const confirmDisconnectShop = async () => {
+    if (!shopToDisconnect) return;
+    try {
+      setDisconnecting(true);
+      await shopsApi.disconnect(shopToDisconnect.id);
+      setShowDisconnectModal(false);
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Shop Disconnected',
+        message: `${shopToDisconnect.name} has been disconnected successfully.`
+      });
+      setShopToDisconnect(null);
+      await loadShops();
+    } catch (err) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Disconnection Failed',
+        message: (err as ApiError).detail || 'Failed to disconnect shop. Please try again.'
+      });
+    } finally {
+      setDisconnecting(false);
+    }
   };
 
   const loadTeamMembers = async () => {
@@ -55,14 +95,70 @@ function SettingsContent() {
   };
 
   const handleInviteMember = async () => {
-    if (!inviteForm.email || !inviteForm.name) { setError('Fill all fields'); return; }
-    try { setInviting(true); setError(null); await teamApi.inviteMember(inviteForm); setShowInviteModal(false); setInviteForm({ email: '', name: '', role: 'creator' }); await loadTeamMembers(); }
-    catch (err) { setError((err as ApiError).detail || 'Failed'); } finally { setInviting(false); }
+    if (!inviteForm.email || !inviteForm.name) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Missing Information',
+        message: 'Please fill in all fields before sending the invitation.'
+      });
+      return;
+    }
+    try {
+      setInviting(true);
+      setError(null);
+      await teamApi.inviteMember(inviteForm);
+      setShowInviteModal(false);
+      setInviteForm({ email: '', name: '', role: 'creator' });
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Invitation Sent!',
+        message: `An invitation has been sent to ${inviteForm.email}. They will receive an email with instructions to join your team.`
+      });
+      await loadTeamMembers();
+    } catch (err) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Invitation Failed',
+        message: (err as ApiError).detail || 'Failed to send invitation. Please try again.'
+      });
+    } finally {
+      setInviting(false);
+    }
   };
 
   const handleRemoveMember = async (userId: number, name: string) => {
-    if (!confirm(`Remove ${name}?`)) return;
-    try { setError(null); await teamApi.removeMember(userId); await loadTeamMembers(); } catch (err) { setError((err as ApiError).detail || 'Failed'); }
+    setMemberToDelete({ id: userId, name });
+    setShowDeleteModal(true);
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!memberToDelete) return;
+    try {
+      setDeleting(true);
+      setError(null);
+      await teamApi.removeMember(memberToDelete.id);
+      setShowDeleteModal(false);
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Member Removed',
+        message: `${memberToDelete.name} has been removed from your team.`
+      });
+      setMemberToDelete(null);
+      await loadTeamMembers();
+    } catch (err) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Removal Failed',
+        message: (err as ApiError).detail || 'Failed to remove team member. Please try again.'
+      });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const getRoleColor = (role: string) => ({ owner: 'text-[var(--warning)] bg-[var(--warning-bg)]', admin: 'text-[var(--primary)] bg-[var(--primary-bg)]', creator: 'text-[var(--info)] bg-[var(--info-bg)]', viewer: 'text-[var(--text-muted)] bg-[var(--background)]' }[role] || 'text-[var(--text-muted)] bg-[var(--background)]');
@@ -120,7 +216,7 @@ function SettingsContent() {
                   <div><p className="text-sm text-[var(--text-muted)]">Shop ID</p><p className="text-[var(--text-primary)] font-mono text-sm">{etsyShop.etsy_shop_id}</p></div>
                   <div><p className="text-sm text-[var(--text-muted)]">Connected</p><p className="text-[var(--text-primary)] text-sm">{new Date(etsyShop.created_at).toLocaleDateString()}</p></div>
                 </div>
-                <button onClick={() => handleDisconnectShop(etsyShop.id)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20"><Unlink className="w-4 h-4" />Disconnect</button>
+                <button onClick={() => handleDisconnectShop(etsyShop.id, etsyShop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20"><Unlink className="w-4 h-4" />Disconnect</button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -238,6 +334,7 @@ function SettingsContent() {
 
       {activeTab === 'notifications' && <DashboardCard><div className="text-center py-12"><Bell className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" /><p className="text-[var(--text-muted)]">Coming soon.</p></div></DashboardCard>}
 
+      {/* Invite Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
@@ -254,6 +351,49 @@ function SettingsContent() {
           </div>
         </div>
       )}
+
+      {/* Disconnect Shop Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDisconnectModal}
+        onClose={() => {
+          setShowDisconnectModal(false);
+          setShopToDisconnect(null);
+        }}
+        onConfirm={confirmDisconnectShop}
+        title="Disconnect Etsy Shop"
+        message={`Are you sure you want to disconnect ${shopToDisconnect?.name || 'this shop'}? You will need to reconnect and reauthorize to use this shop again.`}
+        confirmText="Disconnect Shop"
+        cancelText="Cancel"
+        variant="warning"
+        isProcessing={disconnecting}
+      />
+
+      {/* Delete Member Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeleteModal}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setMemberToDelete(null);
+        }}
+        onConfirm={confirmRemoveMember}
+        title="Remove Team Member"
+        message={`Are you sure you want to remove ${memberToDelete?.name || 'this member'}? They will immediately lose access to the workspace and all its resources.`}
+        confirmText="Remove Member"
+        cancelText="Cancel"
+        variant="danger"
+        isProcessing={deleting}
+      />
+
+      {/* Notification Modal */}
+      <NotificationModal
+        isOpen={notification.show}
+        onClose={() => setNotification({ ...notification, show: false })}
+        title={notification.title}
+        message={notification.message}
+        type={notification.type}
+        autoClose={true}
+        autoCloseDuration={4000}
+      />
     </div>
   );
 }
