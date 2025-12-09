@@ -4,10 +4,14 @@ Handles Google OAuth 2.0 authentication flow
 """
 import httpx
 import secrets
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from datetime import datetime, timezone
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from sqlalchemy.orm import Session
 
 from ..core.config import settings
+from ..models.tenancy import User, Tenant, Membership
 
 
 class GoogleOAuthService:
@@ -90,6 +94,141 @@ class GoogleOAuthService:
             )
             response.raise_for_status()
             return response.json()
+    
+    @staticmethod
+    def authenticate_with_google(
+        db: Session,
+        google_token: str,
+        tenant_name: Optional[str] = None
+    ) -> Tuple[Optional[User], Optional[str], Optional[Tenant], bool]:
+        """
+        Authenticate user with Google OAuth token (for regular login)
+        
+        Args:
+            db: Database session
+            google_token: Google access token from frontend
+            tenant_name: Optional tenant name for new users
+        
+        Returns:
+            Tuple of (User, error_message, Tenant, is_new_user)
+        """
+        try:
+            # Verify the Google token by fetching user info
+            response = httpx.get(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                headers={'Authorization': f'Bearer {google_token}'},
+                timeout=10.0
+            )
+            
+            if response.status_code != 200:
+                return None, "Invalid or expired Google token", None, False
+            
+            user_info = response.json()
+            email = user_info.get('email')
+            google_user_id = user_info.get('sub')
+            name = user_info.get('name')
+            picture = user_info.get('picture')
+            email_verified = user_info.get('email_verified', False)
+            
+            if not email or not google_user_id:
+                return None, "Email or user ID not provided by Google", None, False
+            
+            if not email_verified:
+                return None, "Email not verified by Google", None, False
+            
+            # Check if user exists by Google ID
+            user = db.query(User).filter(
+                User.oauth_provider == 'google',
+                User.oauth_provider_user_id == google_user_id
+            ).first()
+            
+            is_new_user = False
+            tenant = None
+            
+            if user:
+                # Existing user - update last login
+                user.last_login_at = datetime.now(timezone.utc)
+                user.profile_picture_url = picture or user.profile_picture_url
+                db.commit()
+                
+                # Get tenant
+                membership = db.query(Membership).filter(
+                    Membership.user_id == user.id
+                ).first()
+                if membership:
+                    tenant = db.query(Tenant).filter(
+                        Tenant.id == membership.tenant_id
+                    ).first()
+            else:
+                # Check if user exists by email (account linking)
+                user = db.query(User).filter(User.email == email).first()
+                
+                if user:
+                    # Link existing email account to Google
+                    user.oauth_provider = 'google'
+                    user.oauth_provider_user_id = google_user_id
+                    user.profile_picture_url = picture or user.profile_picture_url
+                    user.email_verified = True
+                    user.last_login_at = datetime.now(timezone.utc)
+                    db.commit()
+                    
+                    # Get tenant
+                    membership = db.query(Membership).filter(
+                        Membership.user_id == user.id
+                    ).first()
+                    if membership:
+                        tenant = db.query(Tenant).filter(
+                            Tenant.id == membership.tenant_id
+                        ).first()
+                else:
+                    # Create new user and tenant
+                    is_new_user = True
+                    
+                    # Create tenant
+                    tenant = Tenant(
+                        name=tenant_name or f"{name}'s Organization",
+                        description=None,
+                        onboarding_completed=False,
+                        billing_tier='starter',
+                        status='active',
+                        created_at=datetime.now(timezone.utc)
+                    )
+                    db.add(tenant)
+                    db.flush()
+                    
+                    # Create user
+                    user = User(
+                        email=email,
+                        name=name,
+                        profile_picture_url=picture,
+                        oauth_provider='google',
+                        oauth_provider_user_id=google_user_id,
+                        email_verified=True,
+                        password_hash=None,
+                        created_at=datetime.now(timezone.utc),
+                        last_login_at=datetime.now(timezone.utc)
+                    )
+                    db.add(user)
+                    db.flush()
+                    
+                    # Create membership
+                    membership = Membership(
+                        user_id=user.id,
+                        tenant_id=tenant.id,
+                        role='owner',
+                        invitation_status='accepted',
+                        created_at=datetime.now(timezone.utc)
+                    )
+                    db.add(membership)
+                    db.commit()
+            
+            return user, None, tenant, is_new_user
+            
+        except httpx.HTTPError as e:
+            return None, f"Failed to verify Google token: {str(e)}", None, False
+        except Exception as e:
+            db.rollback()
+            return None, f"Authentication error: {str(e)}", None, False
     
     @staticmethod
     def generate_state() -> str:
