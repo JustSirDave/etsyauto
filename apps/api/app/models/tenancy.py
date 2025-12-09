@@ -49,9 +49,14 @@ class User(Base):
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     email = Column(CITEXT, unique=True, nullable=False, index=True)
-    password_hash = Column(Text, nullable=True)  # Nullable for SSO
+    password_hash = Column(Text, nullable=True)  # Nullable for SSO/OAuth
     name = Column(Text, nullable=True)
     profile_picture_url = Column(Text, nullable=True)  # URL to profile picture
+    
+    # OAuth fields
+    oauth_provider = Column(String(50), nullable=True)  # 'google', 'microsoft', etc.
+    oauth_provider_user_id = Column(Text, nullable=True)  # User ID from OAuth provider
+    oauth_data = Column(JSONB, nullable=True)  # Additional OAuth metadata
 
     # Email verification
     email_verified = Column(Boolean, default=False, nullable=False)
