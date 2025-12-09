@@ -251,7 +251,16 @@ function SettingsContent() {
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center text-white font-semibold">{member.name.charAt(0)}</div>
                       <div>
-                        <div className="flex items-center gap-2"><p className="text-[var(--text-primary)] font-medium">{member.name}</p>{member.user_id === user?.id && <span className="px-2 py-0.5 bg-[var(--primary-bg)] text-[var(--primary)] text-xs rounded">You</span>}</div>
+                        <div className="flex items-center gap-2">
+                          <p className="text-[var(--text-primary)] font-medium">{member.name}</p>
+                          {member.user_id === user?.id && <span className="px-2 py-0.5 bg-[var(--primary-bg)] text-[var(--primary)] text-xs rounded">You</span>}
+                          {member.invitation_status === 'pending' && (
+                            <span className="px-2 py-0.5 bg-[var(--warning-bg)] text-[var(--warning)] text-xs rounded flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" />
+                              Pending
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-[var(--text-muted)]">{member.email}</p>
                       </div>
                     </div>

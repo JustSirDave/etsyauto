@@ -48,23 +48,26 @@ function AcceptInvitationContent() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:8080/api/team/invitations/accept', {
+      // Use relative URL to avoid CORS issues
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const response = await fetch(`${apiUrl}/api/team/invitations/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Important for CORS
         body: JSON.stringify({
           token,
           password: password || null,
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to accept invitation');
+        throw new Error(data.detail || 'Failed to accept invitation');
       }
 
-      const data = await response.json();
       setInvitationData(data);
       setSuccess(true);
 
@@ -73,7 +76,8 @@ function AcceptInvitationContent() {
         router.push('/login?message=invitation_accepted');
       }, 3000);
     } catch (err: any) {
-      setError(err.message || 'Failed to accept invitation');
+      console.error('Accept invitation error:', err);
+      setError(err.message || 'Failed to accept invitation. Please try again or contact support.');
     } finally {
       setLoading(false);
     }
