@@ -15,6 +15,7 @@ import os
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, metrics
+from app.middleware.tenant_context import TenantContextMiddleware
 
 # Initialize Sentry
 if settings.SENTRY_DSN:
@@ -64,6 +65,9 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )
+
+# Tenant Context Middleware - Attaches tenant context to request state
+app.add_middleware(TenantContextMiddleware)
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

@@ -12,6 +12,14 @@ import json
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
+from app.api.dependencies import (
+    get_user_context, 
+    UserContext, 
+    require_permission,
+    require_any_permission
+)
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
 from app.models.tenancy import User
 from app.models.listings import Product, AIGeneration
 from app.schemas.products import (
@@ -30,14 +38,15 @@ router = APIRouter()
 @router.post("/import", tags=["Products"])
 async def import_product(
     request: ProductImportRequest,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.CREATE_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     Import a single product manually
+    Requires: CREATE_PRODUCT permission (Owner, Admin, Creator)
     """
     product = Product(
-        tenant_id=int(current_user["tenant_id"]),
+        tenant_id=context.tenant_id,
         sku=request.sku,
         title_raw=request.title_raw,
         description_raw=request.description_raw,
@@ -62,18 +71,19 @@ async def import_product(
 @router.post("/import/batch", tags=["Products"])
 async def import_batch(
     request: ProductImportBatchRequest,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.CREATE_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     Import multiple products at once
+    Requires: CREATE_PRODUCT permission (Owner, Admin, Creator)
     """
     batch_id = request.batch_id or f"batch_{int(datetime.now(timezone.utc).timestamp())}"
     
     products = []
     for item in request.products:
         product = Product(
-            tenant_id=int(current_user["tenant_id"]),
+            tenant_id=context.tenant_id,
             sku=item.sku,
             title_raw=item.title_raw,
             description_raw=item.description_raw,
@@ -100,7 +110,7 @@ async def import_batch(
 @router.post("/import/csv", tags=["Products"])
 async def import_csv(
     file: UploadFile = File(...),
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.CREATE_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
@@ -144,7 +154,7 @@ async def import_csv(
                 pass
         
         product = Product(
-            tenant_id=int(current_user["tenant_id"]),
+            tenant_id=context.tenant_id,
             sku=row.get('sku'),
             title_raw=row.get('title', ''),
             description_raw=row.get('description', ''),
@@ -174,14 +184,18 @@ async def list_products(
     skip: int = 0,
     limit: int = 50,
     batch_id: Optional[str] = None,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     List all products for current tenant
+    Requires: READ_PRODUCT permission (all roles)
     """
-    query = db.query(Product).filter(
-        Product.tenant_id == int(current_user["tenant_id"])
+    # Automatically filter by tenant
+    query = filter_by_tenant(
+        db.query(Product),
+        context.tenant_id,
+        Product.tenant_id
     )
     
     if batch_id:
@@ -215,19 +229,23 @@ async def list_products(
 @router.get("/{product_id}", tags=["Products"])
 async def get_product(
     product_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     Get single product details
+    Requires: READ_PRODUCT permission (all roles)
     """
     product = db.query(Product).filter(
         Product.id == product_id,
-        Product.tenant_id == int(current_user["tenant_id"])
+        Product.tenant_id == context.tenant_id
     ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Ensure tenant access (defense in depth)
+    ensure_tenant_access(product.tenant_id, context)
     
     return {
         "id": product.id,
@@ -249,20 +267,24 @@ async def get_product(
 async def generate_ai_content(
     product_id: int,
     request: AIGenerationRequest,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.GENERATE_CONTENT)),
     db: Session = Depends(get_db)
 ):
     """
     Generate AI content for a product
+    Requires: GENERATE_CONTENT permission (Owner, Admin, Creator)
     """
     # Get product
     product = db.query(Product).filter(
         Product.id == product_id,
-        Product.tenant_id == int(current_user["tenant_id"])
+        Product.tenant_id == context.tenant_id
     ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Ensure tenant access (defense in depth)
+    ensure_tenant_access(product.tenant_id, context)
     
     # Generate AI content
     try:
@@ -287,7 +309,7 @@ async def generate_ai_content(
     
     # Save AI generation
     ai_gen = AIGeneration(
-        tenant_id=int(current_user["tenant_id"]),
+        tenant_id=context.tenant_id,
         product_id=product.id,
         model=request.model,
         title=ai_result["title"],
@@ -354,19 +376,23 @@ async def update_product(
 @router.delete("/{product_id}", tags=["Products"])
 async def delete_product(
     product_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.DELETE_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     Delete a product
+    Requires: DELETE_PRODUCT permission (Owner, Admin only)
     """
     product = db.query(Product).filter(
         Product.id == product_id,
-        Product.tenant_id == int(current_user["tenant_id"])
+        Product.tenant_id == context.tenant_id
     ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Ensure tenant access (defense in depth)
+    ensure_tenant_access(product.tenant_id, context)
     
     db.delete(product)
     db.commit()

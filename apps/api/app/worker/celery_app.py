@@ -15,6 +15,7 @@ celery_app = Celery(
         "app.worker.tasks.order_tasks",
         "app.worker.tasks.schedule_tasks",
         "app.worker.tasks.token_tasks",
+        "app.worker.tasks.ingestion_tasks",
     ]
 )
 

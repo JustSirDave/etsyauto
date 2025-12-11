@@ -9,8 +9,10 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, get_user_context, UserContext, require_permission, require_shop_access
 from app.core.database import get_db
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant, filter_by_tenant_and_shops, ensure_tenant_access, ensure_shop_access
 from app.models.listings import ListingJob, Product
 from app.models.tenancy import Shop
 from app.worker.tasks.listing_tasks import publish_listing, cancel_listing_job
@@ -46,11 +48,12 @@ async def get_listing_jobs(
     status: Optional[str] = None,
     skip: int = 0,
     limit: int = 20,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_LISTING)),
     db: Session = Depends(get_db)
 ):
     """
     Get all listing jobs for the current tenant
+    Requires: READ_LISTING permission (all roles)
     
     Args:
         status: Optional filter by status (pending, scheduled, processing, completed, failed, cancelled)
@@ -60,13 +63,17 @@ async def get_listing_jobs(
     Returns:
         List of listing jobs with pagination info
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Build query
-    query = db.query(ListingJob).filter(ListingJob.tenant_id == tenant_id)
+    # Filter by tenant and shops
+    query = filter_by_tenant_and_shops(
+        db.query(ListingJob),
+        ListingJob.tenant_id,
+        ListingJob.shop_id,
+        context,
+        db
+    )
     
     if status:
-        query = query.filter(ListingJob.status == status)
+        query = query.filter(ListingJob.status == status if hasattr(ListingJob, 'status') else ListingJob.state == status)
     
     # Get total count
     total = query.count()
@@ -82,7 +89,7 @@ async def get_listing_jobs(
             "product_id": job.product_id,
             "shop_id": job.shop_id,
             "etsy_listing_id": job.etsy_listing_id,
-            "status": job.status if hasattr(job, 'status') else job.state,  # Handle both field names
+            "status": job.status if hasattr(job, 'status') else job.state,
             "error_message": job.error_message if hasattr(job, 'error_message') else (job.error_detail.get('message') if job.error_detail else None),
             "retry_count": job.retry_count if hasattr(job, 'retry_count') else job.attempts,
             "scheduled_for": job.scheduled_for.isoformat() if hasattr(job, 'scheduled_for') and job.scheduled_for else None,
@@ -100,11 +107,12 @@ async def get_listing_jobs(
 @router.post("/", tags=["Listings"])
 async def create_listing_job(
     job: ListingJobCreate,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.CREATE_LISTING)),
     db: Session = Depends(get_db)
 ):
     """
     Create a new listing job to publish a product to Etsy
+    Requires: CREATE_LISTING permission (Owner, Admin, Creator)
     
     Args:
         job: Job creation details (product_id, shop_id)
@@ -112,31 +120,25 @@ async def create_listing_job(
     Returns:
         Created job details
     """
-    tenant_id = int(current_user["tenant_id"])
-    
     # Verify product belongs to tenant
     product = db.query(Product).filter(
         Product.id == job.product_id,
-        Product.tenant_id == tenant_id
+        Product.tenant_id == context.tenant_id
     ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
-    # Verify shop belongs to tenant
-    shop = db.query(Shop).filter(
-        Shop.id == job.shop_id,
-        Shop.tenant_id == tenant_id
-    ).first()
+    ensure_tenant_access(product.tenant_id, context)
     
-    if not shop:
-        raise HTTPException(status_code=404, detail="Shop not found")
+    # Verify shop access
+    ensure_shop_access(job.shop_id, context, db)
     
     # Check if job already exists for this product
     existing_job = db.query(ListingJob).filter(
         ListingJob.product_id == job.product_id,
         ListingJob.shop_id == job.shop_id,
-        ListingJob.status.in_(["pending", "processing", "scheduled"])
+        ListingJob.status.in_(["pending", "processing", "scheduled"]) if hasattr(ListingJob, 'status') else ListingJob.state.in_(["queued", "processing"])
     ).first()
     
     if existing_job:
@@ -147,19 +149,14 @@ async def create_listing_job(
     
     # Create new listing job
     new_job = ListingJob(
-        tenant_id=tenant_id,
+        tenant_id=context.tenant_id,
         product_id=job.product_id,
         shop_id=job.shop_id,
-        status="pending",
+        status="pending" if hasattr(ListingJob, 'status') else None,
+        state="queued" if hasattr(ListingJob, 'state') else None,
         retry_count=0 if hasattr(ListingJob, 'retry_count') else None,
         attempts=0 if hasattr(ListingJob, 'attempts') else None
     )
-    
-    # Set the correct field based on model
-    if hasattr(new_job, 'status'):
-        new_job.status = "pending"
-    elif hasattr(new_job, 'state'):
-        new_job.state = "queued"
     
     db.add(new_job)
     db.commit()
@@ -170,7 +167,8 @@ async def create_listing_job(
         publish_listing.delay(new_job.id)
     except Exception as e:
         # If task fails to queue, mark job as failed
-        new_job.status = "failed" if hasattr(new_job, 'status') else None
+        if hasattr(new_job, 'status'):
+            new_job.status = "failed"
         if hasattr(new_job, 'state'):
             new_job.state = "failed"
         if hasattr(new_job, 'error_message'):
@@ -189,11 +187,12 @@ async def create_listing_job(
 @router.get("/{job_id}", tags=["Listings"])
 async def get_listing_job(
     job_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_LISTING)),
     db: Session = Depends(get_db)
 ):
     """
     Get a specific listing job by ID
+    Requires: READ_LISTING permission (all roles)
     
     Args:
         job_id: ID of the listing job
@@ -201,15 +200,16 @@ async def get_listing_job(
     Returns:
         Job details
     """
-    tenant_id = int(current_user["tenant_id"])
-    
     job = db.query(ListingJob).filter(
         ListingJob.id == job_id,
-        ListingJob.tenant_id == tenant_id
+        ListingJob.tenant_id == context.tenant_id
     ).first()
     
     if not job:
         raise HTTPException(status_code=404, detail="Listing job not found")
+    
+    ensure_tenant_access(job.tenant_id, context)
+    ensure_shop_access(job.shop_id, context, db)
     
     return {
         "id": job.id,
@@ -230,11 +230,12 @@ async def get_listing_job(
 @router.post("/{job_id}/retry", tags=["Listings"])
 async def retry_listing_job(
     job_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.UPDATE_LISTING)),
     db: Session = Depends(get_db)
 ):
     """
     Retry a failed listing job
+    Requires: UPDATE_LISTING permission (Owner, Admin, Creator)
     
     Args:
         job_id: ID of the listing job to retry
@@ -242,15 +243,16 @@ async def retry_listing_job(
     Returns:
         Success message
     """
-    tenant_id = int(current_user["tenant_id"])
-    
     job = db.query(ListingJob).filter(
         ListingJob.id == job_id,
-        ListingJob.tenant_id == tenant_id
+        ListingJob.tenant_id == context.tenant_id
     ).first()
     
     if not job:
         raise HTTPException(status_code=404, detail="Listing job not found")
+    
+    ensure_tenant_access(job.tenant_id, context)
+    ensure_shop_access(job.shop_id, context, db)
     
     current_status = job.status if hasattr(job, 'status') else job.state
     
@@ -292,11 +294,12 @@ async def retry_listing_job(
 @router.delete("/{job_id}", tags=["Listings"])
 async def cancel_listing_job_endpoint(
     job_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.DELETE_LISTING)),
     db: Session = Depends(get_db)
 ):
     """
     Cancel a pending or scheduled listing job
+    Requires: DELETE_LISTING permission (Owner, Admin only)
     
     Args:
         job_id: ID of the listing job to cancel
@@ -304,15 +307,16 @@ async def cancel_listing_job_endpoint(
     Returns:
         Success message
     """
-    tenant_id = int(current_user["tenant_id"])
-    
     job = db.query(ListingJob).filter(
         ListingJob.id == job_id,
-        ListingJob.tenant_id == tenant_id
+        ListingJob.tenant_id == context.tenant_id
     ).first()
     
     if not job:
         raise HTTPException(status_code=404, detail="Listing job not found")
+    
+    ensure_tenant_access(job.tenant_id, context)
+    ensure_shop_access(job.shop_id, context, db)
     
     current_status = job.status if hasattr(job, 'status') else job.state
     

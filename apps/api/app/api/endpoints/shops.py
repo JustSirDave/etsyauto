@@ -10,6 +10,14 @@ import json
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
+from app.api.dependencies import (
+    get_user_context,
+    UserContext,
+    require_permission,
+    require_shop_access
+)
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant, ensure_shop_access
 from app.models.tenancy import Shop, OAuthToken
 from app.services.etsy_oauth import etsy_oauth, EtsyOAuthService
 from app.services.encryption import token_encryptor
@@ -33,13 +41,16 @@ class OAuthCallbackRequest(BaseModel):
 
 
 @router.get("/etsy/connect", response_model=ConnectShopResponse, tags=["Shops"])
-async def connect_etsy_shop(current_user = Depends(get_current_user)):
+async def connect_etsy_shop(
+    context: UserContext = Depends(require_permission(Permission.CONNECT_SHOP))
+):
     """
     Step 1: Get Etsy authorization URL
+    Requires: CONNECT_SHOP permission (Owner, Admin)
 
     Returns URL to redirect user to Etsy for authorization
     """
-    tenant_id = int(current_user["tenant_id"])
+    tenant_id = context.tenant_id
     
     # Rate limit: max 10 OAuth start attempts per tenant per hour
     rl_key = rate_limit_key(tenant_id, 0, 'oauth_start')
@@ -57,8 +68,8 @@ async def connect_etsy_shop(current_user = Depends(get_current_user)):
         600,  # 10 minutes TTL
         json.dumps({
             "code_verifier": auth_data["code_verifier"],
-            "user_id": current_user["id"],
-            "tenant_id": current_user["tenant_id"]
+            "user_id": context.user_id,
+            "tenant_id": context.tenant_id
         })
     )
 
@@ -70,11 +81,12 @@ async def connect_etsy_shop(current_user = Depends(get_current_user)):
 @router.post("/etsy/callback", tags=["Shops"])
 async def etsy_oauth_callback(
     request: OAuthCallbackRequest,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.CONNECT_SHOP)),
     db: Session = Depends(get_db)
 ):
     """
     Step 2: Handle OAuth callback from Etsy
+    Requires: CONNECT_SHOP permission (Owner, Admin)
 
     Exchange authorization code for access token and save shop
     """
@@ -112,7 +124,7 @@ async def etsy_oauth_callback(
         else:
             # Create new shop
             shop = Shop(
-                tenant_id=int(current_user["tenant_id"]),
+                tenant_id=context.tenant_id,
                 etsy_shop_id=str(shop_info["shop_id"]),
                 display_name=shop_info.get("shop_name"),
                 status="connected"
@@ -123,7 +135,7 @@ async def etsy_oauth_callback(
         # Use TokenManager to save encrypted tokens
         token_manager = TokenManager(db, redis_client)
         await token_manager.save_token(
-            tenant_id=int(current_user["tenant_id"]),
+            tenant_id=context.tenant_id,
             shop_id=shop.id,
             access_token=token_data["access_token"],
             refresh_token=token_data.get("refresh_token", ""),
@@ -154,15 +166,23 @@ async def etsy_oauth_callback(
 
 @router.get("/", tags=["Shops"])
 async def list_shops(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(get_user_context),
     db: Session = Depends(get_db)
 ):
     """
     Get all shops for current user's tenant
+    Filters by allowed shops based on role:
+    - Owner/Admin: All shops in tenant
+    - Creator/Viewer: Only allowed shop_ids
     """
-    shops = db.query(Shop).filter(
-        Shop.tenant_id == int(current_user["tenant_id"])
-    ).all()
+    # Filter by tenant
+    query = filter_by_tenant(db.query(Shop), context.tenant_id, Shop.tenant_id)
+    
+    # Filter by allowed shops for Creator/Viewer
+    if context.role.lower() not in ('owner', 'admin') and context.allowed_shop_ids:
+        query = query.filter(Shop.id.in_(context.allowed_shop_ids))
+    
+    shops = query.all()
     
     return {
         "shops": [
@@ -181,37 +201,36 @@ async def list_shops(
 @router.post("/{shop_id}/refresh-token", tags=["Shops"])
 async def refresh_shop_token(
     shop_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_shop_access("shop_id")),
     db: Session = Depends(get_db)
 ):
     """
     Manually refresh OAuth token for a shop
+    Requires: Shop access (Owner, Admin, or Creator/Viewer with shop access)
     
     Useful for testing or forcing a refresh
     """
-    tenant_id = int(current_user["tenant_id"])
-    
-    # Rate limit: max 5 manual refresh attempts per shop per 10 minutes
-    rl_key = rate_limit_key(tenant_id, shop_id, 'manual_refresh')
-    if not check_rate_limit(redis_client, rl_key, max_attempts=5, window_seconds=600):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many refresh attempts. Please wait a few minutes."
-        )
-    
-    # Verify shop ownership
+    # Shop access already verified by require_shop_access
     shop = db.query(Shop).filter(
         Shop.id == shop_id,
-        Shop.tenant_id == tenant_id,
+        Shop.tenant_id == context.tenant_id,
         Shop.status == 'connected'
     ).first()
     
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found or not connected")
     
+    # Rate limit: max 5 manual refresh attempts per shop per 10 minutes
+    rl_key = rate_limit_key(context.tenant_id, shop_id, 'manual_refresh')
+    if not check_rate_limit(redis_client, rl_key, max_attempts=5, window_seconds=600):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many refresh attempts. Please wait a few minutes."
+        )
+    
     try:
         token_manager = TokenManager(db, redis_client)
-        new_token = await token_manager.refresh_token(tenant_id, shop_id, provider='etsy')
+        new_token = await token_manager.refresh_token(context.tenant_id, shop_id, provider='etsy')
         
         if not new_token:
             raise HTTPException(
@@ -241,17 +260,19 @@ async def refresh_shop_token(
 @router.delete("/{shop_id}", tags=["Shops"])
 async def disconnect_shop(
     shop_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.DISCONNECT_SHOP)),
     db: Session = Depends(get_db)
 ):
     """
     Disconnect an Etsy shop
+    Requires: DISCONNECT_SHOP permission (Owner, Admin only)
     """
-    tenant_id = int(current_user["tenant_id"])
+    # Verify shop access
+    ensure_shop_access(shop_id, context, db)
     
     shop = db.query(Shop).filter(
         Shop.id == shop_id,
-        Shop.tenant_id == tenant_id
+        Shop.tenant_id == context.tenant_id
     ).first()
     
     if not shop:
@@ -259,7 +280,7 @@ async def disconnect_shop(
     
     # Revoke and delete tokens
     token_manager = TokenManager(db, redis_client)
-    await token_manager.revoke_token(tenant_id, shop_id, provider='etsy')
+    await token_manager.revoke_token(context.tenant_id, shop_id, provider='etsy')
     
     # Update shop status
     shop.status = "revoked"

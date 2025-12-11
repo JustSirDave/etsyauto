@@ -1,102 +1,17 @@
 """
-API Dependencies - JWT authentication, database sessions, RBAC, etc.
+RBAC Dependencies for FastAPI
+Resolves user context, tenant, role, and shop access
 """
 from typing import List, Optional
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-import jwt
 
+from app.api.dependencies import get_current_user
 from app.core.database import get_db
-from app.core.security import decode_token
 from app.core.rbac import Permission, Role, has_permission, can_access_shop
 from app.models.tenancy import Membership, Shop
 
-# HTTP Bearer token security
-security = HTTPBearer()
-
-
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-):
-    """
-    Dependency to get current authenticated user from JWT token
-    
-    Usage:
-        @app.get("/protected")
-        def protected_route(current_user = Depends(get_current_user)):
-            return {"user_id": current_user["sub"]}
-    """
-    token = credentials.credentials
-    
-    try:
-        payload = decode_token(token)
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-def require_role(allowed_roles: list):
-    """
-    Dependency factory to check user has required role (backward compatible)
-    Returns dict (old behavior) or UserContext (new behavior) based on usage
-    
-    Usage (old - returns dict):
-        @app.get("/admin-only")
-        def admin_route(current_user = Depends(require_role(["owner", "admin"]))):
-            return {"message": "Admin access granted"}
-    
-    Usage (new - returns UserContext):
-        @app.get("/admin-only")
-        def admin_route(context: UserContext = Depends(require_role(["owner", "admin"]))):
-            return {"message": "Admin access granted"}
-    """
-    def role_checker(current_user = Depends(get_current_user)):
-        if current_user["role"] not in allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required roles: {allowed_roles}"
-            )
-        # For backward compatibility, return dict if it's a dict
-        # If user wants UserContext, they should use require_role_new
-        return current_user
-    return role_checker
-
-
-def require_role_with_context(allowed_roles: List[str]):
-    """
-    Dependency factory to check user has required role (enhanced version with UserContext)
-    
-    Usage:
-        @app.get("/admin")
-        def admin_route(
-            context: UserContext = Depends(require_role_with_context(["owner", "admin"]))
-        ):
-            ...
-    """
-    def role_checker(context: UserContext = Depends(get_user_context)):
-        if context.role.lower() not in [r.lower() for r in allowed_roles]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permissions. Required roles: {allowed_roles}"
-            )
-        return context
-    return role_checker
-
-
-# ==================== RBAC Dependencies ====================
 
 class UserContext(BaseModel):
     """Complete user context with tenant and role information"""
@@ -107,7 +22,8 @@ class UserContext(BaseModel):
     name: Optional[str]
     allowed_shop_ids: List[int]  # Empty list = all shops (for Owner/Admin)
     
-    model_config = {"from_attributes": True}
+    class Config:
+        from_attributes = True
 
 
 def get_user_context(
@@ -227,14 +143,14 @@ def require_any_permission(permissions: List[Permission]):
     return permission_checker
 
 
-def require_role_new(allowed_roles: List[str]):
+def require_role(allowed_roles: List[str]):
     """
-    Dependency factory to check user has required role (enhanced version with UserContext)
+    Dependency factory to check user has required role (backward compatible)
     
     Usage:
         @app.get("/admin")
         def admin_route(
-            context: UserContext = Depends(require_role_new(["owner", "admin"]))
+            context: UserContext = Depends(require_role(["owner", "admin"]))
         ):
             ...
     """
@@ -306,3 +222,4 @@ def require_shop_access(
         return context
     
     return shop_checker
+

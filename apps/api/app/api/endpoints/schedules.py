@@ -9,10 +9,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_user_context, UserContext, require_permission
 from app.core.database import get_db
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
 from app.models.listings import Schedule
-
+from app.models.tenancy import Shop
 
 router = APIRouter()
 
@@ -60,11 +62,12 @@ class ScheduleResponse(BaseModel):
 @router.get("/", tags=["Schedules"])
 async def get_schedules(
     status: Optional[str] = None,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Get all schedules for the current tenant
+    Requires: READ_SCHEDULE permission (all roles)
 
     Args:
         status: Optional filter by status (active, paused, error)
@@ -72,10 +75,8 @@ async def get_schedules(
     Returns:
         List of schedules with statistics
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Build query
-    query = db.query(Schedule).filter(Schedule.tenant_id == tenant_id)
+    # Filter by tenant
+    query = filter_by_tenant(db.query(Schedule), context.tenant_id, Schedule.tenant_id)
 
     if status:
         query = query.filter(Schedule.status == status)
@@ -83,13 +84,13 @@ async def get_schedules(
     schedules = query.order_by(Schedule.created_at.desc()).all()
 
     # Get statistics
-    total = db.query(Schedule).filter(Schedule.tenant_id == tenant_id).count()
+    total = db.query(Schedule).filter(Schedule.tenant_id == context.tenant_id).count()
     active = db.query(Schedule).filter(
-        Schedule.tenant_id == tenant_id,
+        Schedule.tenant_id == context.tenant_id,
         Schedule.status == 'active'
     ).count()
     paused = db.query(Schedule).filter(
-        Schedule.tenant_id == tenant_id,
+        Schedule.tenant_id == context.tenant_id,
         Schedule.status == 'paused'
     ).count()
 
@@ -97,7 +98,7 @@ async def get_schedules(
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     executions_today = db.query(func.sum(Schedule.execution_count)).filter(
-        Schedule.tenant_id == tenant_id,
+        Schedule.tenant_id == context.tenant_id,
         Schedule.last_run_at >= today_start
     ).scalar() or 0
 
@@ -135,16 +136,19 @@ async def get_schedules(
 @router.post("/", tags=["Schedules"])
 async def create_schedule(
     schedule: ScheduleCreate,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.CREATE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Create a new schedule
+    Requires: CREATE_SCHEDULE permission (Owner, Admin, Creator)
     """
-    tenant_id = int(current_user["tenant_id"])
+    # Verify shop access if shop_id is provided
+    if schedule.shop_id:
+        ensure_shop_access(schedule.shop_id, context, db)
 
     new_schedule = Schedule(
-        tenant_id=tenant_id,
+        tenant_id=context.tenant_id,
         name=schedule.name,
         description=schedule.description,
         type=schedule.type,
@@ -168,21 +172,25 @@ async def create_schedule(
 @router.get("/{schedule_id}", tags=["Schedules"])
 async def get_schedule(
     schedule_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Get a specific schedule by ID
+    Requires: READ_SCHEDULE permission (all roles)
     """
-    tenant_id = int(current_user["tenant_id"])
-
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
-        Schedule.tenant_id == tenant_id
+        Schedule.tenant_id == context.tenant_id
     ).first()
 
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    ensure_tenant_access(schedule.tenant_id, context)
+    
+    if schedule.shop_id:
+        ensure_shop_access(schedule.shop_id, context, db)
 
     return {
         "id": schedule.id,
@@ -206,21 +214,30 @@ async def get_schedule(
 async def update_schedule(
     schedule_id: int,
     schedule_update: ScheduleUpdate,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.UPDATE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Update a schedule
+    Requires: UPDATE_SCHEDULE permission (Owner, Admin, Creator*)
+    *Creator can only update own schedules (enforced at application level if needed)
     """
-    tenant_id = int(current_user["tenant_id"])
-
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
-        Schedule.tenant_id == tenant_id
+        Schedule.tenant_id == context.tenant_id
     ).first()
 
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    ensure_tenant_access(schedule.tenant_id, context)
+    
+    if schedule.shop_id:
+        ensure_shop_access(schedule.shop_id, context, db)
+
+    # Verify shop access if shop_id is being updated
+    if schedule_update.shop_id is not None:
+        ensure_shop_access(schedule_update.shop_id, context, db)
 
     # Update fields
     if schedule_update.name is not None:
@@ -252,21 +269,22 @@ async def update_schedule(
 @router.delete("/{schedule_id}", tags=["Schedules"])
 async def delete_schedule(
     schedule_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.DELETE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Delete a schedule
+    Requires: DELETE_SCHEDULE permission (Owner, Admin only)
     """
-    tenant_id = int(current_user["tenant_id"])
-
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
-        Schedule.tenant_id == tenant_id
+        Schedule.tenant_id == context.tenant_id
     ).first()
 
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    ensure_tenant_access(schedule.tenant_id, context)
 
     db.delete(schedule)
     db.commit()
@@ -277,21 +295,26 @@ async def delete_schedule(
 @router.post("/{schedule_id}/toggle", tags=["Schedules"])
 async def toggle_schedule(
     schedule_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.PAUSE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Toggle schedule status between active and paused
+    Requires: PAUSE_SCHEDULE permission (Owner, Admin, Creator*)
+    *Creator can only pause own schedules
     """
-    tenant_id = int(current_user["tenant_id"])
-
     schedule = db.query(Schedule).filter(
         Schedule.id == schedule_id,
-        Schedule.tenant_id == tenant_id
+        Schedule.tenant_id == context.tenant_id
     ).first()
 
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
+
+    ensure_tenant_access(schedule.tenant_id, context)
+    
+    if schedule.shop_id:
+        ensure_shop_access(schedule.shop_id, context, db)
 
     # Toggle status
     if schedule.status == 'active':
@@ -317,16 +340,15 @@ async def toggle_schedule(
 
 @router.post("/pause-all", tags=["Schedules"])
 async def pause_all_schedules(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.PAUSE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Pause all active schedules
+    Requires: PAUSE_SCHEDULE permission (Owner, Admin, Creator)
     """
-    tenant_id = int(current_user["tenant_id"])
-
     db.query(Schedule).filter(
-        Schedule.tenant_id == tenant_id,
+        Schedule.tenant_id == context.tenant_id,
         Schedule.status == 'active'
     ).update({"status": "paused", "updated_at": datetime.utcnow()})
 
@@ -337,16 +359,15 @@ async def pause_all_schedules(
 
 @router.post("/resume-all", tags=["Schedules"])
 async def resume_all_schedules(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.PAUSE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Resume all paused schedules
+    Requires: PAUSE_SCHEDULE permission (Owner, Admin, Creator)
     """
-    tenant_id = int(current_user["tenant_id"])
-
     db.query(Schedule).filter(
-        Schedule.tenant_id == tenant_id,
+        Schedule.tenant_id == context.tenant_id,
         Schedule.status == 'paused'
     ).update({"status": "active", "updated_at": datetime.utcnow()})
 
@@ -357,17 +378,16 @@ async def resume_all_schedules(
 
 @router.post("/run-all-syncs", tags=["Schedules"])
 async def run_all_syncs(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.UPDATE_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
     """
     Trigger all active sync schedules to run immediately
+    Requires: UPDATE_SCHEDULE permission (Owner, Admin, Creator)
     """
-    tenant_id = int(current_user["tenant_id"])
-
     # Get all active sync schedules
     sync_schedules = db.query(Schedule).filter(
-        Schedule.tenant_id == tenant_id,
+        Schedule.tenant_id == context.tenant_id,
         Schedule.type == 'sync',
         Schedule.status == 'active'
     ).all()

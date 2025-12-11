@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_user_context, UserContext, require_permission
 from app.core.database import get_db
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant
 from app.models.listings import Product, ListingJob, Order
 
 router = APIRouter()
@@ -16,11 +18,12 @@ router = APIRouter()
 
 @router.get("/stats", tags=["Dashboard"])
 async def get_dashboard_stats(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(get_user_context),  # Dashboard accessible to all authenticated users
     db: Session = Depends(get_db)
 ):
     """
     Get dashboard statistics
+    Available to: all authenticated users
 
     Returns:
     - total_products: Total number of products
@@ -29,30 +32,34 @@ async def get_dashboard_stats(
     - active_listings: Number of active/completed listing jobs
     - recent_activity: Recent changes summary
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Count total products
-    total_products = db.query(Product).filter(
-        Product.tenant_id == tenant_id
+    # Count total products (filtered by tenant)
+    total_products = filter_by_tenant(
+        db.query(Product),
+        context.tenant_id,
+        Product.tenant_id
     ).count()
 
-    # Count active/completed listings
-    active_listings = db.query(ListingJob).filter(
-        ListingJob.tenant_id == tenant_id,
-        ListingJob.status.in_(['completed', 'processing', 'pending'])
+    # Count active/completed listings (filtered by tenant)
+    active_listings = filter_by_tenant(
+        db.query(ListingJob),
+        context.tenant_id,
+        ListingJob.tenant_id
+    ).filter(
+        ListingJob.status.in_(['completed', 'processing', 'pending']) if hasattr(ListingJob, 'status') else ListingJob.state.in_(['done', 'processing', 'queued'])
     ).count()
 
-    # Count total orders
-    total_orders = db.query(Order).filter(
-        Order.tenant_id == tenant_id
+    # Count total orders (filtered by tenant)
+    total_orders = filter_by_tenant(
+        db.query(Order),
+        context.tenant_id,
+        Order.tenant_id
     ).count()
 
-    # Count unique customers (from orders)
-    # Assuming orders have buyer_email or buyer_name field
+    # Count unique customers (from orders, filtered by tenant)
     total_customers = db.query(
         func.count(distinct(Order.buyer_email))
     ).filter(
-        Order.tenant_id == tenant_id,
+        Order.tenant_id == context.tenant_id,
         Order.buyer_email.isnot(None)
     ).scalar() or 0
 
@@ -80,11 +87,12 @@ async def get_dashboard_stats(
 @router.get("/recent-orders", tags=["Dashboard"])
 async def get_recent_orders(
     limit: int = 5,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     Get recent orders for dashboard
+    Requires: READ_ORDER permission (all roles)
 
     Args:
         limit: Number of orders to return (default 5)
@@ -92,11 +100,11 @@ async def get_recent_orders(
     Returns:
         List of recent orders with basic info
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Get recent orders
-    orders = db.query(Order).filter(
-        Order.tenant_id == tenant_id
+    # Get recent orders (filtered by tenant)
+    orders = filter_by_tenant(
+        db.query(Order),
+        context.tenant_id,
+        Order.tenant_id
     ).order_by(
         Order.created_at.desc()
     ).limit(limit).all()

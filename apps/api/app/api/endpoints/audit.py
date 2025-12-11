@@ -9,8 +9,10 @@ from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from pydantic import BaseModel
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_user_context, UserContext, require_permission
 from app.core.database import get_db
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
 from app.models.listings import AuditLog
 
 router = APIRouter()
@@ -53,11 +55,12 @@ async def get_audit_logs(
     end_date: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_AUDIT_LOG)),
     db: Session = Depends(get_db)
 ):
     """
     Get audit logs for the current tenant
+    Requires: READ_AUDIT_LOG permission (Owner, Viewer)
     
     Args:
         action: Optional filter by action (e.g., 'create', 'update', 'delete')
@@ -71,19 +74,17 @@ async def get_audit_logs(
     Returns:
         List of audit log entries
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Build query
-    query = db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id)
+    # Filter by tenant
+    query = filter_by_tenant(db.query(AuditLog), context.tenant_id, AuditLog.tenant_id)
     
     if action:
         query = query.filter(AuditLog.action == action)
     
     if resource_type:
-        query = query.filter(AuditLog.resource_type == resource_type)
+        query = query.filter(AuditLog.target_type == resource_type)
     
     if user_id:
-        query = query.filter(AuditLog.user_id == user_id)
+        query = query.filter(AuditLog.actor_id == str(user_id))
     
     if start_date:
         try:
@@ -110,13 +111,11 @@ async def get_audit_logs(
     for log in logs:
         log_list.append({
             "id": log.id,
-            "user_id": log.user_id,
+            "shop_id": log.shop_id,
             "tenant_id": log.tenant_id,
             "action": log.action,
-            "resource_type": log.resource_type,
-            "resource_id": log.resource_id,
-            "ip_address": log.ip_address,
-            "user_agent": log.user_agent,
+            "target_type": log.target_type,
+            "target_id": log.target_id,
             "request_id": log.request_id,
             "diff": log.diff,
             "status_code": log.status_code,
@@ -134,48 +133,43 @@ async def get_audit_logs(
 
 @router.get("/stats", tags=["Audit Logs"])
 async def get_audit_stats(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_AUDIT_LOG)),
     db: Session = Depends(get_db)
 ):
     """
     Get audit log statistics for the current tenant
+    Requires: READ_AUDIT_LOG permission (Owner, Viewer)
     
     Returns:
         Statistics about audit events
     """
-    tenant_id = int(current_user["tenant_id"])
+    # Filter by tenant
+    base_query = filter_by_tenant(db.query(AuditLog), context.tenant_id, AuditLog.tenant_id)
+    
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = now - timedelta(days=7)
 
     # Total events
-    total_events = db.query(AuditLog).filter(
-        AuditLog.tenant_id == tenant_id
-    ).count()
+    total_events = base_query.count()
 
-    # Unique users
-    unique_users = db.query(func.count(func.distinct(AuditLog.user_id))).filter(
-        AuditLog.tenant_id == tenant_id
+    # Unique users (from actor_id)
+    unique_users = db.query(func.count(func.distinct(AuditLog.actor_id))).filter(
+        AuditLog.tenant_id == context.tenant_id
     ).scalar() or 0
 
     # Events today
-    events_today = db.query(AuditLog).filter(
-        AuditLog.tenant_id == tenant_id,
-        AuditLog.created_at >= today_start
-    ).count()
+    events_today = base_query.filter(AuditLog.created_at >= today_start).count()
 
     # Events this week
-    events_this_week = db.query(AuditLog).filter(
-        AuditLog.tenant_id == tenant_id,
-        AuditLog.created_at >= week_start
-    ).count()
+    events_this_week = base_query.filter(AuditLog.created_at >= week_start).count()
 
     # Top actions
     top_actions_query = db.query(
         AuditLog.action,
         func.count(AuditLog.id).label('count')
     ).filter(
-        AuditLog.tenant_id == tenant_id
+        AuditLog.tenant_id == context.tenant_id
     ).group_by(AuditLog.action).order_by(desc('count')).limit(5).all()
 
     top_actions = [
@@ -203,11 +197,12 @@ async def create_audit_log(
     diff: Optional[dict] = None,
     status_code: Optional[int] = None,
     latency_ms: Optional[int] = None,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(get_user_context),  # All authenticated users can create audit logs
     db: Session = Depends(get_db)
 ):
     """
     Create a new audit log entry
+    Available to: all authenticated users (internal use)
     
     Args:
         action: Action performed (e.g., 'create', 'update', 'delete', 'login', 'logout')
@@ -223,17 +218,13 @@ async def create_audit_log(
     Returns:
         Created audit log entry
     """
-    tenant_id = int(current_user["tenant_id"])
-    user_id = int(current_user["id"])
-
     new_log = AuditLog(
-        user_id=user_id,
-        tenant_id=tenant_id,
+        actor_type='user',
+        actor_id=str(context.user_id),
+        tenant_id=context.tenant_id,
         action=action,
-        resource_type=resource_type,
-        resource_id=resource_id,
-        ip_address=ip_address,
-        user_agent=user_agent,
+        target_type=resource_type,
+        target_id=resource_id,
         request_id=request_id,
         diff=diff,
         status_code=status_code,
@@ -253,11 +244,12 @@ async def create_audit_log(
 @router.get("/{log_id}", tags=["Audit Logs"])
 async def get_audit_log(
     log_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_AUDIT_LOG)),
     db: Session = Depends(get_db)
 ):
     """
     Get a specific audit log entry by ID
+    Requires: READ_AUDIT_LOG permission (Owner, Viewer)
     
     Args:
         log_id: ID of the audit log
@@ -265,25 +257,23 @@ async def get_audit_log(
     Returns:
         Audit log details
     """
-    tenant_id = int(current_user["tenant_id"])
-
     log = db.query(AuditLog).filter(
         AuditLog.id == log_id,
-        AuditLog.tenant_id == tenant_id
+        AuditLog.tenant_id == context.tenant_id
     ).first()
 
     if not log:
         raise HTTPException(status_code=404, detail="Audit log not found")
 
+    ensure_tenant_access(log.tenant_id, context)
+
     return {
         "id": log.id,
-        "user_id": log.user_id,
+        "shop_id": log.shop_id,
         "tenant_id": log.tenant_id,
         "action": log.action,
-        "resource_type": log.resource_type,
-        "resource_id": log.resource_id,
-        "ip_address": log.ip_address,
-        "user_agent": log.user_agent,
+        "target_type": log.target_type,
+        "target_id": log.target_id,
         "request_id": log.request_id,
         "diff": log.diff,
         "status_code": log.status_code,

@@ -6,50 +6,43 @@ Manage Etsy orders and synchronization
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
+from datetime import datetime, timezone
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_user_context, UserContext, require_permission, require_any_permission
 from app.core.database import get_db
-from app.models.tenancy import Order
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
+from app.models.tenancy import Order, Shop
 
 router = APIRouter()
 
 
 @router.get("/stats", tags=["Orders"])
 async def get_order_stats(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     Get order statistics for dashboard cards
+    Requires: READ_ORDER permission (all roles)
 
     Returns:
         Statistics about order counts by payment and delivery status
     """
-    tenant_id = int(current_user["tenant_id"])
+    # Filter by tenant
+    base_query = filter_by_tenant(db.query(Order), context.tenant_id, Order.tenant_id)
 
     # Get total order count
-    total_orders = db.query(Order).filter(Order.tenant_id == tenant_id).count()
+    total_orders = base_query.count()
 
     # Count by payment status
-    pending_payment = db.query(Order).filter(
-        Order.tenant_id == tenant_id,
-        Order.payment_status == 'pending'
-    ).count()
+    pending_payment = base_query.filter(Order.payment_status == 'pending').count()
 
-    completed = db.query(Order).filter(
-        Order.tenant_id == tenant_id,
-        Order.status.in_(['delivered', 'completed'])
-    ).count()
+    completed = base_query.filter(Order.status.in_(['delivered', 'completed'])).count()
 
-    refunded = db.query(Order).filter(
-        Order.tenant_id == tenant_id,
-        Order.payment_status == 'refunded'
-    ).count()
+    refunded = base_query.filter(Order.payment_status == 'refunded').count()
 
-    failed = db.query(Order).filter(
-        Order.tenant_id == tenant_id,
-        Order.payment_status == 'failed'
-    ).count()
+    failed = base_query.filter(Order.payment_status == 'failed').count()
 
     return {
         "pending_payment": pending_payment,
@@ -66,11 +59,12 @@ async def list_orders(
     limit: int = 20,
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     List all orders for current tenant
+    Requires: READ_ORDER permission (all roles)
 
     Args:
         skip: Number of records to skip (pagination)
@@ -81,12 +75,8 @@ async def list_orders(
     Returns:
         List of orders with pagination info
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Build query
-    query = db.query(Order).filter(
-        Order.tenant_id == tenant_id
-    )
+    # Filter by tenant
+    query = filter_by_tenant(db.query(Order), context.tenant_id, Order.tenant_id)
 
     # Apply filters
     if status:
@@ -98,9 +88,7 @@ async def list_orders(
     total = query.count()
 
     # Apply pagination and ordering
-    orders = query.order_by(
-        Order.created_at.desc()
-    ).offset(skip).limit(limit).all()
+    orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
 
     # Format orders for response
     formatted_orders = []
@@ -131,11 +119,12 @@ async def list_orders(
 @router.get("/{order_id}", tags=["Orders"])
 async def get_order(
     order_id: int,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     Get single order details
+    Requires: READ_ORDER permission (all roles)
 
     Args:
         order_id: Order ID
@@ -143,15 +132,15 @@ async def get_order(
     Returns:
         Order details
     """
-    tenant_id = int(current_user["tenant_id"])
-
     order = db.query(Order).filter(
         Order.id == order_id,
-        Order.tenant_id == tenant_id
+        Order.tenant_id == context.tenant_id
     ).first()
 
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    ensure_tenant_access(order.tenant_id, context)
 
     return {
         "id": order.id,
@@ -173,11 +162,12 @@ async def get_order(
 
 @router.post("/sync", tags=["Orders"])
 async def sync_orders(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.SYNC_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     Trigger order synchronization from Etsy
+    Requires: SYNC_ORDER permission (Owner, Admin only)
 
     This endpoint will:
     1. Fetch latest orders from Etsy API
@@ -185,16 +175,13 @@ async def sync_orders(
     3. Create new orders
     4. Return sync summary
     """
-    from app.models.tenancy import Shop
     from app.services.etsy_client import EtsyClient
     from app.core.redis import get_redis_client
     from app.services.rate_limiter import get_rate_limiter
     
-    tenant_id = int(current_user["tenant_id"])
-    
     # Get all connected shops for this tenant
     shops = db.query(Shop).filter(
-        Shop.tenant_id == tenant_id,
+        Shop.tenant_id == context.tenant_id,
         Shop.status == 'connected'
     ).all()
     
@@ -270,6 +257,9 @@ async def sync_orders(
                     }
                 
                 if existing_order:
+                    # Ensure existing order belongs to tenant
+                    ensure_tenant_access(existing_order.tenant_id, context)
+                    
                     # Update existing order
                     existing_order.buyer_name = buyer_name
                     existing_order.buyer_email = buyer_email
@@ -284,7 +274,7 @@ async def sync_orders(
                 else:
                     # Create new order
                     new_order = Order(
-                        tenant_id=tenant_id,
+                        tenant_id=context.tenant_id,
                         shop_id=shop.id,
                         etsy_receipt_id=receipt_id,
                         order_id=f"ETSY-{receipt_id}",

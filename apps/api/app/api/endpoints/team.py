@@ -14,7 +14,9 @@ import secrets
 from ...core.database import get_db
 from ...models.tenancy import User, Tenant, Membership
 from ...models.notifications import Notification, NotificationType
-from ..dependencies import get_current_user, require_role
+from ..dependencies import get_current_user, get_user_context, UserContext, require_role, require_role_with_context, require_permission
+from ...core.rbac import Permission
+from ...core.query_helpers import ensure_tenant_access
 from ...core.security import hash_password, verify_password
 from ...services.email_service import email_service
 from ...core.config import settings
@@ -74,14 +76,14 @@ class MemberResponse(BaseModel):
 
 @router.get("/members", response_model=List[MemberResponse])
 async def list_team_members(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(get_user_context),
     db: Session = Depends(get_db)
 ):
     """
     List all team members in the current tenant
     Available to: all authenticated users
     """
-    tenant_id = int(current_user["tenant_id"])
+    tenant_id = context.tenant_id
 
     # Get all memberships for this tenant with user info
     memberships = (
@@ -111,17 +113,17 @@ async def list_team_members(
 @router.post("/members/invite", status_code=status.HTTP_201_CREATED)
 async def invite_team_member(
     request: InviteMemberRequest,
-    current_user = Depends(require_role(["owner", "admin"])),
+    context: UserContext = Depends(require_permission(Permission.MANAGE_TEAM)),
     db: Session = Depends(get_db)
 ):
     """
     Invite a new team member to the tenant
-    Available to: owner, admin
+    Requires: MANAGE_TEAM permission (Owner, Admin)
 
     If user exists with this email, adds them to tenant
     If user doesn't exist, creates new user account
     """
-    tenant_id = int(current_user["tenant_id"])
+    tenant_id = context.tenant_id
 
     # Validate role
     valid_roles = ["owner", "admin", "creator", "viewer"]
@@ -132,7 +134,7 @@ async def invite_team_member(
         )
 
     # Get current user details for invitation email
-    inviter = db.query(User).filter(User.id == int(current_user["sub"])).first()
+    inviter = db.query(User).filter(User.id == context.user_id).first()
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
 
     # Generate invitation token (valid for 7 days)
@@ -373,21 +375,21 @@ async def accept_invitation(
 async def update_member_role(
     user_id: int,
     request: UpdateRoleRequest,
-    current_user = Depends(require_role(["owner", "admin"])),
+    context: UserContext = Depends(require_permission(Permission.MANAGE_TEAM)),
     db: Session = Depends(get_db)
 ):
     """
     Update a team member's role
-    Available to: owner, admin
+    Requires: MANAGE_TEAM permission (Owner, Admin)
 
     Restrictions:
     - Cannot change your own role
     - Only owners can promote to owner
     - Admins cannot demote owners
     """
-    tenant_id = int(current_user["tenant_id"])
-    current_user_id = int(current_user["sub"])
-    current_user_role = current_user["role"]
+    tenant_id = context.tenant_id
+    current_user_id = context.user_id
+    current_user_role = context.role
 
     # Validate role
     valid_roles = ["owner", "admin", "creator", "viewer"]
@@ -446,21 +448,21 @@ async def update_member_role(
 @router.delete("/members/{user_id}")
 async def remove_team_member(
     user_id: int,
-    current_user = Depends(require_role(["owner", "admin"])),
+    context: UserContext = Depends(require_permission(Permission.MANAGE_TEAM)),
     db: Session = Depends(get_db)
 ):
     """
     Remove a team member from the tenant
-    Available to: owner, admin
+    Requires: MANAGE_TEAM permission (Owner, Admin)
 
     Restrictions:
     - Cannot remove yourself
     - Admins cannot remove owners
     - Must have at least one owner remaining
     """
-    tenant_id = int(current_user["tenant_id"])
-    current_user_id = int(current_user["sub"])
-    current_user_role = current_user["role"]
+    tenant_id = context.tenant_id
+    current_user_id = context.user_id
+    current_user_role = context.role
 
     # Cannot remove yourself
     if user_id == current_user_id:
@@ -513,24 +515,26 @@ async def remove_team_member(
 
 @router.get("/me/role")
 async def get_my_role(
-    current_user = Depends(get_current_user)
+    context: UserContext = Depends(get_user_context)
 ):
     """
     Get current user's role and permissions
     Available to: all authenticated users
     """
+    from ...core.rbac import has_permission, Permission
+    
     return {
-        "user_id": int(current_user["sub"]),
-        "tenant_id": int(current_user["tenant_id"]),
-        "role": current_user["role"],
+        "user_id": context.user_id,
+        "tenant_id": context.tenant_id,
+        "role": context.role,
         "permissions": {
-            "can_invite_members": current_user["role"] in ["owner", "admin"],
-            "can_manage_roles": current_user["role"] in ["owner", "admin"],
-            "can_remove_members": current_user["role"] in ["owner", "admin"],
-            "can_manage_settings": current_user["role"] in ["owner", "admin"],
-            "can_create_products": current_user["role"] in ["owner", "admin", "creator"],
-            "can_generate_ai": current_user["role"] in ["owner", "admin", "creator"],
-            "can_publish_listings": current_user["role"] in ["owner", "admin", "creator"],
-            "is_owner": current_user["role"] == "owner",
+            "can_invite_members": has_permission(context.role, Permission.MANAGE_TEAM),
+            "can_manage_roles": has_permission(context.role, Permission.MANAGE_TEAM),
+            "can_remove_members": has_permission(context.role, Permission.MANAGE_TEAM),
+            "can_manage_settings": has_permission(context.role, Permission.UPDATE_TENANT_SETTINGS),
+            "can_create_products": has_permission(context.role, Permission.CREATE_PRODUCT),
+            "can_generate_ai": has_permission(context.role, Permission.GENERATE_CONTENT),
+            "can_publish_listings": has_permission(context.role, Permission.PUBLISH_LISTING),
+            "is_owner": context.role == "owner",
         }
     }

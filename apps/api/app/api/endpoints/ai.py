@@ -8,8 +8,10 @@ from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_user_context, UserContext, require_permission
 from app.core.database import get_db
+from app.core.rbac import Permission
+from app.core.query_helpers import filter_by_tenant
 from app.models.listings import AIGeneration, Product
 
 router = APIRouter()
@@ -17,28 +19,25 @@ router = APIRouter()
 
 @router.get("/stats", tags=["AI"])
 async def get_ai_stats(
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),  # AI stats tied to products
     db: Session = Depends(get_db)
 ):
     """
     Get AI generation statistics for dashboard cards
+    Requires: READ_PRODUCT permission (all roles have access to AI stats)
 
     Returns:
         Statistics about AI generations including total count, success rate,
         average response time, and this month's growth
     """
-    tenant_id = int(current_user["tenant_id"])
+    # Filter by tenant
+    base_query = filter_by_tenant(db.query(AIGeneration), context.tenant_id, AIGeneration.tenant_id)
 
     # Get total generations count
-    total_generations = db.query(AIGeneration).filter(
-        AIGeneration.tenant_id == tenant_id
-    ).count()
+    total_generations = base_query.count()
 
     # Calculate success rate (ok vs flagged)
-    ok_count = db.query(AIGeneration).filter(
-        AIGeneration.tenant_id == tenant_id,
-        AIGeneration.status == 'ok'
-    ).count()
+    ok_count = base_query.filter(AIGeneration.status == 'ok').count()
 
     success_rate = (ok_count / total_generations * 100) if total_generations > 0 else 0
 
@@ -47,13 +46,9 @@ async def get_ai_stats(
     first_day_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     first_day_last_month = (first_day_this_month - timedelta(days=1)).replace(day=1)
 
-    this_month_count = db.query(AIGeneration).filter(
-        AIGeneration.tenant_id == tenant_id,
-        AIGeneration.created_at >= first_day_this_month
-    ).count()
+    this_month_count = base_query.filter(AIGeneration.created_at >= first_day_this_month).count()
 
-    last_month_count = db.query(AIGeneration).filter(
-        AIGeneration.tenant_id == tenant_id,
+    last_month_count = base_query.filter(
         AIGeneration.created_at >= first_day_last_month,
         AIGeneration.created_at < first_day_this_month
     ).count()
@@ -83,11 +78,12 @@ async def get_ai_stats(
 @router.get("/recent", tags=["AI"])
 async def get_recent_generations(
     limit: int = 10,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     Get recent AI generations with product information
+    Requires: READ_PRODUCT permission (all roles)
 
     Args:
         limit: Maximum number of recent generations to return (default: 10)
@@ -95,9 +91,7 @@ async def get_recent_generations(
     Returns:
         List of recent AI generations with product names and metadata
     """
-    tenant_id = int(current_user["tenant_id"])
-
-    # Query recent generations with product join
+    # Query recent generations with product join, filtered by tenant
     generations = db.query(
         AIGeneration.id,
         AIGeneration.product_id,
@@ -110,7 +104,8 @@ async def get_recent_generations(
     ).join(
         Product, AIGeneration.product_id == Product.id
     ).filter(
-        AIGeneration.tenant_id == tenant_id
+        AIGeneration.tenant_id == context.tenant_id,
+        Product.tenant_id == context.tenant_id
     ).order_by(
         AIGeneration.created_at.desc()
     ).limit(limit).all()
@@ -119,8 +114,6 @@ async def get_recent_generations(
     result = []
     for gen in generations:
         # Determine generation type based on what was generated
-        # For now, we'll say all are 'title' type since we generate all three together
-        # In a real implementation, you might want to track which specific type was requested
         gen_type = 'title'  # Could be 'title', 'description', or 'tags'
 
         # Calculate time ago
