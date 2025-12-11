@@ -29,8 +29,8 @@ from app.schemas.products import (
     AIGenerationRequest,
     AIGenerationResponse
 )
-from app.services.ai_generator import ai_generator
-from app.services.policy_checker import policy_checker
+from app.services.ai_generation_service import AIGenerationService
+from app.services.ai_providers import AIProviderType
 
 router = APIRouter()
 
@@ -286,56 +286,60 @@ async def generate_ai_content(
     # Ensure tenant access (defense in depth)
     ensure_tenant_access(product.tenant_id, context)
     
-    # Generate AI content
+    # Build product info string
+    product_info = f"{product.title_raw or ''}"
+    if product.description_raw:
+        product_info += f"\n{product.description_raw}"
+    if product.tags_raw:
+        tags_str = ", ".join(product.tags_raw) if isinstance(product.tags_raw, list) else str(product.tags_raw)
+        product_info += f"\nTags: {tags_str}"
+    
+    # Use new AI Generation Service with integrated policy checking
     try:
-        ai_result = await ai_generator.generate_content(
-            title=product.title_raw or "",
-            description=product.description_raw or "",
-            style=request.style,
-            tone=request.tone
+        service = AIGenerationService(db)
+        
+        # Determine provider (default to OpenAI)
+        provider_type = AIProviderType.OPENAI
+        if hasattr(request, 'provider') and request.provider:
+            provider_type = AIProviderType(request.provider)
+        
+        # Generate with automatic policy check
+        generation, needs_review = await service.generate_with_policy_check(
+            product_id=product.id,
+            tenant_id=context.tenant_id,
+            product_info=product_info,
+            title_raw=product.title_raw,
+            description_raw=product.description_raw,
+            tags_raw=product.tags_raw if isinstance(product.tags_raw, list) else None,
+            style=request.style or "friendly",
+            tone=request.tone or "professional",
+            provider_type=provider_type,
+            model=request.model
         )
+        
+        return {
+            "ai_generation_id": generation.id,
+            "title": generation.title,
+            "description": generation.description,
+            "tags": generation.tags,
+            "policy_status": generation.policy_status,
+            "policy_flags": generation.policy_flags,
+            "needs_review": needs_review,
+            "provider": generation.provider,
+            "tokens_used": generation.tokens_used,
+            "generation_time_ms": generation.generation_time_ms,
+            "cost": {
+                "tokens": generation.cost_tokens or generation.tokens_used or 0,
+                "usd_cents": generation.cost_usd_cents or 0
+            },
+            "message": "⚠️ Content needs manual review due to policy violations. Visit /ai-review to review." if needs_review else "✅ Content generated successfully and passed policy checks"
+        }
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"AI generation failed: {str(e)}"
         )
-    
-    # Check policy compliance
-    policy_result = policy_checker.check_compliance(
-        title=ai_result["title"],
-        description=ai_result["description"],
-        tags=ai_result["tags"]
-    )
-    
-    # Save AI generation
-    ai_gen = AIGeneration(
-        tenant_id=context.tenant_id,
-        product_id=product.id,
-        model=request.model,
-        title=ai_result["title"],
-        description=ai_result["description"],
-        tags=ai_result["tags"],
-        policy_flags=policy_result,
-        status='ok' if policy_result["compliant"] else 'flagged',
-        cost_tokens=ai_result["tokens"],
-        cost_usd_cents=ai_result["cost_usd_cents"]
-    )
-    
-    db.add(ai_gen)
-    db.commit()
-    db.refresh(ai_gen)
-    
-    return {
-        "ai_generation_id": ai_gen.id,
-        "title": ai_gen.title,
-        "description": ai_gen.description,
-        "tags": ai_gen.tags,
-        "policy_flags": ai_gen.policy_flags,
-        "cost": {
-            "tokens": ai_gen.cost_tokens,
-            "usd_cents": ai_gen.cost_usd_cents
-        }
-    }
 
 
 @router.put("/{product_id}", tags=["Products"])
