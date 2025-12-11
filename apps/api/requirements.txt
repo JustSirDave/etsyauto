@@ -12,6 +12,7 @@ boto3==1.40.74
 botocore==1.40.74
 celery==5.5.3
 certifi==2025.11.12
+croniter==2.0.1
 cffi==2.0.0
 charset-normalizer==3.4.4
 click==8.3.0

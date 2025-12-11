@@ -555,6 +555,29 @@ export const schedulesApi = {
       method: 'POST',
     });
   },
+
+  // Quota Management
+  getQuota: async (scheduleId: number): Promise<any> => {
+    return apiRequest(`/api/schedules/${scheduleId}/quota`);
+  },
+
+  updateQuota: async (scheduleId: number, dailyQuota: number, weeklyQuota: number | null): Promise<any> => {
+    return apiRequest(`/api/schedules/${scheduleId}/quota`, {
+      method: 'PUT',
+      body: JSON.stringify({ daily_quota: dailyQuota, weekly_quota: weeklyQuota }),
+    });
+  },
+
+  resetQuota: async (scheduleId: number, resetDaily: boolean = true, resetWeekly: boolean = false): Promise<any> => {
+    return apiRequest(`/api/schedules/${scheduleId}/quota/reset`, {
+      method: 'POST',
+      body: JSON.stringify({ reset_daily: resetDaily, reset_weekly: resetWeekly }),
+    });
+  },
+
+  getQuotaSummary: async (): Promise<any> => {
+    return apiRequest('/api/schedules/quota/summary');
+  },
 };
 
 

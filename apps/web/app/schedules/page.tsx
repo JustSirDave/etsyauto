@@ -25,6 +25,8 @@ import { schedulesApi, Schedule, ScheduleStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { ConfirmActionModal } from '@/components/schedules/ConfirmActionModal';
 import { NewScheduleModal } from '@/components/schedules/NewScheduleModal';
+import { QuotaDisplay } from '@/components/schedules/QuotaDisplay';
+import { QuotaConfigModal } from '@/components/schedules/QuotaConfigModal';
 
 // Helper function to format relative time
 function formatRelativeTime(dateStr: string | null): string {
@@ -70,11 +72,18 @@ function ScheduleItem({
   schedule,
   onToggle,
   onDelete,
+  onConfigureQuota,
 }: {
   schedule: Schedule;
   onToggle: (id: number) => void;
   onDelete: (id: number) => void;
+  onConfigureQuota: (id: number) => void;
 }) {
+  const [showQuota, setShowQuota] = useState(false);
+  const [quotaData, setQuotaData] = useState<any>(null);
+  const [loadingQuota, setLoadingQuota] = useState(false);
+  const [showQuotaConfig, setShowQuotaConfig] = useState(false);
+
   const typeColors = {
     sync: 'bg-[var(--primary-bg)] text-[var(--primary)]',
     generate: 'bg-[var(--info-bg)] text-[var(--info)]',
@@ -86,12 +95,41 @@ function ScheduleItem({
     active: 'text-[var(--success)]',
     paused: 'text-[var(--warning)]',
     error: 'text-[var(--danger)]',
+    quota_exceeded: 'text-[var(--danger)]',
   };
 
   const statusIcons = {
     active: CheckCircle,
     paused: Pause,
     error: AlertCircle,
+    quota_exceeded: AlertCircle,
+  };
+
+  // Load quota data
+  const loadQuota = async (scheduleId: number) => {
+    setLoadingQuota(true);
+    try {
+      const data = await schedulesApi.getQuota(scheduleId);
+      setQuotaData(data);
+      setShowQuota(true);
+    } catch (error) {
+      console.error('Failed to load quota:', error);
+    } finally {
+      setLoadingQuota(false);
+    }
+  };
+
+  // Handle quota configuration
+  const handleConfigureQuota = (scheduleId: number) => {
+    loadQuota(scheduleId);
+    setShowQuotaConfig(true);
+  };
+
+  // Save quota configuration
+  const handleSaveQuota = async (scheduleId: number, dailyQuota: number, weeklyQuota: number | null) => {
+    await schedulesApi.updateQuota(scheduleId, dailyQuota, weeklyQuota);
+    await loadSchedules(filter);
+    await loadQuota(scheduleId);
   };
 
   const StatusIcon = statusIcons[schedule.status];
@@ -138,6 +176,13 @@ function ScheduleItem({
             title={schedule.status === 'active' ? 'Pause schedule' : 'Activate schedule'}
           >
             {schedule.status === 'active' ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+          </button>
+          <button
+            onClick={() => onConfigureQuota(schedule.id)}
+            className="p-2 text-[var(--text-muted)] hover:text-[var(--info)] hover:bg-[var(--info-bg)] rounded-lg transition-colors"
+            title="Configure quota"
+          >
+            <Timer className="w-5 h-5" />
           </button>
           <button
             onClick={() => onDelete(schedule.id)}
@@ -465,6 +510,7 @@ export default function SchedulesPage() {
                       schedule={schedule}
                       onToggle={handleToggle}
                       onDelete={handleDelete}
+                      onConfigureQuota={handleConfigureQuota}
                     />
                   ))}
                 </div>
@@ -546,6 +592,21 @@ export default function SchedulesPage() {
         onSuccess={() => loadSchedules(filter)}
         showToast={showToast}
       />
+
+      {/* Quota Configuration Modal */}
+      {showQuotaConfig && quotaData && (
+        <QuotaConfigModal
+          scheduleId={quotaData.schedule_id}
+          scheduleName={quotaData.schedule_name}
+          currentDailyQuota={quotaData.daily_quota}
+          currentWeeklyQuota={quotaData.weekly_quota}
+          onClose={() => {
+            setShowQuotaConfig(false);
+            setQuotaData(null);
+          }}
+          onSave={handleSaveQuota}
+        />
+      )}
     </DashboardLayout>
   );
 }

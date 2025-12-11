@@ -16,6 +16,7 @@ celery_app = Celery(
         "app.worker.tasks.schedule_tasks",
         "app.worker.tasks.token_tasks",
         "app.worker.tasks.ingestion_tasks",
+        "app.worker.tasks.scheduled_publishing",
     ]
 )
 
@@ -45,5 +46,13 @@ celery_app.conf.beat_schedule = {
     "run-scheduled-listings-every-5-minutes": {
         "task": "app.worker.tasks.schedule_tasks.process_scheduled_listings",
         "schedule": 300.0,  # Every 5 minutes
+    },
+    "process-schedules-every-minute": {
+        "task": "scheduled_publishing.process_schedules",
+        "schedule": 60.0,  # Every minute
+    },
+    "reset-quota-statuses-hourly": {
+        "task": "scheduled_publishing.reset_quota_statuses",
+        "schedule": 3600.0,  # Every hour
     },
 }

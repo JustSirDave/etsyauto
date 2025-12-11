@@ -121,27 +121,51 @@ class ListingJob(Base):
 
 
 class Schedule(Base):
-    """Automated task schedules"""
+    """Automated task schedules with quota management"""
     __tablename__ = "schedules"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True)  # Optional for non-shop tasks
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)  # Optional for non-shop tasks
 
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
-    type = Column(String(50), nullable=False)  # sync, generate, backup, report
+    type = Column(String(50), nullable=False)  # sync, generate, backup, report, publish
     cron_expr = Column(String(100), nullable=False)
-    daily_quota = Column(Integer, default=0)
-    status = Column(String(20), default='active')  # active, paused, error
-
+    
+    # Quota configuration
+    daily_quota = Column(Integer, default=150)  # Max listings/actions per day
+    weekly_quota = Column(Integer, nullable=True)  # Optional weekly limit
+    
+    # Quota tracking (resets daily/weekly)
+    daily_used = Column(Integer, default=0)
+    weekly_used = Column(Integer, default=0)
+    last_daily_reset = Column(DateTime(timezone=True), default=datetime.utcnow)
+    last_weekly_reset = Column(DateTime(timezone=True), default=datetime.utcnow)
+    
+    # Status and execution
+    status = Column(
+        String(20), 
+        CheckConstraint("status IN ('active','paused','error','quota_exceeded')"),
+        default='active',
+        index=True
+    )
     last_run_at = Column(DateTime(timezone=True), nullable=True)
-    next_run_at = Column(DateTime(timezone=True), nullable=True)
+    next_run_at = Column(DateTime(timezone=True), nullable=True, index=True)
     last_error = Column(Text, nullable=True)
     execution_count = Column(Integer, default=0)
+    
+    # Statistics
+    total_success = Column(Integer, default=0)
+    total_failed = Column(Integer, default=0)
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_schedules_next_run_enabled', 'next_run_at', 'status'),
+        Index('idx_schedules_shop_status', 'shop_id', 'status'),
+    )
 
 
 class Order(Base):

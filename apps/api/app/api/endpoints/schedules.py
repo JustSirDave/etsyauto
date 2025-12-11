@@ -15,6 +15,7 @@ from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
 from app.models.listings import Schedule
 from app.models.tenancy import Shop
+from app.services.quota_manager import QuotaManager
 
 router = APIRouter()
 
@@ -35,8 +36,15 @@ class ScheduleUpdate(BaseModel):
     type: Optional[str] = None
     cron_expr: Optional[str] = None
     daily_quota: Optional[int] = None
+    weekly_quota: Optional[int] = None
     shop_id: Optional[int] = None
     status: Optional[str] = None
+
+
+class QuotaConfigUpdate(BaseModel):
+    """Update quota configuration for a schedule"""
+    daily_quota: Optional[int] = None
+    weekly_quota: Optional[int] = None
 
 
 class ScheduleResponse(BaseModel):
@@ -412,3 +420,172 @@ async def run_all_syncs(
         "message": f"Triggered {len(sync_schedules)} sync schedule{'s' if len(sync_schedules) > 1 else ''}",
         "triggered_count": len(sync_schedules)
     }
+
+
+# ==================== Quota Management Endpoints ====================
+
+@router.get("/{schedule_id}/quota", tags=["Schedules", "Quotas"])
+async def get_schedule_quota(
+    schedule_id: int,
+    context: UserContext = Depends(require_permission(Permission.READ_SCHEDULE)),
+    db: Session = Depends(get_db)
+):
+    """
+    Get quota information for a schedule
+    Requires: READ_SCHEDULE permission
+    
+    Returns:
+        Current quota usage, remaining quota, and reset times
+    """
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    ensure_tenant_access(schedule.tenant_id, context)
+    
+    # Get quota information
+    quota_manager = QuotaManager(db)
+    quota_info = quota_manager.get_remaining_quota(schedule)
+    
+    return {
+        "schedule_id": schedule.id,
+        "schedule_name": schedule.name,
+        "status": schedule.status,
+        **quota_info
+    }
+
+
+@router.put("/{schedule_id}/quota", tags=["Schedules", "Quotas"])
+async def update_schedule_quota(
+    schedule_id: int,
+    quota_config: QuotaConfigUpdate,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_SCHEDULE)),
+    db: Session = Depends(get_db)
+):
+    """
+    Update quota configuration for a schedule
+    Requires: UPDATE_SCHEDULE permission (Admin+)
+    
+    Allows premium users to set custom quotas per shop
+    """
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    ensure_tenant_access(schedule.tenant_id, context)
+    
+    # Update quota configuration
+    if quota_config.daily_quota is not None:
+        schedule.daily_quota = quota_config.daily_quota
+    
+    if quota_config.weekly_quota is not None:
+        schedule.weekly_quota = quota_config.weekly_quota
+    
+    schedule.updated_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(schedule)
+    
+    # Get updated quota info
+    quota_manager = QuotaManager(db)
+    quota_info = quota_manager.get_remaining_quota(schedule)
+    
+    return {
+        "message": "Quota configuration updated successfully",
+        "schedule_id": schedule.id,
+        "quota": quota_info
+    }
+
+
+@router.post("/{schedule_id}/quota/reset", tags=["Schedules", "Quotas"])
+async def reset_schedule_quota(
+    schedule_id: int,
+    reset_daily: bool = True,
+    reset_weekly: bool = False,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_SCHEDULE)),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually reset quota counters for a schedule
+    Requires: UPDATE_SCHEDULE permission (Admin+)
+    
+    Useful for testing or handling edge cases
+    """
+    schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+    
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    
+    ensure_tenant_access(schedule.tenant_id, context)
+    
+    # Reset quotas
+    now = datetime.now(timezone.utc)
+    
+    if reset_daily:
+        schedule.daily_used = 0
+        schedule.last_daily_reset = now
+    
+    if reset_weekly:
+        schedule.weekly_used = 0
+        schedule.last_weekly_reset = now
+    
+    # Reset status if it was quota_exceeded
+    quota_manager = QuotaManager(db)
+    quota_manager.reset_quota_status(schedule)
+    
+    db.commit()
+    db.refresh(schedule)
+    
+    # Get updated info
+    quota_info = quota_manager.get_remaining_quota(schedule)
+    
+    return {
+        "message": "Quota reset successfully",
+        "schedule_id": schedule.id,
+        "reset_daily": reset_daily,
+        "reset_weekly": reset_weekly,
+        "quota": quota_info
+    }
+
+
+@router.get("/quota/summary", tags=["Schedules", "Quotas"])
+async def get_quota_summary(
+    context: UserContext = Depends(require_permission(Permission.READ_SCHEDULE)),
+    db: Session = Depends(get_db)
+):
+    """
+    Get quota summary for all schedules
+    Requires: READ_SCHEDULE permission
+    
+    Returns:
+        Summary of quota usage across all tenant's schedules
+    """
+    schedules = filter_by_tenant(
+        db.query(Schedule), 
+        context.tenant_id, 
+        Schedule.tenant_id
+    ).all()
+    
+    quota_manager = QuotaManager(db)
+    
+    summary = {
+        "total_schedules": len(schedules),
+        "active_schedules": len([s for s in schedules if s.status == 'active']),
+        "quota_exceeded": len([s for s in schedules if s.status == 'quota_exceeded']),
+        "total_daily_quota": sum(s.daily_quota or 0 for s in schedules),
+        "total_daily_used": sum(s.daily_used or 0 for s in schedules),
+        "schedules": []
+    }
+    
+    for schedule in schedules:
+        quota_info = quota_manager.get_remaining_quota(schedule)
+        summary["schedules"].append({
+            "id": schedule.id,
+            "name": schedule.name,
+            "status": schedule.status,
+            "quota": quota_info
+        })
+    
+    return summary
