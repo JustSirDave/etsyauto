@@ -52,6 +52,7 @@ const navigation: NavSection[] = [
     title: 'AUTOMATION',
     items: [
       { name: 'AI Generation', href: '/ai', icon: Sparkles },
+      { name: 'AI Review', href: '/ai-review', icon: BookOpen },
   { name: 'Schedules', href: '/schedules', icon: Calendar },
     ],
   },
