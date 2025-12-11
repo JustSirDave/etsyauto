@@ -142,3 +142,229 @@ async def get_recent_generations(
         "generations": result,
         "total": len(result)
     }
+
+
+# Policy and Review Workflow Endpoints
+
+@router.get("/generations/pending-review", tags=["AI Policy"])
+async def get_pending_reviews(
+    limit: int = 50,
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Get AI generations that need review due to policy violations
+    Requires: READ_PRODUCT permission
+    
+    Returns:
+        List of generations with policy_status='failed' or 'needs_review'
+    """
+    from app.services.ai_generation_service import AIGenerationService
+    
+    service = AIGenerationService(db)
+    pending = service.get_pending_reviews(context.tenant_id, limit=limit)
+    
+    return {
+        "pending_reviews": [
+            {
+                "id": gen.id,
+                "product_id": gen.product_id,
+                "title": gen.title,
+                "description": gen.description,
+                "tags": gen.tags,
+                "policy_status": gen.policy_status,
+                "policy_flags": gen.policy_flags,
+                "provider": gen.provider,
+                "created_at": gen.created_at.isoformat() if gen.created_at else None
+            }
+            for gen in pending
+        ],
+        "total": len(pending)
+    }
+
+
+@router.post("/generations/{generation_id}/accept", tags=["AI Policy"])
+async def accept_generation(
+    generation_id: int,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Accept generated content (mark as reviewed and approved)
+    Requires: UPDATE_PRODUCT permission (Creator+)
+    """
+    from app.services.ai_generation_service import AIGenerationService
+    from app.core.query_helpers import ensure_tenant_access
+    
+    service = AIGenerationService(db)
+    
+    # Get generation and verify tenant access
+    generation = db.query(AIGeneration).filter(
+        AIGeneration.id == generation_id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    
+    ensure_tenant_access(generation.tenant_id, context)
+    
+    # Review and accept
+    updated = service.review_generation(
+        generation_id=generation_id,
+        user_id=context.user_id,
+        decision='accepted'
+    )
+    
+    return {
+        "message": "Generation accepted",
+        "generation_id": updated.id,
+        "review_decision": updated.review_decision,
+        "reviewed_at": updated.reviewed_at.isoformat() if updated.reviewed_at else None
+    }
+
+
+@router.post("/generations/{generation_id}/reject", tags=["AI Policy"])
+async def reject_generation(
+    generation_id: int,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Reject generated content (mark as reviewed and rejected)
+    Requires: UPDATE_PRODUCT permission (Creator+)
+    """
+    from app.services.ai_generation_service import AIGenerationService
+    from app.core.query_helpers import ensure_tenant_access
+    
+    service = AIGenerationService(db)
+    
+    # Get generation and verify tenant access
+    generation = db.query(AIGeneration).filter(
+        AIGeneration.id == generation_id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    
+    ensure_tenant_access(generation.tenant_id, context)
+    
+    # Review and reject
+    updated = service.review_generation(
+        generation_id=generation_id,
+        user_id=context.user_id,
+        decision='rejected'
+    )
+    
+    return {
+        "message": "Generation rejected",
+        "generation_id": updated.id,
+        "review_decision": updated.review_decision,
+        "reviewed_at": updated.reviewed_at.isoformat() if updated.reviewed_at else None
+    }
+
+
+@router.post("/generations/{generation_id}/modify", tags=["AI Policy"])
+async def modify_generation(
+    generation_id: int,
+    title: str = None,
+    description: str = None,
+    tags: List[str] = None,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Modify and re-validate generated content
+    Requires: UPDATE_PRODUCT permission (Creator+)
+    
+    The modified content will be automatically re-checked against policies
+    """
+    from app.services.ai_generation_service import AIGenerationService
+    from app.core.query_helpers import ensure_tenant_access
+    
+    service = AIGenerationService(db)
+    
+    # Get generation and verify tenant access
+    generation = db.query(AIGeneration).filter(
+        AIGeneration.id == generation_id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    
+    ensure_tenant_access(generation.tenant_id, context)
+    
+    # Build modified content
+    modified_content = {}
+    if title:
+        modified_content['title'] = title
+    if description:
+        modified_content['description'] = description
+    if tags:
+        modified_content['tags'] = tags
+    
+    if not modified_content:
+        raise HTTPException(
+            status_code=400, 
+            detail="At least one field (title, description, or tags) must be provided"
+        )
+    
+    # Review with modifications (triggers re-policy-check)
+    updated = service.review_generation(
+        generation_id=generation_id,
+        user_id=context.user_id,
+        decision='modified',
+        modified_content=modified_content
+    )
+    
+    return {
+        "message": "Generation modified and re-validated",
+        "generation_id": updated.id,
+        "policy_status": updated.policy_status,
+        "policy_flags": updated.policy_flags,
+        "review_decision": updated.review_decision,
+        "reviewed_at": updated.reviewed_at.isoformat() if updated.reviewed_at else None,
+        "title": updated.title,
+        "description": updated.description,
+        "tags": updated.tags
+    }
+
+
+@router.get("/generations/{generation_id}", tags=["AI Policy"])
+async def get_generation_detail(
+    generation_id: int,
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed information about a specific generation
+    Requires: READ_PRODUCT permission
+    """
+    from app.core.query_helpers import ensure_tenant_access
+    
+    generation = db.query(AIGeneration).filter(
+        AIGeneration.id == generation_id
+    ).first()
+    
+    if not generation:
+        raise HTTPException(status_code=404, detail="Generation not found")
+    
+    ensure_tenant_access(generation.tenant_id, context)
+    
+    return {
+        "id": generation.id,
+        "product_id": generation.product_id,
+        "title": generation.title,
+        "description": generation.description,
+        "tags": generation.tags,
+        "policy_status": generation.policy_status,
+        "policy_flags": generation.policy_flags,
+        "policy_checked_at": generation.policy_checked_at.isoformat() if generation.policy_checked_at else None,
+        "reviewed_by": generation.reviewed_by,
+        "reviewed_at": generation.reviewed_at.isoformat() if generation.reviewed_at else None,
+        "review_decision": generation.review_decision,
+        "provider": generation.provider,
+        "model": generation.model,
+        "tokens_used": generation.tokens_used,
+        "generation_time_ms": generation.generation_time_ms,
+        "created_at": generation.created_at.isoformat() if generation.created_at else None
+    }

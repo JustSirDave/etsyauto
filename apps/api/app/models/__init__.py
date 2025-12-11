@@ -9,6 +9,7 @@ from app.models.listings import (
     UsageCost, AuditLog, WebhookEvent
 )
 from app.models.notifications import Notification, NotificationType
+from app.models.ingestion import IngestionBatch
 
 # Make models available at package level
 __all__ = [
@@ -30,5 +31,7 @@ __all__ = [
     # Notification models
     "Notification",
     "NotificationType",
+    # Ingestion models
+    "IngestionBatch",
 ]
 
