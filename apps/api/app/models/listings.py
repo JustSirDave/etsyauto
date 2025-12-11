@@ -58,9 +58,23 @@ class AIGeneration(Base):
     description = Column(Text)
     tags = Column(JSONB)
     
+    # Policy compliance
+    policy_status = Column(String(20), CheckConstraint("policy_status IN ('passed','failed','needs_review','warning')"), default='passed')
     policy_flags = Column(JSONB)
-    status = Column(String(20), CheckConstraint("status IN ('ok','flagged')"), default='ok')
+    policy_checked_at = Column(DateTime(timezone=True))
     
+    # Review workflow
+    reviewed_by = Column(BigInteger, ForeignKey('users.id'), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_decision = Column(String(20), CheckConstraint("review_decision IN ('accepted','rejected','modified')"), nullable=True)
+    
+    # Provider info
+    provider = Column(String(20), default='openai')
+    tokens_used = Column(Integer, nullable=True)
+    generation_time_ms = Column(Integer, nullable=True)
+    
+    # Legacy fields (kept for backwards compatibility)
+    status = Column(String(20), CheckConstraint("status IN ('ok','flagged')"), default='ok')
     cost_tokens = Column(Integer, default=0)
     cost_usd_cents = Column(Integer, default=0)
     
