@@ -47,8 +47,8 @@ class ProductRowSchema(BaseModel):
     sku: Optional[str] = Field(None, max_length=255, description="Product SKU")
     title: str = Field(..., min_length=1, max_length=140, description="Product title (Etsy limit: 140 chars)")
     description: Optional[str] = Field(None, max_length=10000, description="Product description")
-    tags: Optional[List[str]] = Field(None, max_items=13, description="Product tags (Etsy limit: 13)")
-    images: Optional[List[str]] = Field(None, max_items=10, description="Image URLs (Etsy limit: 10)")
+    tags: Optional[List[str]] = Field(None, max_length=13, description="Product tags (Etsy limit: 13)")
+    images: Optional[List[str]] = Field(None, max_length=10, description="Image URLs (Etsy limit: 10)")
     variants: Optional[List[Dict[str, Any]]] = Field(None, description="Product variants")
     price: Optional[float] = Field(None, ge=0.01, le=999999.99, description="Price in dollars")
     quantity: Optional[int] = Field(None, ge=0, le=999999, description="Available quantity")
@@ -121,8 +121,7 @@ class ProductRowSchema(BaseModel):
                 raise ValueError(f"Invalid variant: {e.errors()}")
         return validated_variants
     
-    class Config:
-        extra = "allow"  # Allow extra fields for flexibility
+    model_config = {"extra": "allow", "from_attributes": True}
 
 
 class IngestionBatchResponse(BaseModel):
@@ -141,8 +140,7 @@ class IngestionBatchResponse(BaseModel):
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 
 class IngestionUploadResponse(BaseModel):

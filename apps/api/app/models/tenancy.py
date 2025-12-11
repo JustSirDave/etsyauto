@@ -40,6 +40,7 @@ class Tenant(Base):
     memberships = relationship("Membership", back_populates="tenant")
     shops = relationship("Shop", back_populates="tenant")
     notifications = relationship("Notification", back_populates="tenant", cascade="all, delete-orphan")
+    ingestion_batches = relationship("IngestionBatch", back_populates="tenant", cascade="all, delete-orphan")
     # products = relationship("Product", back_populates="tenant")
 
 
@@ -137,6 +138,7 @@ class Shop(Base):
     # Relationships
     tenant = relationship("Tenant", back_populates="shops")
     oauth_tokens = relationship("OAuthToken", back_populates="shop")
+    ingestion_batches = relationship("IngestionBatch", back_populates="shop", cascade="all, delete-orphan")
     # listing_jobs = relationship("ListingJob", back_populates="shop")
     # orders = relationship("Order", back_populates="shop")
 

@@ -806,4 +806,23 @@ export const aiApi = {
       }),
     });
   },
+
+  // Helper for form data uploads (not used in current implementation)
+  postForm: async (endpoint: string, formData: FormData) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': token ? `Bearer ${token}` : '',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Request failed' }));
+      throw { response: { data: errorData } };
+    }
+
+    return await response.json();
+  },
 };

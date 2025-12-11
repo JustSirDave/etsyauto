@@ -309,7 +309,7 @@ class IngestionService:
             try:
                 product = Product(
                     tenant_id=tenant_id,
-                    shop_id=shop_id,
+                    # Note: Product model doesn't have shop_id field
                     sku=validated.sku,
                     title_raw=validated.title,
                     description_raw=validated.description,
