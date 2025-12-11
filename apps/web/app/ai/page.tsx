@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { aiApi, productsApi, AIStats, AIGeneration, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { parseAIError, AIErrorDetails } from '@/lib/ai-error-handler';
+import { AIErrorModal } from '@/components/modals/AIErrorModal';
 
 // Recent Generation Item
 function RecentGeneration({
@@ -79,6 +81,7 @@ export default function AIGenerationPage() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<AIErrorDetails | null>(null);
 
   // Load stats
   const loadStats = async () => {
@@ -149,7 +152,10 @@ export default function AIGenerationPage() {
       setSelectedProductId(null);
     } catch (error: any) {
       console.error('AI generation failed:', error);
-      showToast(error.detail || 'Failed to generate AI content', 'error');
+      const errorInfo = parseAIError(error);
+      setErrorDetails(errorInfo);
+      // Also show a brief toast
+      showToast(errorInfo.title, 'error');
     } finally {
       setGenerating(false);
     }
@@ -479,6 +485,14 @@ export default function AIGenerationPage() {
           </div>
         </div>
       </div>
+
+      {/* AI Error Modal */}
+      {errorDetails && (
+        <AIErrorModal
+          error={errorDetails}
+          onClose={() => setErrorDetails(null)}
+        />
+      )}
     </DashboardLayout>
   );
 }
