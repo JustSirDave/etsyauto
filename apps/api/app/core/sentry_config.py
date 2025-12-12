@@ -42,11 +42,15 @@ def scrub_sensitive_data(data: Any) -> Any:
         Scrubbed data with sensitive values redacted
     """
     if isinstance(data, dict):
-        return {
-            key: '[REDACTED]' if any(sensitive in key.lower() for sensitive in SENSITIVE_KEYS)
-            else scrub_sensitive_data(value)
-            for key, value in data.items()
-        }
+        result = {}
+        for key, value in data.items():
+            # Check if key contains sensitive term
+            if any(sensitive in key.lower() for sensitive in SENSITIVE_KEYS):
+                result[key] = '[REDACTED]'
+            else:
+                # Recursively scrub the value
+                result[key] = scrub_sensitive_data(value)
+        return result
     elif isinstance(data, list):
         return [scrub_sensitive_data(item) for item in data]
     elif isinstance(data, tuple):
@@ -66,17 +70,29 @@ def scrub_pii(data: Any) -> Any:
         Data with PII redacted
     """
     if isinstance(data, dict):
-        return {
-            key: '[PII]' if any(pii in key.lower() for pii in PII_KEYS)
-            else scrub_pii(value)
-            for key, value in data.items()
-        }
+        result = {}
+        for key, value in data.items():
+            # Check if key contains any PII term (substring match)
+            lower_key = key.lower()
+            if any(pii in lower_key for pii in PII_KEYS):
+                result[key] = '[PII]'
+            else:
+                # Recursively scrub the value
+                result[key] = scrub_pii(value)
+        return result
     elif isinstance(data, list):
         return [scrub_pii(item) for item in data]
     elif isinstance(data, tuple):
         return tuple(scrub_pii(item) for item in data)
     else:
         return data
+
+
+def scrub_all(data: Any) -> Any:
+    """Scrub both sensitive data and PII"""
+    data = scrub_sensitive_data(data)
+    data = scrub_pii(data)
+    return data
 
 
 def before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -94,26 +110,26 @@ def before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[st
     # Scrub request data
     if 'request' in event:
         if 'data' in event['request']:
-            event['request']['data'] = scrub_sensitive_data(event['request']['data'])
+            event['request']['data'] = scrub_all(event['request']['data'])
         
         if 'headers' in event['request']:
-            event['request']['headers'] = scrub_sensitive_data(event['request']['headers'])
+            event['request']['headers'] = scrub_all(event['request']['headers'])
         
         if 'cookies' in event['request']:
-            event['request']['cookies'] = scrub_sensitive_data(event['request']['cookies'])
+            event['request']['cookies'] = scrub_all(event['request']['cookies'])
         
         if 'query_string' in event['request']:
-            event['request']['query_string'] = scrub_sensitive_data(event['request']['query_string'])
+            event['request']['query_string'] = scrub_all(event['request']['query_string'])
     
     # Scrub extra context
     if 'extra' in event:
-        event['extra'] = scrub_sensitive_data(event['extra'])
+        event['extra'] = scrub_all(event['extra'])
     
     # Scrub breadcrumbs
     if 'breadcrumbs' in event:
         for breadcrumb in event['breadcrumbs']:
             if 'data' in breadcrumb:
-                breadcrumb['data'] = scrub_sensitive_data(breadcrumb['data'])
+                breadcrumb['data'] = scrub_all(breadcrumb['data'])
     
     # Scrub exception context
     if 'exception' in event:
@@ -121,7 +137,7 @@ def before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[st
             if 'stacktrace' in exception:
                 for frame in exception['stacktrace'].get('frames', []):
                     if 'vars' in frame:
-                        frame['vars'] = scrub_sensitive_data(frame['vars'])
+                        frame['vars'] = scrub_all(frame['vars'])
     
     return event
 
@@ -140,7 +156,7 @@ def before_breadcrumb(crumb: Dict[str, Any], hint: Dict[str, Any]) -> Optional[D
     """
     # Scrub sensitive data from breadcrumb
     if 'data' in crumb:
-        crumb['data'] = scrub_sensitive_data(crumb['data'])
+        crumb['data'] = scrub_all(crumb['data'])
     
     # Don't log sensitive HTTP headers
     if crumb.get('category') == 'httplib' and 'data' in crumb:
