@@ -4,6 +4,9 @@ Background task worker for async operations
 """
 from celery import Celery
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create Celery app
 celery_app = Celery(
@@ -20,6 +23,14 @@ celery_app = Celery(
         "app.worker.tasks.audit_cleanup",
     ]
 )
+
+# Setup Celery metrics collection
+try:
+    from app.observability.celery_metrics import setup_celery_metrics
+    setup_celery_metrics(celery_app)
+    logger.info("✅ Celery metrics enabled")
+except ImportError as e:
+    logger.warning(f"⚠️ Celery metrics not available: {e}")
 
 # Celery configuration
 celery_app.conf.update(

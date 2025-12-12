@@ -14,8 +14,10 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, metrics, ingestion, audit_logs, policy
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy
+from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
+from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.audit_middleware import AuditMiddleware
 
 # Initialize Sentry
@@ -67,9 +69,10 @@ app.add_middleware(
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
-# Tenant Context Middleware - Attaches tenant context to request state
-app.add_middleware(TenantContextMiddleware)
-app.add_middleware(AuditMiddleware)  # Audit logging for all requests
+# Middleware stack (order matters - first added = outermost layer)
+app.add_middleware(MetricsMiddleware)  # Track all requests
+app.add_middleware(TenantContextMiddleware)  # Extract tenant context
+app.add_middleware(AuditMiddleware)  # Audit logging
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -87,7 +90,7 @@ app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])
 app.include_router(audit_logs.router, prefix="/api/audit/logs", tags=["Audit Logs"])
 app.include_router(policy.router, prefix="/api/policy", tags=["Policy Compliance"])
-app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics & Monitoring"])
+app.include_router(metrics_endpoint.router, prefix="/api", tags=["Observability"])
 app.include_router(ingestion.router, prefix="/api/products/ingestion", tags=["Product Ingestion"])
 
 # Mount Prometheus metrics
