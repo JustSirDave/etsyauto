@@ -17,6 +17,7 @@ celery_app = Celery(
         "app.worker.tasks.token_tasks",
         "app.worker.tasks.ingestion_tasks",
         "app.worker.tasks.scheduled_publishing",
+        "app.worker.tasks.audit_cleanup",
     ]
 )
 
@@ -54,5 +55,9 @@ celery_app.conf.beat_schedule = {
     "reset-quota-statuses-hourly": {
         "task": "scheduled_publishing.reset_quota_statuses",
         "schedule": 3600.0,  # Every hour
+    },
+    "cleanup-old-audit-logs-daily": {
+        "task": "audit.cleanup_old_logs",
+        "schedule": 86400.0,  # Every 24 hours (daily at midnight UTC)
     },
 }

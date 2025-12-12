@@ -62,6 +62,7 @@ class AIGeneration(Base):
     policy_status = Column(String(20), CheckConstraint("policy_status IN ('passed','failed','needs_review','warning')"), default='passed')
     policy_flags = Column(JSONB)
     policy_checked_at = Column(DateTime(timezone=True))
+    can_publish = Column(Integer, default=0)  # 0=blocked, 1=can publish
     
     # Review workflow
     reviewed_by = Column(BigInteger, ForeignKey('users.id'), nullable=True)
@@ -93,10 +94,16 @@ class ListingJob(Base):
     
     idempotency_key = Column(String(255), unique=True)
     
+    # Policy compliance (pre-publish enforcement)
+    policy_status = Column(String(20), CheckConstraint("policy_status IN ('passed','failed','warning','pending')"), default='pending')
+    policy_flags = Column(JSONB)
+    policy_checked_at = Column(DateTime(timezone=True))
+    policy_block_reason = Column(Text, nullable=True)  # Reason if blocked
+    
     # Status tracking
     status = Column(
         String(20), 
-        CheckConstraint("status IN ('pending','scheduled','processing','completed','failed','cancelled')"),
+        CheckConstraint("status IN ('pending','scheduled','processing','completed','failed','cancelled','policy_blocked')"),
         default='pending'
     )
     
@@ -212,28 +219,94 @@ class UsageCost(Base):
 
 
 class AuditLog(Base):
-    """Audit log for all actions"""
+    """
+    Audit log for tracking all significant actions in the system
+    Retention: 30 days (TTL enforced by cleanup job)
+    """
     __tablename__ = "audit_logs"
     
+    # Primary key
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'))
     
-    actor_type = Column(String(20), CheckConstraint("actor_type IN ('user','system','worker')"))
-    actor_id = Column(String(50))
-    shop_id = Column(BigInteger, ForeignKey('shops.id'))
+    # Request identification
+    request_id = Column(String(36), nullable=False, index=True)  # UUID for request correlation
     
-    action = Column(String(100))
-    target_type = Column(String(50))
-    target_id = Column(String(50))
+    # Actor information
+    actor_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    actor_email = Column(String(255), nullable=True)
+    actor_ip = Column(String(45), nullable=True)  # IPv6 max length
     
-    request_id = Column(String(100))
-    idempotency_key = Column(String(255))
+    # Tenant/Shop scoping (for multi-tenancy)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=True, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)
     
-    diff = Column(JSONB)
-    status_code = Column(Integer)
-    latency_ms = Column(Integer)
+    # Action details
+    action = Column(String(100), nullable=False, index=True)  # e.g., 'auth.login', 'product.create'
+    target_type = Column(String(50), nullable=True)  # e.g., 'product', 'listing', 'user'
+    target_id = Column(String(100), nullable=True)  # ID of the target resource
     
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    # HTTP request details
+    http_method = Column(String(10), nullable=True)  # GET, POST, PUT, DELETE, etc.
+    http_path = Column(String(500), nullable=True)  # /api/products/123
+    http_status = Column(Integer, nullable=True)  # 200, 404, 500, etc.
+    
+    # Operation status
+    status = Column(String(20), nullable=False, index=True)  # success, failure, pending, error
+    error_message = Column(Text, nullable=True)  # Error details if status=failure/error
+    
+    # Metadata (no secrets!)
+    request_metadata = Column(JSONB, nullable=True)  # Request params/body (sanitized)
+    response_metadata = Column(JSONB, nullable=True)  # Response summary (sanitized)
+    
+    # Performance tracking
+    attempt = Column(Integer, default=1)  # Retry attempt number
+    latency_ms = Column(Integer, nullable=True)  # Request duration in milliseconds
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
+    
+    # Indexes for common queries
+    __table_args__ = (
+        Index('idx_audit_tenant_created', 'tenant_id', 'created_at'),
+        Index('idx_audit_actor_created', 'actor_user_id', 'created_at'),
+        Index('idx_audit_action_created', 'action', 'created_at'),
+        Index('idx_audit_status_created', 'status', 'created_at'),
+    )
+    
+    def __repr__(self):
+        return f"<AuditLog(id={self.id}, action={self.action}, actor={self.actor_email}, status={self.status})>"
+    
+    @classmethod
+    def sanitize_metadata(cls, data: dict) -> dict:
+        """
+        Remove sensitive fields from metadata before logging
+        """
+        if not data:
+            return {}
+        
+        sensitive_keys = [
+            'password', 'secret', 'token', 'api_key', 'access_token', 
+            'refresh_token', 'authorization', 'cookie', 'session',
+            'credit_card', 'ssn', 'cvv', 'pin'
+        ]
+        
+        sanitized = {}
+        for key, value in data.items():
+            key_lower = key.lower()
+            
+            # Skip sensitive keys
+            if any(sensitive in key_lower for sensitive in sensitive_keys):
+                sanitized[key] = "[REDACTED]"
+            # Recursively sanitize nested dicts
+            elif isinstance(value, dict):
+                sanitized[key] = cls.sanitize_metadata(value)
+            # Truncate large strings
+            elif isinstance(value, str) and len(value) > 1000:
+                sanitized[key] = value[:1000] + "... [TRUNCATED]"
+            else:
+                sanitized[key] = value
+        
+        return sanitized
 
 
 class WebhookEvent(Base):

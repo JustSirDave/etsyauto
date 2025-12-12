@@ -56,6 +56,8 @@ class Permission(str, Enum):
     
     # Audit Log permissions
     READ_AUDIT_LOG = "read_audit_log"
+    READ_AUDIT_LOGS = "read_audit_logs"
+    MANAGE_AUDIT_LOGS = "manage_audit_logs"  # For cleanup/admin tasks
 
 
 # Permission matrix: Role -> Set of Permissions
@@ -94,6 +96,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.GENERATE_CONTENT,
         # Audit
         Permission.READ_AUDIT_LOG,
+        Permission.READ_AUDIT_LOGS,
+        Permission.MANAGE_AUDIT_LOGS,
     },
     Role.ADMIN: {
         # Tenant (no billing/delete)
@@ -127,6 +131,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.GENERATE_CONTENT,
         # Audit
         Permission.READ_AUDIT_LOG,
+        Permission.READ_AUDIT_LOGS,
     },
     Role.CREATOR: {
         # Product (create within scope)

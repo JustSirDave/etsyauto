@@ -20,6 +20,7 @@ import {
   LifeBuoy,
   X,
   BookOpen,
+  Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +60,8 @@ const navigation: NavSection[] = [
   {
     title: 'SETTINGS',
     items: [
-  { name: 'Settings', href: '/settings', icon: Settings },
+      { name: 'Settings', href: '/settings', icon: Settings },
+      { name: 'Audit Logs', href: '/audit', icon: Shield },
     ],
   },
 ];

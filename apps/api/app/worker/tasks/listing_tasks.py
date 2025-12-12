@@ -18,6 +18,7 @@ from app.models.listings import ListingJob, Product, AIGeneration, AuditLog
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitError
 from app.services.rate_limiter import get_rate_limiter
+from app.services.listing_policy_checker import ListingPolicyChecker
 from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -118,11 +119,64 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             db.query(AIGeneration)
             .filter(
                 AIGeneration.product_id == product.id,
-                AIGeneration.status == "approved"
+                AIGeneration.review_decision == "accepted"
             )
             .order_by(AIGeneration.created_at.desc())
             .first()
         )
+        
+        # ==== POLICY COMPLIANCE CHECK (PRE-PUBLISH) ====
+        # Create a mock listing object for policy checking
+        from types import SimpleNamespace
+        mock_listing = SimpleNamespace(
+            product_id=product.id,
+            ai_generation_id=ai_generation.id if ai_generation else None
+        )
+        
+        policy_checker = ListingPolicyChecker(db)
+        compliance_result = policy_checker.check_listing_compliance(mock_listing, product)
+        
+        # Store policy results on job
+        job.policy_status = compliance_result["policy_status"]
+        job.policy_flags = compliance_result["policy_flags"]
+        job.policy_checked_at = datetime.utcnow()
+        
+        # FAIL CLOSED: Block publish if not compliant
+        if not compliance_result["can_publish"]:
+            job.status = "policy_blocked"
+            job.policy_block_reason = f"Policy violations: {', '.join(compliance_result['policy_flags'])}"
+            job.completed_at = datetime.utcnow()
+            db.commit()
+            
+            logger.error(f"[{request_id}] Job {job_id} blocked by policy: {job.policy_block_reason}")
+            
+            # Release concurrency slot
+            _release_shop_concurrency_slot(redis_client, shop_id)
+            
+            result = {
+                "success": False,
+                "job_id": job_id,
+                "error": "policy_blocked",
+                "policy_status": compliance_result["policy_status"],
+                "policy_flags": compliance_result["policy_flags"],
+                "remediation_required": True,
+                "message": job.policy_block_reason
+            }
+            
+            if job.idempotency_key:
+                _cache_idempotency_result(redis_client, job.idempotency_key, result, ttl=3600)
+            
+            return result
+        
+        # Store policy approval on AIGeneration if available
+        if ai_generation and compliance_result["can_publish"]:
+            ai_generation.policy_status = compliance_result["policy_status"]
+            ai_generation.policy_flags = compliance_result["policy_flags"]
+            ai_generation.policy_checked_at = datetime.utcnow()
+            ai_generation.can_publish = 1
+            db.commit()
+        
+        logger.info(f"[{request_id}] Policy check passed for job {job_id}")
         
         # Initialize Etsy client
         rate_limiter = get_rate_limiter(redis_client)

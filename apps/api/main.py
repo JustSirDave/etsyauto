@@ -14,8 +14,9 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, metrics, ingestion
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, metrics, ingestion, audit_logs, policy
 from app.middleware.tenant_context import TenantContextMiddleware
+from app.middleware.audit_middleware import AuditMiddleware
 
 # Initialize Sentry
 if settings.SENTRY_DSN:
@@ -68,6 +69,7 @@ app.add_middleware(
 
 # Tenant Context Middleware - Attaches tenant context to request state
 app.add_middleware(TenantContextMiddleware)
+app.add_middleware(AuditMiddleware)  # Audit logging for all requests
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
@@ -83,6 +85,8 @@ app.include_router(ai.router, prefix="/api/ai", tags=["AI Generation"])
 app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
 app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])
+app.include_router(audit_logs.router, prefix="/api/audit/logs", tags=["Audit Logs"])
+app.include_router(policy.router, prefix="/api/policy", tags=["Policy Compliance"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics & Monitoring"])
 app.include_router(ingestion.router, prefix="/api/products/ingestion", tags=["Product Ingestion"])
 
