@@ -18,6 +18,7 @@ from app.api.endpoints import auth, shops, products, team, onboarding, dashboard
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
+from app.middleware.sentry_middleware import SentryContextMiddleware
 from app.middleware.audit_middleware import AuditMiddleware
 
 # Initialize Sentry
@@ -71,6 +72,7 @@ app.add_middleware(
 
 # Middleware stack (order matters - first added = outermost layer)
 app.add_middleware(MetricsMiddleware)  # Track all requests
+app.add_middleware(SentryContextMiddleware)  # Sentry error tracking context
 app.add_middleware(TenantContextMiddleware)  # Extract tenant context
 app.add_middleware(AuditMiddleware)  # Audit logging
 

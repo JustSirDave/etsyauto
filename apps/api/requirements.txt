@@ -18,3 +18,4 @@ pytest-asyncio==0.21.1
 python-dotenv==1.0.0
 croniter==2.0.1
 prometheus-client==0.19.0
+sentry-sdk==1.39.1

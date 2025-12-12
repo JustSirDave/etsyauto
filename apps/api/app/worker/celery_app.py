@@ -32,6 +32,16 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Celery metrics not available: {e}")
 
+# Setup Celery Sentry integration
+try:
+    from app.core.sentry_config import initialize_sentry
+    from app.observability.celery_sentry import setup_celery_sentry
+    initialize_sentry()
+    setup_celery_sentry(celery_app)
+    logger.info("✅ Celery Sentry integration enabled")
+except ImportError as e:
+    logger.warning(f"⚠️ Celery Sentry not available: {e}")
+
 # Celery configuration
 celery_app.conf.update(
     task_serializer="json",
