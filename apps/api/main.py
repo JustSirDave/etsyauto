@@ -14,7 +14,7 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
@@ -89,6 +89,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(ai.router, prefix="/api/ai", tags=["AI Generation"])
 app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
 app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
+app.include_router(listing_errors.router, prefix="/api/listings", tags=["Listing Errors"])
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])
 app.include_router(audit_logs.router, prefix="/api/audit/logs", tags=["Audit Logs"])
 app.include_router(policy.router, prefix="/api/policy", tags=["Policy Compliance"])
