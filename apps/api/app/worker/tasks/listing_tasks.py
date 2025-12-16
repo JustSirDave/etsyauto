@@ -20,6 +20,7 @@ from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitErro
 from app.services.rate_limiter import get_rate_limiter
 from app.services.listing_policy_checker import ListingPolicyChecker
 from app.core.redis import get_redis_client
+from app.worker.rbac_helpers import enforce_task_rbac, TaskRBACError
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,25 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
     if not job:
         logger.error(f"Job {job_id} not found")
         return {"success": False, "error": "Job not found"}
+    
+    # ==== RBAC: Verify tenant/shop/product access ====
+    try:
+        resources = enforce_task_rbac(
+            db,
+            tenant_id=job.tenant_id,
+            shop_id=job.shop_id,
+            product_id=job.product_id,
+            job_id=job_id
+        )
+        logger.info(f"[{request_id}] RBAC checks passed for job {job_id}")
+    except TaskRBACError as e:
+        logger.error(f"[{request_id}] RBAC check failed for job {job_id}: {e}")
+        job.status = "failed"
+        job.error_code = "RBAC_DENIED"
+        job.error_message = f"Access denied: {str(e)}"
+        job.completed_at = datetime.utcnow()
+        db.commit()
+        return {"success": False, "error": "access_denied", "message": str(e)}
     
     # ==== IDEMPOTENCY CHECK ====
     if job.idempotency_key:
@@ -183,7 +203,7 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         etsy_client = EtsyClient(db, rate_limiter)
         
         # Prepare listing data
-        listing_data = _prepare_listing_data(product, ai_generation)
+        listing_data = _prepare_listing_data(product, shop, ai_generation)
         
         # ==== AUDIT LOG: Create Draft Listing ====
         start_time = time.time()
@@ -241,6 +261,106 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             db.add(audit)
             db.commit()
             raise
+        
+        # ==== IMAGE UPLOAD: Upload product images to listing ====
+        images_uploaded = 0
+        images_failed = 0
+        
+        if product.images and isinstance(product.images, list) and len(product.images) > 0:
+            logger.info(f"[{request_id}] Uploading {len(product.images)} images for listing {listing_id}")
+            
+            for idx, image_url in enumerate(product.images[:10]):  # Etsy max 10 images
+                # Check idempotency cache for this image
+                image_cache_key = f"image_upload:{job.idempotency_key}:{idx}" if job.idempotency_key else None
+                
+                if image_cache_key:
+                    cached_upload = redis_client.get(image_cache_key)
+                    if cached_upload:
+                        logger.info(f"[{request_id}] Image {idx} already uploaded (cache hit)")
+                        images_uploaded += 1
+                        continue
+                
+                # Rate limit check
+                rate_limit_acquired = asyncio.run(rate_limiter.acquire(shop.id, tokens=1))
+                if not rate_limit_acquired:
+                    wait_time = asyncio.run(rate_limiter.get_wait_time(shop.id, tokens=1))
+                    logger.warning(f"[{request_id}] Rate limit for image upload, waiting {wait_time:.1f}s")
+                    await asyncio.sleep(wait_time + 1)
+                
+                # Fetch image data
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=30.0) as http_client:
+                        img_response = await http_client.get(image_url)
+                        img_response.raise_for_status()
+                        image_data = img_response.content
+                        
+                        # Validate image size (Etsy limit: 10MB)
+                        if len(image_data) > 10 * 1024 * 1024:
+                            logger.warning(f"[{request_id}] Image {idx} too large ({len(image_data)} bytes), skipping")
+                            images_failed += 1
+                            continue
+                        
+                        # Upload to Etsy
+                        start_upload_time = time.time()
+                        upload_result = await etsy_client.upload_listing_image(
+                            shop_id=shop.id,
+                            etsy_shop_id=shop.etsy_shop_id,
+                            listing_id=listing_id,
+                            image_data=image_data,
+                            rank=idx + 1  # Rank starts at 1
+                        )
+                        
+                        # Log successful upload
+                        audit_image = AuditLog(
+                            tenant_id=job.tenant_id,
+                            shop_id=shop.id,
+                            actor_type='worker',
+                            actor_id=f'celery:{self.request.id}',
+                            action='etsy.upload_image',
+                            target_type='listing_image',
+                            target_id=listing_id,
+                            request_id=request_id,
+                            idempotency_key=image_cache_key,
+                            diff={'image_idx': idx, 'rank': idx + 1, 'size_bytes': len(image_data)},
+                            status_code=200,
+                            latency_ms=int((time.time() - start_upload_time) * 1000)
+                        )
+                        db.add(audit_image)
+                        
+                        # Cache success
+                        if image_cache_key:
+                            redis_client.setex(image_cache_key, 86400, '1')  # 24h cache
+                        
+                        images_uploaded += 1
+                        logger.info(f"[{request_id}] Uploaded image {idx + 1}/{len(product.images)}")
+                        
+                except Exception as img_error:
+                    logger.error(f"[{request_id}] Failed to upload image {idx}: {img_error}")
+                    
+                    # Log failure
+                    audit_image_fail = AuditLog(
+                        tenant_id=job.tenant_id,
+                        shop_id=shop.id,
+                        actor_type='worker',
+                        actor_id=f'celery:{self.request.id}',
+                        action='etsy.upload_image',
+                        target_type='listing_image',
+                        target_id=listing_id,
+                        request_id=request_id,
+                        idempotency_key=image_cache_key,
+                        diff={'image_idx': idx, 'error': str(img_error)},
+                        status_code=500,
+                        error_message=str(img_error)
+                    )
+                    db.add(audit_image_fail)
+                    
+                    images_failed += 1
+                    # Don't fail the entire job if some images fail
+                    continue
+            
+            db.commit()
+            logger.info(f"[{request_id}] Image upload complete: {images_uploaded} succeeded, {images_failed} failed")
         
         # ==== AUDIT LOG: Publish Listing ====
         start_time = time.time()
@@ -525,12 +645,13 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
     raise task.retry(exc=error, countdown=120)
 
 
-def _prepare_listing_data(product: Product, ai_generation: AIGeneration = None) -> Dict[str, Any]:
+def _prepare_listing_data(product: Product, shop: Shop, ai_generation: AIGeneration = None) -> Dict[str, Any]:
     """
-    Prepare Etsy listing data from product and AI generation.
+    Prepare Etsy listing data from product, shop, and AI generation.
 
     Args:
         product: Product model instance
+        shop: Shop model instance (for default shipping/return policies)
         ai_generation: Optional AI generation data
 
     Returns:
@@ -542,39 +663,53 @@ def _prepare_listing_data(product: Product, ai_generation: AIGeneration = None) 
         description = ai_generation.description
         tags = ai_generation.tags[:13]  # Etsy max 13 tags
     else:
-        title = product.title
-        description = product.description or ""
-        tags = []
+        title = product.title_raw
+        description = product.description_raw or ""
+        tags = product.tags_raw[:13] if product.tags_raw else []
 
     # Etsy listing data structure
     listing_data = {
-        "quantity": product.quantity,
+        "quantity": product.quantity or 1,
         "title": title[:140],  # Etsy max 140 chars
         "description": description,
-        "price": product.price,
-        "who_made": "i_did",  # Required: who made it
-        "when_made": "made_to_order",  # Required: when made
-        "taxonomy_id": 1,  # TODO: Map to proper Etsy category
-        "shipping_profile_id": None,  # TODO: Use shop's shipping profile
-        "return_policy_id": None,  # TODO: Use shop's return policy
-        "materials": [],  # Optional materials
-        "shop_section_id": None,  # Optional shop section
-        "processing_min": 1,  # Processing time in days
-        "processing_max": 3,
+        "price": product.price / 100.0 if product.price else 0,  # Convert cents to dollars
+        
+        # Required Etsy fields
+        "who_made": product.who_made or "i_did",
+        "when_made": product.when_made or "made_to_order",
+        "taxonomy_id": product.taxonomy_id or 1,  # Default to "Other" if not set
+        
+        # Shop-level defaults
+        "shipping_profile_id": shop.default_shipping_profile_id,
+        "return_policy_id": shop.default_return_policy_id,
+        "shop_section_id": shop.shop_section_id or product.variants.get('shop_section_id') if product.variants else None,
+        
+        # Materials and customization
+        "materials": product.materials if product.materials else [],
+        "is_supply": product.is_supply or False,
+        "is_customizable": product.is_customizable or False,
+        "is_personalizable": product.is_personalizable or False,
+        "personalization_is_required": product.is_personalizable or False,
+        "personalization_char_count_max": 100 if product.is_personalizable else None,
+        "personalization_instructions": product.personalization_instructions,
+        
+        # Processing time
+        "processing_min": product.processing_min or 1,
+        "processing_max": product.processing_max or 3,
+        
+        # Tags and styles
         "tags": tags,
-        "styles": [],  # Optional styles
-        "item_weight": None,  # Optional weight
-        "item_length": None,  # Optional dimensions
-        "item_width": None,
-        "item_height": None,
-        "item_weight_unit": "oz",  # oz, lb, g, kg
-        "item_dimensions_unit": "in",  # in, ft, mm, cm, m
-        "is_personalizable": False,
-        "personalization_is_required": False,
-        "personalization_char_count_max": None,
-        "personalization_instructions": None,
-        "is_supply": False,  # Is it a craft supply?
-        "is_customizable": False,
+        "styles": [],  # Could be extended from product metadata
+        
+        # Dimensions and weight
+        "item_weight": product.item_weight,
+        "item_length": product.item_length,
+        "item_width": product.item_width,
+        "item_height": product.item_height,
+        "item_weight_unit": product.item_weight_unit or "oz",
+        "item_dimensions_unit": product.item_dimensions_unit or "in",
+        
+        # Listing settings
         "should_auto_renew": True,  # Auto-renew when expires
         "is_taxable": True,
         "type": "physical",  # physical or download
@@ -716,13 +851,13 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
                 db.query(AIGeneration)
                 .filter(
                     AIGeneration.product_id == product.id,
-                    AIGeneration.status == "approved"
+                    AIGeneration.review_decision == "accepted"
                 )
                 .order_by(AIGeneration.created_at.desc())
                 .first()
             )
             
-            listing_data = _prepare_listing_data(product, ai_generation)
+            listing_data = _prepare_listing_data(product, shop, ai_generation)
         
         # Initialize Etsy client
         rate_limiter = get_rate_limiter(redis_client)

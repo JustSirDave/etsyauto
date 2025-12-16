@@ -102,73 +102,94 @@ async def _sync_shop_orders(db, etsy_client: EtsyClient, shop: Shop) -> Dict[str
     }
 
     try:
-        # Fetch recent receipts from Etsy (last 100)
-        receipts_response = await etsy_client.get_shop_receipts(
-            shop_id=shop.id,
-            etsy_shop_id=shop.etsy_shop_id,
-            limit=100,
-            offset=0
+        # Get last sync time for incremental sync
+        last_order = (
+            db.query(Order)
+            .filter(Order.shop_id == shop.id)
+            .order_by(Order.synced_at.desc())
+            .first()
         )
-
-        receipts = receipts_response.get("results", [])
-        logger.info(f"Fetched {len(receipts)} receipts for shop {shop.id}")
+        
+        # Use incremental sync if we have a last sync time (fetch orders modified since then)
+        min_last_modified = None
+        if last_order and last_order.synced_at:
+            # Subtract 5 minutes for safety (avoid missing updates)
+            from datetime import timedelta
+            sync_from = last_order.synced_at - timedelta(minutes=5)
+            min_last_modified = int(sync_from.timestamp())
+            logger.info(f"Incremental sync for shop {shop.id} from {sync_from}")
+        else:
+            logger.info(f"Full sync for shop {shop.id} (no previous sync)")
+        
+        # Paginate through all results (Etsy limit: 100 per page)
+        all_receipts = []
+        offset = 0
+        limit = 100
+        
+        while True:
+            receipts_response = await etsy_client.get_shop_receipts(
+                shop_id=shop.id,
+                etsy_shop_id=shop.etsy_shop_id,
+                limit=limit,
+                offset=offset,
+                min_last_modified=min_last_modified
+            )
+            
+            receipts = receipts_response.get("results", [])
+            count = receipts_response.get("count", 0)
+            
+            if not receipts:
+                break
+            
+            all_receipts.extend(receipts)
+            logger.debug(f"Fetched {len(receipts)} receipts at offset {offset} (total: {count})")
+            
+            # Check if there are more pages
+            if len(receipts) < limit or offset + len(receipts) >= count:
+                break
+            
+            offset += limit
+        
+        logger.info(f"Fetched {len(all_receipts)} total receipts for shop {shop.id}")
+        receipts = all_receipts
 
         for receipt in receipts:
             try:
+                receipt_id = str(receipt.get("receipt_id"))
+                
                 # Check if order exists
                 existing_order = (
                     db.query(Order)
                     .filter(
-                        Order.etsy_order_id == str(receipt["receipt_id"]),
+                        Order.etsy_receipt_id == receipt_id,
                         Order.shop_id == shop.id
                     )
                     .first()
                 )
 
-                # Map Etsy receipt status to our status
-                etsy_status = receipt.get("status", "").lower()
-                our_status = _map_etsy_status(etsy_status)
+                # Extract comprehensive order data
+                order_data = _extract_order_data(receipt, shop.id, shop.tenant_id)
 
                 if existing_order:
-                    # Update existing order
-                    existing_order.status = our_status
-                    existing_order.synced_at = datetime.utcnow()
-
-                    # Update tracking if available
-                    if receipt.get("shipments"):
-                        shipment = receipt["shipments"][0]  # First shipment
-                        existing_order.tracking_number = shipment.get("tracking_code")
-                        existing_order.tracking_carrier = shipment.get("carrier_name")
-
+                    # Update existing order with all fields
+                    for key, value in order_data.items():
+                        if hasattr(existing_order, key):
+                            setattr(existing_order, key, value)
+                    
                     result["orders_updated"] += 1
+                    logger.debug(f"Updated order {receipt_id}")
 
                 else:
-                    # Create new order
-                    order = Order(
-                        etsy_order_id=str(receipt["receipt_id"]),
-                        shop_id=shop.id,
-                        tenant_id=shop.tenant_id,
-                        status=our_status,
-                        buyer_email=receipt.get("buyer_email", ""),
-                        total_price=float(receipt.get("grandtotal", {}).get("amount", 0)) / 100,  # Cents to dollars
-                        currency=receipt.get("grandtotal", {}).get("currency_code", "USD"),
-                        items_count=len(receipt.get("transactions", [])),
-                        synced_at=datetime.utcnow()
-                    )
-
-                    # Add tracking if available
-                    if receipt.get("shipments"):
-                        shipment = receipt["shipments"][0]
-                        order.tracking_number = shipment.get("tracking_code")
-                        order.tracking_carrier = shipment.get("carrier_name")
-
+                    # Create new order with all extracted data
+                    order = Order(**order_data)
                     db.add(order)
                     result["orders_created"] += 1
+                    logger.debug(f"Created new order {receipt_id}")
 
                 result["orders_synced"] += 1
 
             except Exception as e:
-                logger.error(f"Error processing receipt {receipt.get('receipt_id')}: {e}")
+                logger.error(f"Error processing receipt {receipt.get('receipt_id')}: {e}", exc_info=True)
                 continue
 
         db.commit()
@@ -207,10 +228,130 @@ def _map_etsy_status(etsy_status: str) -> str:
         "shipped": "shipped",
         "delivered": "delivered",
         "canceled": "cancelled",
-        "refunded": "cancelled",
+        "refunded": "refunded",
     }
 
     return status_map.get(etsy_status, "pending")
+
+
+def _extract_order_data(receipt: Dict[str, Any], shop_id: int, tenant_id: int) -> Dict[str, Any]:
+    """
+    Extract comprehensive order data from Etsy receipt.
+
+    Args:
+        receipt: Etsy receipt/order data
+        shop_id: Shop ID
+        tenant_id: Tenant ID
+
+    Returns:
+        dict: Order data ready for database insertion/update
+    """
+    etsy_status = receipt.get("status", "").lower()
+    
+    # Get buyer information
+    buyer_email = receipt.get("buyer_email", "")
+    buyer_user_id = str(receipt.get("buyer_user_id", "")) if receipt.get("buyer_user_id") else None
+    
+    # Extract shipping address
+    shipping_address = receipt.get("first_line", {})  # Etsy uses nested structure
+    name = receipt.get("name", "")
+    
+    # Get financial data (Etsy uses Money objects with amount in cents)
+    grandtotal = receipt.get("grandtotal", {})
+    subtotal = receipt.get("subtotal", {})
+    total_shipping = receipt.get("total_shipping_cost", {})
+    total_tax = receipt.get("total_tax_cost", {})
+    discount = receipt.get("discount_amt", {})
+    gift_wrap = receipt.get("gift_wrap_price", {})
+    
+    # Extract line items (transactions)
+    line_items = []
+    transactions = receipt.get("transactions", [])
+    for txn in transactions:
+        line_item = {
+            "transaction_id": str(txn.get("transaction_id")),
+            "listing_id": str(txn.get("listing_id")),
+            "quantity": txn.get("quantity", 1),
+            "title": txn.get("title", ""),
+            "description": txn.get("description", ""),
+            "sku": txn.get("sku", ""),
+            "price": txn.get("price", {}).get("amount", 0),
+            "currency": txn.get("price", {}).get("currency_code", "USD"),
+            "variations": txn.get("variations", []),
+            "product_data": txn.get("product_data", {})
+        }
+        line_items.append(line_item)
+    
+    # Extract shipments (can be multiple)
+    shipments = []
+    for shipment in receipt.get("shipments", []):
+        shipment_data = {
+            "receipt_shipping_id": str(shipment.get("receipt_shipping_id", "")),
+            "tracking_code": shipment.get("tracking_code"),
+            "tracking_url": shipment.get("tracking_url"),
+            "carrier_name": shipment.get("carrier_name"),
+            "shipping_date": shipment.get("mailing_date"),
+            "is_delivered": shipment.get("is_delivered", False),
+            "notification_date": shipment.get("notification_date")
+        }
+        shipments.append(shipment_data)
+    
+    # Parse timestamps
+    created_timestamp = receipt.get("create_timestamp")
+    updated_timestamp = receipt.get("update_timestamp")
+    
+    from datetime import datetime, timezone
+    etsy_created_at = datetime.fromtimestamp(created_timestamp, tz=timezone.utc) if created_timestamp else None
+    etsy_updated_at = datetime.fromtimestamp(updated_timestamp, tz=timezone.utc) if updated_timestamp else None
+    
+    # Build order data dictionary
+    order_data = {
+        "etsy_receipt_id": str(receipt.get("receipt_id")),
+        "shop_id": shop_id,
+        "tenant_id": tenant_id,
+        "status": _map_etsy_status(etsy_status),
+        "etsy_status": etsy_status,
+        
+        # Buyer info
+        "buyer_user_id": buyer_user_id,
+        "buyer_email": buyer_email,
+        "buyer_name": name,
+        
+        # Shipping address
+        "shipping_name": receipt.get("name", ""),
+        "shipping_first_line": receipt.get("first_line", ""),
+        "shipping_second_line": receipt.get("second_line", ""),
+        "shipping_city": receipt.get("city", ""),
+        "shipping_state": receipt.get("state", ""),
+        "shipping_zip": receipt.get("zip", ""),
+        "shipping_country": receipt.get("country", ""),
+        "shipping_country_iso": receipt.get("country_iso", ""),
+        
+        # Financials (convert from cents to integer cents for storage)
+        "subtotal": subtotal.get("amount", 0) if isinstance(subtotal, dict) else 0,
+        "total_price": grandtotal.get("amount", 0) if isinstance(grandtotal, dict) else 0,
+        "total_shipping_cost": total_shipping.get("amount", 0) if isinstance(total_shipping, dict) else 0,
+        "total_tax_cost": total_tax.get("amount", 0) if isinstance(total_tax, dict) else 0,
+        "discount_amt": discount.get("amount", 0) if isinstance(discount, dict) else 0,
+        "gift_wrap_price": gift_wrap.get("amount", 0) if isinstance(gift_wrap, dict) else 0,
+        "currency": grandtotal.get("currency_code", "USD") if isinstance(grandtotal, dict) else "USD",
+        
+        # Line items and shipments
+        "line_items": line_items,
+        "shipments": shipments,
+        
+        # Gift options
+        "is_gift": receipt.get("is_gift", False),
+        "gift_message": receipt.get("gift_message", ""),
+        "message_from_buyer": receipt.get("message_from_buyer", ""),
+        
+        # Timestamps
+        "etsy_created_at": etsy_created_at,
+        "etsy_updated_at": etsy_updated_at,
+        "synced_at": datetime.now(timezone.utc)
+    }
+    
+    return order_data
 
 
 @celery_app.task(name="app.worker.tasks.order_tasks.sync_order_by_id")
@@ -248,25 +389,21 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
         existing_order = (
             db.query(Order)
             .filter(
-                Order.etsy_order_id == receipt_id,
+                Order.etsy_receipt_id == receipt_id,
                 Order.shop_id == shop.id
             )
             .first()
         )
 
-        etsy_status = receipt.get("status", "").lower()
-        our_status = _map_etsy_status(etsy_status)
+        # Extract comprehensive order data
+        order_data = _extract_order_data(receipt, shop.id, shop.tenant_id)
 
         if existing_order:
-            # Update
-            existing_order.status = our_status
-            existing_order.synced_at = datetime.utcnow()
-
-            if receipt.get("shipments"):
-                shipment = receipt["shipments"][0]
-                existing_order.tracking_number = shipment.get("tracking_code")
-                existing_order.tracking_carrier = shipment.get("carrier_name")
-
+            # Update with all extracted data
+            for key, value in order_data.items():
+                if hasattr(existing_order, key):
+                    setattr(existing_order, key, value)
+            
             db.commit()
 
             return {
@@ -276,24 +413,8 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
             }
 
         else:
-            # Create
-            order = Order(
-                etsy_order_id=receipt_id,
-                shop_id=shop.id,
-                tenant_id=shop.tenant_id,
-                status=our_status,
-                buyer_email=receipt.get("buyer_email", ""),
-                total_price=float(receipt.get("grandtotal", {}).get("amount", 0)) / 100,
-                currency=receipt.get("grandtotal", {}).get("currency_code", "USD"),
-                items_count=len(receipt.get("transactions", [])),
-                synced_at=datetime.utcnow()
-            )
-
-            if receipt.get("shipments"):
-                shipment = receipt["shipments"][0]
-                order.tracking_number = shipment.get("tracking_code")
-                order.tracking_carrier = shipment.get("carrier_name")
-
+            # Create new order
+            order = Order(**order_data)
             db.add(order)
             db.commit()
 

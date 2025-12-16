@@ -132,6 +132,15 @@ class Shop(Base):
         default='connected',
         nullable=False
     )
+    
+    # Etsy shop configuration
+    default_shipping_profile_id = Column(BigInteger, nullable=True)  # Etsy shipping profile ID
+    default_return_policy_id = Column(BigInteger, nullable=True)  # Etsy return policy ID
+    shop_section_id = Column(BigInteger, nullable=True)  # Default Etsy shop section
+    
+    # Shop metadata from Etsy
+    shop_data = Column(JSONB, nullable=True)  # Store full shop info from Etsy API
+    
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

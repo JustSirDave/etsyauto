@@ -14,7 +14,7 @@ import os
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
@@ -94,6 +94,7 @@ app.include_router(audit_logs.router, prefix="/api/audit/logs", tags=["Audit Log
 app.include_router(policy.router, prefix="/api/policy", tags=["Policy Compliance"])
 app.include_router(metrics_endpoint.router, prefix="/api", tags=["Observability"])
 app.include_router(ingestion.router, prefix="/api/products/ingestion", tags=["Product Ingestion"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
 
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()

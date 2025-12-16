@@ -114,3 +114,6 @@ Try registering again at: `https://etsyauto.bigbotdrivers.com/register`
 
 The 500 error should be resolved!
 
+
+
+

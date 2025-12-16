@@ -1,0 +1,146 @@
+"""
+Webhook Endpoints for External Services (Etsy, etc.)
+"""
+from fastapi import APIRouter, Request, HTTPException, status, Header, Depends
+from sqlalchemy.orm import Session
+import hmac
+import hashlib
+import json
+import logging
+from typing import Optional
+from datetime import datetime
+
+from app.core.database import get_db
+from app.core.config import settings
+from app.models.listings import WebhookEvent, ListingJob
+from app.models.tenancy import Shop
+from app.worker.tasks.webhook_tasks import process_webhook_event
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+@router.post("/etsy", tags=["Webhooks"])
+async def etsy_webhook(
+    request: Request,
+    x_etsy_signature: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Receive webhook events from Etsy API.
+    
+    Etsy sends webhooks for:
+    - Listing state changes (draft, active, inactive, expired)
+    - Order updates (new order, shipped, cancelled)
+    - Shop updates
+    
+    Signature verification:
+    - Etsy signs webhook payloads with HMAC-SHA256
+    - Signature is in X-Etsy-Signature header
+    """
+    try:
+        # Read raw body
+        body = await request.body()
+        body_str = body.decode('utf-8')
+        
+        # Verify signature if provided
+        if x_etsy_signature and settings.ETSY_WEBHOOK_SECRET:
+            expected_signature = hmac.new(
+                settings.ETSY_WEBHOOK_SECRET.encode('utf-8'),
+                body,
+                hashlib.sha256
+            ).hexdigest()
+            
+            if not hmac.compare_digest(x_etsy_signature, expected_signature):
+                logger.warning(f"Invalid Etsy webhook signature: {x_etsy_signature}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid webhook signature"
+                )
+        
+        # Parse payload
+        try:
+            payload = json.loads(body_str)
+        except json.JSONDecodeError:
+            logger.error(f"Invalid JSON in Etsy webhook: {body_str}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid JSON payload"
+            )
+        
+        # Extract event metadata
+        event_type = payload.get("type")  # e.g., "listing.updated", "receipt.created"
+        event_id = payload.get("event_id")
+        shop_id_etsy = payload.get("shop_id")
+        
+        if not event_type or not shop_id_etsy:
+            logger.error(f"Missing required fields in webhook: {payload}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required fields"
+            )
+        
+        # Check if we've already processed this event (idempotency)
+        existing_event = db.query(WebhookEvent).filter(
+            WebhookEvent.external_id == event_id
+        ).first()
+        
+        if existing_event:
+            logger.info(f"Webhook event {event_id} already processed, skipping")
+            return {"status": "duplicate", "event_id": event_id}
+        
+        # Find the shop
+        shop = db.query(Shop).filter(
+            Shop.etsy_shop_id == str(shop_id_etsy)
+        ).first()
+        
+        if not shop:
+            logger.warning(f"Shop {shop_id_etsy} not found for webhook event {event_id}")
+            # Store as skipped
+            webhook_event = WebhookEvent(
+                provider="etsy",
+                external_id=event_id,
+                payload=payload,
+                status="skipped"
+            )
+            db.add(webhook_event)
+            db.commit()
+            
+            return {"status": "skipped", "reason": "shop_not_found"}
+        
+        # Store webhook event
+        webhook_event = WebhookEvent(
+            provider="etsy",
+            external_id=event_id,
+            payload=payload,
+            status="pending"
+        )
+        db.add(webhook_event)
+        db.commit()
+        db.refresh(webhook_event)
+        
+        logger.info(f"Received Etsy webhook: {event_type} for shop {shop_id_etsy} (event {event_id})")
+        
+        # Process asynchronously via Celery
+        process_webhook_event.delay(webhook_event.id, shop.id)
+        
+        return {"status": "accepted", "event_id": event_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error processing Etsy webhook: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error"
+        )
+
+
+@router.get("/health", tags=["Webhooks"])
+async def webhook_health():
+    """
+    Health check endpoint for webhook service.
+    Etsy may ping this to verify webhook endpoint is alive.
+    """
+    return {"status": "ok", "service": "webhooks"}
+

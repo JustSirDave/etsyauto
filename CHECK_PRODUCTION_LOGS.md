@@ -91,3 +91,6 @@ docker exec etsy-api python -c "from app.core.database import engine; from sqlal
 
 Save this as `check_logs.sh`, make it executable (`chmod +x check_logs.sh`), and run it.
 
+
+
+

@@ -414,24 +414,50 @@ class EtsyClient:
         shop_id: int,
         etsy_shop_id: str,
         limit: int = 25,
-        offset: int = 0
+        offset: int = 0,
+        min_created: Optional[int] = None,
+        max_created: Optional[int] = None,
+        min_last_modified: Optional[int] = None,
+        max_last_modified: Optional[int] = None,
+        was_paid: Optional[bool] = None,
+        was_shipped: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
-        Get shop receipts (orders).
+        Get shop receipts (orders) with filtering and pagination.
 
         Args:
             shop_id: Internal shop ID
             etsy_shop_id: Etsy shop ID
-            limit: Number of receipts to return
+            limit: Number of receipts to return (max 100)
             offset: Pagination offset
+            min_created: Minimum created timestamp (Unix epoch)
+            max_created: Maximum created timestamp (Unix epoch)
+            min_last_modified: Minimum last modified timestamp (Unix epoch)
+            max_last_modified: Maximum last modified timestamp (Unix epoch)
+            was_paid: Filter by payment status
+            was_shipped: Filter by shipping status
 
         Returns:
-            dict: Receipt data with results array
+            dict: Receipt data with results array and count
         """
         params = {
-            "limit": limit,
+            "limit": min(limit, 100),  # Etsy max is 100
             "offset": offset,
         }
+        
+        # Add optional time filters
+        if min_created is not None:
+            params["min_created"] = min_created
+        if max_created is not None:
+            params["max_created"] = max_created
+        if min_last_modified is not None:
+            params["min_last_modified"] = min_last_modified
+        if max_last_modified is not None:
+            params["max_last_modified"] = max_last_modified
+        if was_paid is not None:
+            params["was_paid"] = str(was_paid).lower()
+        if was_shipped is not None:
+            params["was_shipped"] = str(was_shipped).lower()
 
         return await self._make_request(
             shop_id,

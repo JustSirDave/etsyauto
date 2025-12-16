@@ -34,6 +34,28 @@ class Product(Base):
     compare_at_price = Column(Integer)
     quantity = Column(Integer, nullable=True)  # Available quantity
     
+    # Etsy-specific fields
+    taxonomy_id = Column(Integer, nullable=True)  # Etsy category/taxonomy ID
+    materials = Column(JSONB, nullable=True)  # List of materials used
+    who_made = Column(String(50), default='i_did')  # i_did, someone_else, collective
+    when_made = Column(String(50), default='made_to_order')  # made_to_order, 2020_2024, etc.
+    is_supply = Column(Boolean, default=False)  # Is it a craft supply?
+    is_customizable = Column(Boolean, default=False)
+    is_personalizable = Column(Boolean, default=False)
+    personalization_instructions = Column(Text, nullable=True)
+    
+    # Dimensions and weight
+    item_weight = Column(Integer, nullable=True)  # Weight value
+    item_weight_unit = Column(String(10), default='oz')  # oz, lb, g, kg
+    item_length = Column(Integer, nullable=True)
+    item_width = Column(Integer, nullable=True)
+    item_height = Column(Integer, nullable=True)
+    item_dimensions_unit = Column(String(10), default='in')  # in, ft, mm, cm, m
+    
+    # Processing time
+    processing_min = Column(Integer, default=1)  # Days
+    processing_max = Column(Integer, default=3)  # Days
+    
     # Import tracking
     source = Column(String(50), CheckConstraint("source IN ('csv','json','api','manual')"), default='manual')
     ingest_batch_id = Column(String(255))
@@ -183,21 +205,74 @@ class Order(Base):
     tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
     shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False)
     
-    etsy_receipt_id = Column(String(50), unique=True)
+    etsy_receipt_id = Column(String(50), unique=True, nullable=False, index=True)
+    
+    # Order status
     status = Column(
         String(30),
-        CheckConstraint("status IN ('new','submitted_to_supplier','fulfilled','failed')"),
-        default='new'
+        CheckConstraint("status IN ('pending','processing','shipped','delivered','cancelled','refunded')"),
+        default='pending'
     )
+    etsy_status = Column(String(50), nullable=True)  # Original Etsy status
     
-    supplier_order_id = Column(String(255))
-    tracking = Column(JSONB)
-    customer_name = Column(String(255))
-    customer_email = Column(String(255))
-    order_data = Column(JSONB)
+    # Buyer information
+    buyer_user_id = Column(String(50), nullable=True)  # Etsy buyer user ID
+    buyer_email = Column(String(255), nullable=True)
+    buyer_name = Column(String(255), nullable=True)
+    
+    # Shipping address
+    shipping_name = Column(String(255), nullable=True)
+    shipping_first_line = Column(String(500), nullable=True)
+    shipping_second_line = Column(String(500), nullable=True)
+    shipping_city = Column(String(255), nullable=True)
+    shipping_state = Column(String(255), nullable=True)
+    shipping_zip = Column(String(50), nullable=True)
+    shipping_country = Column(String(100), nullable=True)
+    shipping_country_iso = Column(String(2), nullable=True)
+    
+    # Order financials (all in cents)
+    subtotal = Column(Integer, nullable=True)  # Subtotal before tax/shipping
+    total_price = Column(Integer, nullable=True)  # Grand total
+    total_shipping_cost = Column(Integer, nullable=True)
+    total_tax_cost = Column(Integer, nullable=True)
+    discount_amt = Column(Integer, default=0)  # Total discount amount
+    gift_wrap_price = Column(Integer, default=0)
+    currency = Column(String(3), default='USD')
+    
+    # Transaction fees (if available)
+    transaction_fee = Column(Integer, nullable=True)
+    listing_fee = Column(Integer, nullable=True)
+    
+    # Line items (stored as JSONB array)
+    line_items = Column(JSONB, nullable=True)  # Array of order items
+    
+    # Shipping/tracking (supports multiple shipments)
+    shipments = Column(JSONB, nullable=True)  # Array of shipment objects
+    
+    # Supplier fulfillment (for future use)
+    supplier_order_id = Column(String(255), nullable=True)
+    supplier_status = Column(String(50), nullable=True)
+    
+    # Message to seller
+    message_from_buyer = Column(Text, nullable=True)
+    
+    # Gift options
+    is_gift = Column(Boolean, default=False)
+    gift_message = Column(Text, nullable=True)
+    
+    # Timestamps
+    etsy_created_at = Column(DateTime(timezone=True), nullable=True)  # Order creation on Etsy
+    etsy_updated_at = Column(DateTime(timezone=True), nullable=True)  # Last update on Etsy
+    synced_at = Column(DateTime(timezone=True), nullable=True)  # Last sync from Etsy
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_orders_status_shop', 'shop_id', 'status'),
+        Index('idx_orders_etsy_status', 'etsy_status'),
+        Index('idx_orders_synced_at', 'synced_at'),
+    )
 
 
 class UsageCost(Base):

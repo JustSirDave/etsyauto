@@ -153,3 +153,6 @@ docker exec etsy-api python -c "from app.core.config import settings; print('Pri
 
 Save as `check_production.sh`, make executable (`chmod +x check_production.sh`), and run it.
 
+
+
+

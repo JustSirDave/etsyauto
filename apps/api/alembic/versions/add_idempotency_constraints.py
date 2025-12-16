@@ -8,7 +8,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = 'idempotency_constraints'
-down_revision = 'previous_migration'  # Update this
+down_revision = 'f9713cb3c87f'
 branch_labels = None
 depends_on = None
 
