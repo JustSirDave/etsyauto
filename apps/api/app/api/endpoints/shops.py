@@ -101,6 +101,14 @@ async def etsy_oauth_callback(
 
         state_data = json.loads(state_data_json)
         code_verifier = state_data.get("code_verifier")
+        stored_user_id = state_data.get("user_id")
+        stored_tenant_id = state_data.get("tenant_id")
+
+        if stored_user_id != context.user_id or stored_tenant_id != context.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OAuth state does not match the current user. Please try again."
+            )
 
         # Clean up Redis entry
         redis_client.delete(f"etsy_oauth_state:{request.state}")

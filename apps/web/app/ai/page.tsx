@@ -262,7 +262,7 @@ export default function AIGenerationPage() {
             AI Generation
           </h1>
           <p className="text-[var(--text-muted)] mt-1">
-            Generate product titles, descriptions, and tags using AI
+            Generate Etsy-optimized titles, descriptions, and tags using AI
           </p>
         </div>
 
@@ -476,8 +476,8 @@ export default function AIGenerationPage() {
                   <h4 className="text-[var(--text-primary)] font-semibold mb-2">Pro Tips</h4>
                   <ul className="text-[var(--text-muted)] text-sm space-y-1">
                     <li>• Be specific with your product details</li>
-                    <li>• Include target keywords for better SEO</li>
-                    <li>• Review and customize generated content</li>
+                    <li>• Include target keywords for Etsy SEO</li>
+                    <li>• Review content for Etsy policy compliance</li>
                   </ul>
                 </div>
               </div>

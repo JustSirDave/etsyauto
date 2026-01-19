@@ -188,7 +188,7 @@ function SettingsContent() {
         </div>
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Settings</h1>
-          <p className="text-[var(--text-muted)]">Manage your integrations and preferences</p>
+          <p className="text-[var(--text-muted)]">Manage your Etsy shop connections and team</p>
         </div>
       </div>
 
@@ -238,7 +238,7 @@ function SettingsContent() {
               </div>
             ) : (
               <div className="space-y-4">
-                <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to start automating.</p>
+                <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to start automating listings, orders, and inventory management.</p>
                 <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
                   {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Connecting...</> : <><LinkIcon className="w-4 h-4" />Connect Etsy</>}
                 </button>

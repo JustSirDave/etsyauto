@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant
 from app.models.listings import Product, ListingJob, Order
+from app.services.order_utils import derive_payment_status
 
 router = APIRouter()
 
@@ -117,9 +118,9 @@ async def get_recent_orders(
             "customer": order.buyer_name or "Unknown Customer",
             "customer_email": order.buyer_email,
             "date": order.created_at.strftime("%Y-%m-%d") if order.created_at else "N/A",
-            "amount": f"${float(order.total_price):.2f}" if order.total_price else "$0.00",
+            "amount": f"${float(order.total_price or 0) / 100:.2f}",
             "status": order.status or "pending",
-            "payment_status": order.payment_status or "pending"
+            "payment_status": derive_payment_status(order)
         })
 
     return {

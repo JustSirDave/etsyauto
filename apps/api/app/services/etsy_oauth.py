@@ -94,14 +94,21 @@ class EtsyOAuthService:
 
         if code_verifier:
             data["code_verifier"] = code_verifier
+        if self.client_secret:
+            data["client_secret"] = self.client_secret
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 self.TOKEN_URL,
                 data=data,
-                auth=(self.client_id, self.client_secret)
+                headers={
+                    "x-api-key": self.client_id,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
             )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                # Include Etsy response body to aid debugging (redact secrets upstream).
+                raise Exception(f"Etsy token exchange failed: {response.status_code} {response.text}")
             return response.json()
 
     async def refresh_access_token(self, refresh_token: str) -> Dict:
@@ -119,14 +126,20 @@ class EtsyOAuthService:
             "client_id": self.client_id,
             "refresh_token": refresh_token,
         }
+        if self.client_secret:
+            data["client_secret"] = self.client_secret
 
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 self.TOKEN_URL,
                 data=data,
-                auth=(self.client_id, self.client_secret)
+                headers={
+                    "x-api-key": self.client_id,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
             )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                raise Exception(f"Etsy token refresh failed: {response.status_code} {response.text}")
             return response.json()
 
     async def get_shop_info(self, access_token: str) -> Dict:
@@ -141,21 +154,45 @@ class EtsyOAuthService:
         """
         headers = {
             "Authorization": f"Bearer {access_token}",
-            "x-api-key": self.client_id
+            "x-api-key": self.client_id,
+            "Accept": "application/json",
         }
 
         async with httpx.AsyncClient() as client:
-            # Get user's shops
-            response = await client.get(
-                f"{self.BASE_URL}/application/shops",
+            # Get current user
+            user_response = await client.get(
+                f"{self.BASE_URL}/application/users/me",
                 headers=headers
             )
-            response.raise_for_status()
-            data = response.json()
+            if user_response.status_code >= 400:
+                raise Exception(f"Etsy get user failed: {user_response.status_code} {user_response.text}")
+            user_data = user_response.json()
+            user_id = user_data.get("user_id")
+            shop_id = user_data.get("shop_id")
 
-            # Return first shop (most users have one)
-            if data.get("results"):
-                return data["results"][0]
+            # Preferred path: fetch shops by user_id
+            if user_id:
+                shops_response = await client.get(
+                    f"{self.BASE_URL}/application/users/{user_id}/shops",
+                    headers=headers
+                )
+                if shops_response.status_code >= 400:
+                    raise Exception(f"Etsy get shops failed: {shops_response.status_code} {shops_response.text}")
+                data = shops_response.json()
+
+                # Return first shop (most users have one)
+                if data.get("results"):
+                    return data["results"][0]
+
+            # Fallback: some Etsy accounts return shop_id on /users/me
+            if shop_id:
+                shop_response = await client.get(
+                    f"{self.BASE_URL}/application/shops/{shop_id}",
+                    headers=headers
+                )
+                if shop_response.status_code >= 400:
+                    raise Exception(f"Etsy get shop failed: {shop_response.status_code} {shop_response.text}")
+                return shop_response.json()
 
             raise Exception("No shops found for this user")
 

@@ -1,6 +1,8 @@
 # 🎯 Etsy Automation Platform
 
-**AI-assisted, policy-compliant automation for Etsy sellers**
+**AI-powered, policy-compliant automation exclusively for Etsy sellers**
+
+> **Note**: This platform is built specifically for Etsy. It focuses on Etsy's unique requirements, policies, and API capabilities to provide the best experience for Etsy shop owners.
 
 ## 🚀 Quick Start
 
@@ -63,14 +65,14 @@ docs/           Documentation
 
 ## 🎯 Core Features (MVP v1)
 
-✅ Multi-tenant dashboard with RBAC  
-✅ CSV/JSON product ingestion  
-✅ AI-powered title/description/tag generation  
-✅ Policy compliance checker  
-✅ Rate-limited Etsy publishing  
-✅ Automated scheduling  
-✅ Printful order sync  
-✅ Usage tracking & audit logs  
+✅ **Etsy-Focused Dashboard** - Multi-tenant with RBAC  
+✅ **Product Management** - CSV/JSON ingestion for Etsy listings  
+✅ **AI Content Generation** - Etsy-optimized titles, descriptions, and tags  
+✅ **Policy Compliance** - Automatic Etsy policy checker  
+✅ **Smart Publishing** - Rate-limited Etsy API integration  
+✅ **Automated Scheduling** - Queue management for Etsy listings  
+✅ **Order Sync** - Etsy orders with Printful fulfillment  
+✅ **Usage Tracking** - Cost tracking & comprehensive audit logs  
 
 ## 🔐 Security
 
@@ -111,5 +113,15 @@ Proprietary - All rights reserved
 See [CONTRIBUTING.md](./docs/CONTRIBUTING.md)
 
 ---
+
+## 🎨 Why Etsy-Only?
+
+This platform is **exclusively designed for Etsy** because:
+
+- **Etsy-Specific Policies**: Built-in compliance with Etsy's unique marketplace rules
+- **Optimized API Usage**: Tailored to Etsy's rate limits and API patterns
+- **Etsy SEO**: AI trained on Etsy's search algorithm and best practices
+- **Community Focus**: Features designed for handmade, vintage, and craft sellers
+- **Deep Integration**: Leverages Etsy's full API capabilities without compromise
 
 **Built with ❤️ for Etsy creators**

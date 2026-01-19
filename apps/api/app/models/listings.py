@@ -3,8 +3,8 @@ SQLAlchemy Models - Products, AI Generations, Listing Jobs, Orders
 """
 from datetime import datetime
 from sqlalchemy import (
-    Column, BigInteger, String, Text, Integer, DateTime, 
-    ForeignKey, CheckConstraint, Index, UniqueConstraint
+    Column, BigInteger, String, Text, Integer, DateTime,
+    Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB

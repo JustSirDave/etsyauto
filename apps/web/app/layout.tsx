@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { useEffect } from 'react';
 import Script from 'next/script';
+import { Providers } from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Etsy Automation Platform',
-  description: 'Automate your Etsy store operations',
+  description: 'AI-powered automation exclusively for Etsy sellers - Manage listings, generate content, and sync orders',
 };
 
 export default function RootLayout({
@@ -31,7 +31,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={inter.className}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

@@ -285,13 +285,13 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                 if not rate_limit_acquired:
                     wait_time = asyncio.run(rate_limiter.get_wait_time(shop.id, tokens=1))
                     logger.warning(f"[{request_id}] Rate limit for image upload, waiting {wait_time:.1f}s")
-                    await asyncio.sleep(wait_time + 1)
+                    time.sleep(wait_time + 1)
                 
                 # Fetch image data
                 try:
                     import httpx
-                    async with httpx.AsyncClient(timeout=30.0) as http_client:
-                        img_response = await http_client.get(image_url)
+                    with httpx.Client(timeout=30.0) as http_client:
+                        img_response = http_client.get(image_url)
                         img_response.raise_for_status()
                         image_data = img_response.content
                         
@@ -303,13 +303,13 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                         
                         # Upload to Etsy
                         start_upload_time = time.time()
-                        upload_result = await etsy_client.upload_listing_image(
+                        upload_result = asyncio.run(etsy_client.upload_listing_image(
                             shop_id=shop.id,
                             etsy_shop_id=shop.etsy_shop_id,
                             listing_id=listing_id,
                             image_data=image_data,
                             rank=idx + 1  # Rank starts at 1
-                        )
+                        ))
                         
                         # Log successful upload
                         audit_image = AuditLog(

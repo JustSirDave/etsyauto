@@ -331,7 +331,7 @@ function DashboardContent() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
-        <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your shop overview.</p>
+          <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your Etsy shop overview.</p>
       </div>
 
       {/* Main Grid: Left (Connection Status + Quick Actions) / Right (KPIs) */}
@@ -354,9 +354,9 @@ function DashboardContent() {
                   onConnect={() => window.location.href = '/settings'}
                 />
                 <ConnectionItem
-                  name="Supplier API"
+                  name="Printful"
                   status="disconnected"
-                  onConnect={() => showToast('Supplier API connection coming soon!', 'info')}
+                  onConnect={() => showToast('Printful connection coming soon!', 'info')}
                 />
               </div>
             )}

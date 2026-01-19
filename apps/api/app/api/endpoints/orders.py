@@ -4,6 +4,7 @@ Manage Etsy orders and synchronization
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timezone
@@ -12,7 +13,9 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
-from app.models.tenancy import Order, Shop
+from app.models.listings import Order
+from app.models.tenancy import Shop
+from app.services.order_utils import build_shipping_address, derive_payment_status
 
 router = APIRouter()
 
@@ -35,14 +38,11 @@ async def get_order_stats(
     # Get total order count
     total_orders = base_query.count()
 
-    # Count by payment status
-    pending_payment = base_query.filter(Order.payment_status == 'pending').count()
-
-    completed = base_query.filter(Order.status.in_(['delivered', 'completed'])).count()
-
-    refunded = base_query.filter(Order.payment_status == 'refunded').count()
-
-    failed = base_query.filter(Order.payment_status == 'failed').count()
+    # Count by lifecycle status (derived payment status is not persisted)
+    pending_payment = base_query.filter(Order.status.in_(["pending", "processing"])).count()
+    completed = base_query.filter(Order.status.in_(["shipped", "delivered"])).count()
+    refunded = base_query.filter(Order.status == "refunded").count()
+    failed = base_query.filter(Order.status == "cancelled").count()
 
     return {
         "pending_payment": pending_payment,
@@ -82,7 +82,22 @@ async def list_orders(
     if status:
         query = query.filter(Order.status == status)
     if payment_status:
-        query = query.filter(Order.payment_status == payment_status)
+        normalized = payment_status.lower()
+        if normalized == "paid":
+            query = query.filter(Order.etsy_status.in_(["paid", "completed"]))
+        elif normalized == "refunded":
+            query = query.filter(or_(Order.status == "refunded", Order.etsy_status == "refunded"))
+        elif normalized == "failed":
+            query = query.filter(Order.status == "cancelled")
+        elif normalized == "pending":
+            query = query.filter(
+                or_(
+                    Order.status.in_(["pending", "processing"]),
+                    Order.etsy_status.in_(["open", "pending", "payment processing"]),
+                )
+            )
+        else:
+            raise HTTPException(status_code=400, detail="Invalid payment_status filter value")
 
     # Get total count before pagination
     total = query.count()
@@ -100,10 +115,10 @@ async def list_orders(
             "shop_id": order.shop_id,
             "buyer_name": order.buyer_name,
             "buyer_email": order.buyer_email,
-            "total_price": float(order.total_price) if order.total_price else 0.0,
-            "currency": order.currency_code or "USD",
+            "total_price": float(order.total_price or 0) / 100,
+            "currency": order.currency or "USD",
             "status": order.status or "pending",
-            "payment_status": order.payment_status or "pending",
+            "payment_status": derive_payment_status(order),
             "created_at": order.created_at.isoformat() if order.created_at else None,
             "updated_at": order.updated_at.isoformat() if order.updated_at else None,
         })
@@ -148,12 +163,12 @@ async def get_order(
         "shop_id": order.shop_id,
         "buyer_name": order.buyer_name,
         "buyer_email": order.buyer_email,
-        "total_price": float(order.total_price) if order.total_price else 0.0,
-        "currency": order.currency_code or "USD",
+        "total_price": float(order.total_price or 0) / 100,
+        "currency": order.currency or "USD",
         "status": order.status or "pending",
-        "payment_status": order.payment_status or "pending",
-        "shipping_address": order.shipping_address,
-        "items": order.items or [],
+        "payment_status": derive_payment_status(order),
+        "shipping_address": build_shipping_address(order),
+        "items": order.line_items or [],
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "updated_at": order.updated_at.isoformat() if order.updated_at else None,
         "synced_at": order.synced_at.isoformat() if order.synced_at else None,
@@ -224,37 +239,15 @@ async def sync_orders(
                 # Extract order data
                 buyer_name = f"{receipt.get('name', '')}".strip() or "Unknown"
                 buyer_email = receipt.get('buyer_email', 'unknown@example.com')
-                total_price = float(receipt.get('grandtotal', {}).get('amount', 0)) / 100  # Convert cents to dollars
+                total_price = int(receipt.get('grandtotal', {}).get('amount', 0) or 0)
                 currency = receipt.get('grandtotal', {}).get('currency_code', 'USD')
                 
                 # Map Etsy status to our status
                 etsy_status = receipt.get('status', '').lower()
-                if etsy_status in ['paid', 'completed']:
-                    order_status = 'completed'
-                elif etsy_status in ['open', 'pending']:
-                    order_status = 'pending'
+                if etsy_status == "completed":
+                    order_status = "processing"
                 else:
-                    order_status = 'pending'
-                
-                # Map payment status
-                payment_method = receipt.get('payment_method', '').lower()
-                if 'paid' in payment_method or etsy_status == 'paid':
-                    payment_status = 'paid'
-                else:
-                    payment_status = 'pending'
-                
-                # Extract shipping address
-                shipping_address = {}
-                if 'formatted_address' in receipt:
-                    shipping_address = {
-                        "name": receipt.get('name'),
-                        "address1": receipt.get('first_line'),
-                        "address2": receipt.get('second_line'),
-                        "city": receipt.get('city'),
-                        "state": receipt.get('state'),
-                        "zip": receipt.get('zip'),
-                        "country": receipt.get('country_iso')
-                    }
+                    order_status = "pending"
                 
                 if existing_order:
                     # Ensure existing order belongs to tenant
@@ -266,8 +259,15 @@ async def sync_orders(
                     existing_order.total_price = total_price
                     existing_order.currency = currency
                     existing_order.status = order_status
-                    existing_order.payment_status = payment_status
-                    existing_order.shipping_address = shipping_address
+                    existing_order.etsy_status = etsy_status
+                    existing_order.shipping_name = receipt.get("name")
+                    existing_order.shipping_first_line = receipt.get("first_line")
+                    existing_order.shipping_second_line = receipt.get("second_line")
+                    existing_order.shipping_city = receipt.get("city")
+                    existing_order.shipping_state = receipt.get("state")
+                    existing_order.shipping_zip = receipt.get("zip")
+                    existing_order.shipping_country = receipt.get("country")
+                    existing_order.shipping_country_iso = receipt.get("country_iso")
                     existing_order.synced_at = datetime.now(timezone.utc)
                     existing_order.updated_at = datetime.now(timezone.utc)
                     total_updated += 1
@@ -277,14 +277,20 @@ async def sync_orders(
                         tenant_id=context.tenant_id,
                         shop_id=shop.id,
                         etsy_receipt_id=receipt_id,
-                        order_id=f"ETSY-{receipt_id}",
                         buyer_name=buyer_name,
                         buyer_email=buyer_email,
                         total_price=total_price,
                         currency=currency,
                         status=order_status,
-                        payment_status=payment_status,
-                        shipping_address=shipping_address,
+                        etsy_status=etsy_status,
+                        shipping_name=receipt.get("name"),
+                        shipping_first_line=receipt.get("first_line"),
+                        shipping_second_line=receipt.get("second_line"),
+                        shipping_city=receipt.get("city"),
+                        shipping_state=receipt.get("state"),
+                        shipping_zip=receipt.get("zip"),
+                        shipping_country=receipt.get("country"),
+                        shipping_country_iso=receipt.get("country_iso"),
                         synced_at=datetime.now(timezone.utc)
                     )
                     db.add(new_order)

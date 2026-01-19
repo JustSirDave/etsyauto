@@ -39,9 +39,9 @@ function scrubSensitiveData(data: any): any {
   for (const [key, value] of Object.entries(data)) {
     const lowerKey = key.toLowerCase();
     
-    if ([...SENSITIVE_KEYS].some(sensitive => lowerKey.includes(sensitive))) {
+    if (Array.from(SENSITIVE_KEYS).some(sensitive => lowerKey.includes(sensitive))) {
       scrubbed[key] = '[REDACTED]';
-    } else if ([...PII_KEYS].some(pii => lowerKey.includes(pii))) {
+    } else if (Array.from(PII_KEYS).some(pii => lowerKey.includes(pii))) {
       scrubbed[key] = '[PII]';
     } else {
       scrubbed[key] = scrubSensitiveData(value);

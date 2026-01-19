@@ -276,6 +276,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
+    // Avoid build-time crashes during prerender; client will have provider.
+    if (typeof window === 'undefined') {
+      return {
+        user: null,
+        setUser: () => {},
+        isLoading: true,
+        isAuthenticated: false,
+        login: async () => {},
+        register: async () => {},
+        googleLogin: async () => {},
+        logout: async () => {},
+        uploadProfilePicture: async () => {},
+        deleteProfilePicture: async () => {},
+        error: null,
+        clearError: () => {},
+      };
+    }
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

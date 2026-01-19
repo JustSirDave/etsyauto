@@ -129,9 +129,9 @@ class AIProvider(ABC):
 Requirements:
 - Style: {request.style}
 - Tone: {request.tone}
-- Title: Max 140 characters, attention-grabbing, SEO-optimized{handmade_instruction}
-- Description: 2-3 paragraphs, highlight features and benefits
-- Tags: Exactly 13 relevant tags, each max 20 characters
+- Title: Max 140 characters, attention-grabbing, Etsy SEO-optimized{handmade_instruction}
+- Description: 2-3 paragraphs, highlight features and benefits for Etsy buyers
+- Tags: Exactly 13 relevant Etsy search tags, each max 20 characters
 
 Generate content in this JSON format:
 {{
@@ -141,18 +141,19 @@ Generate content in this JSON format:
 }}
 
 Focus on:
-1. Unique selling points
-2. Materials and craftsmanship
+1. Unique selling points that appeal to Etsy shoppers
+2. Materials and craftsmanship (key for Etsy)
 3. Use cases and benefits
-4. Target audience appeal
-5. Etsy marketplace best practices
+4. Target audience appeal (Etsy's creative community)
+5. Etsy marketplace best practices and search optimization
 
 DO NOT include:
-- Banned terms (replica, knockoff, dropship, etc.)
+- Banned terms per Etsy policy (replica, knockoff, dropship, resale, wholesale, bulk order, alibaba, aliexpress, etc.)
 - Unverifiable claims (guaranteed, proven, etc.)
 - Medical or health claims
+- Mass-produced or commercial language
 
-Generate the listing content now:"""
+Generate authentic, Etsy-appropriate listing content now:"""
         
         return prompt
 

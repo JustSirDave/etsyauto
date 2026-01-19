@@ -73,17 +73,14 @@ function ScheduleItem({
   onToggle,
   onDelete,
   onConfigureQuota,
+  onRefreshSchedules,
 }: {
   schedule: Schedule;
   onToggle: (id: number) => void;
   onDelete: (id: number) => void;
   onConfigureQuota: (id: number) => void;
+  onRefreshSchedules?: () => Promise<void>;
 }) {
-  const [showQuota, setShowQuota] = useState(false);
-  const [quotaData, setQuotaData] = useState<any>(null);
-  const [loadingQuota, setLoadingQuota] = useState(false);
-  const [showQuotaConfig, setShowQuotaConfig] = useState(false);
-
   const typeColors = {
     sync: 'bg-[var(--primary-bg)] text-[var(--primary)]',
     generate: 'bg-[var(--info-bg)] text-[var(--info)]',
@@ -103,33 +100,6 @@ function ScheduleItem({
     paused: Pause,
     error: AlertCircle,
     quota_exceeded: AlertCircle,
-  };
-
-  // Load quota data
-  const loadQuota = async (scheduleId: number) => {
-    setLoadingQuota(true);
-    try {
-      const data = await schedulesApi.getQuota(scheduleId);
-      setQuotaData(data);
-      setShowQuota(true);
-    } catch (error) {
-      console.error('Failed to load quota:', error);
-    } finally {
-      setLoadingQuota(false);
-    }
-  };
-
-  // Handle quota configuration
-  const handleConfigureQuota = (scheduleId: number) => {
-    loadQuota(scheduleId);
-    setShowQuotaConfig(true);
-  };
-
-  // Save quota configuration
-  const handleSaveQuota = async (scheduleId: number, dailyQuota: number, weeklyQuota: number | null) => {
-    await schedulesApi.updateQuota(scheduleId, dailyQuota, weeklyQuota);
-    await loadSchedules(filter);
-    await loadQuota(scheduleId);
   };
 
   const StatusIcon = statusIcons[schedule.status];
@@ -203,6 +173,8 @@ export default function SchedulesPage() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [stats, setStats] = useState<ScheduleStats>({ total: 0, active: 0, paused: 0, executions_today: 0 });
   const [loading, setLoading] = useState(true);
+  const [quotaData, setQuotaData] = useState<any>(null);
+  const [showQuotaConfig, setShowQuotaConfig] = useState(false);
   
   // Modal states
   const [showNewScheduleModal, setShowNewScheduleModal] = useState(false);
@@ -234,6 +206,31 @@ export default function SchedulesPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadQuota = async (scheduleId: number) => {
+    try {
+      const data = await schedulesApi.getQuota(scheduleId);
+      setQuotaData(data);
+      setShowQuotaConfig(true);
+    } catch (error: any) {
+      console.error('Failed to load quota:', error);
+      showToast(error.detail || 'Failed to load quota', 'error');
+    }
+  };
+
+  const handleConfigureQuota = (scheduleId: number) => {
+    loadQuota(scheduleId);
+  };
+
+  const handleSaveQuota = async (dailyQuota: number, weeklyQuota: number | null) => {
+    if (!quotaData?.schedule_id) {
+      showToast('Missing schedule information for quota update', 'error');
+      return;
+    }
+    await schedulesApi.updateQuota(quotaData.schedule_id, dailyQuota, weeklyQuota);
+    await loadSchedules(filter);
+    await loadQuota(quotaData.schedule_id);
   };
 
   // Load on mount and when filter changes
@@ -511,6 +508,7 @@ export default function SchedulesPage() {
                       onToggle={handleToggle}
                       onDelete={handleDelete}
                       onConfigureQuota={handleConfigureQuota}
+                      onRefreshSchedules={() => loadSchedules(filter)}
                     />
                   ))}
                 </div>

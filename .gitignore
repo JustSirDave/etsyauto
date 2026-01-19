@@ -69,6 +69,12 @@ postgres_data/
 logs/
 *.log
 npm-debug.log*
+*_logs.txt
+api_logs*.txt
+latest_api_logs.txt
+
+# Uploads
+apps/api/uploads/
 
 # Monitoring
 prometheus_data/
@@ -80,6 +86,9 @@ docker-compose.override.yml
 # Alembic (keep alembic.ini - uses env vars, no secrets)
 # Backup files
 backup.sql
+*.sql.backup
+*-backup.*
+*_backup.*
 
 # Misc
 .cache/

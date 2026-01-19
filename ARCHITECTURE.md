@@ -2,6 +2,8 @@
 
 ## System Overview
 
+> **Etsy-Exclusive Platform**: This architecture is purpose-built for Etsy marketplace automation. All components are optimized for Etsy's API, policies, and seller workflows.
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                         USER BROWSER                             │

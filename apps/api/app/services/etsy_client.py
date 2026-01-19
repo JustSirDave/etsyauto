@@ -4,7 +4,6 @@ Handles all interactions with Etsy Open API v3
 """
 import httpx
 from typing import Optional, Dict, Any, List
-from urllib.parse import urlencode
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import redis
@@ -16,17 +15,6 @@ from app.core.redis import get_redis_client
 import logging
 
 logger = logging.getLogger(__name__)
-
-
-# Standard Etsy OAuth 2.0 scopes for listings
-ETSY_SCOPES = [
-    "listings_r",      # Read listings
-    "listings_w",      # Write/create listings
-    "listings_d",      # Delete listings
-    "transactions_r",  # Read orders/transactions
-    "shops_r",         # Read shop information
-    "profile_r",       # Read user profile
-]
 
 
 class EtsyAPIError(Exception):
@@ -53,8 +41,6 @@ class EtsyClient:
         self.db = db
         self.base_url = settings.ETSY_API_BASE_URL
         self.client_id = settings.ETSY_CLIENT_ID
-        self.client_secret = settings.ETSY_CLIENT_SECRET
-        self.redirect_uri = settings.ETSY_REDIRECT_URI
 
         # Initialize rate limiter
         if rate_limiter is None:
@@ -67,95 +53,6 @@ class EtsyClient:
         # Initialize token manager
         redis_client = get_redis_client()
         self.token_manager = TokenManager(db, redis_client)
-
-    def get_authorization_url(self, state: str, code_challenge: str) -> str:
-        """
-        Generate OAuth authorization URL for PKCE flow.
-
-        Args:
-            state: Random state for CSRF protection
-            code_challenge: SHA256 hash of code_verifier
-
-        Returns:
-            str: Authorization URL to redirect user to
-        """
-        params = {
-            "response_type": "code",
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "scope": " ".join(ETSY_SCOPES),
-            "state": state,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        }
-
-        return f"https://www.etsy.com/oauth/connect?{urlencode(params)}"
-
-    async def exchange_code_for_token(
-        self,
-        code: str,
-        code_verifier: str
-    ) -> Dict[str, Any]:
-        """
-        Exchange authorization code for access token.
-
-        Args:
-            code: Authorization code from callback
-            code_verifier: Original PKCE verifier
-
-        Returns:
-            dict: Token response with access_token, refresh_token, etc.
-        """
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.etsy.com/v3/public/oauth/token",
-                data={
-                    "grant_type": "authorization_code",
-                    "client_id": self.client_id,
-                    "redirect_uri": self.redirect_uri,
-                    "code": code,
-                    "code_verifier": code_verifier,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-            if response.status_code != 200:
-                raise EtsyAPIError(
-                    f"Token exchange failed: {response.text}",
-                    status_code=response.status_code,
-                    response=response.json() if response.text else None
-                )
-
-            return response.json()
-
-    async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
-        """
-        Refresh an expired access token.
-
-        Args:
-            refresh_token: The refresh token
-
-        Returns:
-            dict: New token response
-        """
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.etsy.com/v3/public/oauth/token",
-                data={
-                    "grant_type": "refresh_token",
-                    "client_id": self.client_id,
-                    "refresh_token": refresh_token,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-
-            if response.status_code != 200:
-                raise EtsyAPIError(
-                    f"Token refresh failed: {response.text}",
-                    status_code=response.status_code,
-                )
-
-            return response.json()
 
     async def _get_access_token(self, shop_id: int, tenant_id: int) -> str:
         """

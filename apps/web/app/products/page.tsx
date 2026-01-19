@@ -104,7 +104,7 @@ function ProductsContent() {
           <div>
             <h2 className="text-2xl font-bold text-[var(--text-primary)]">Products</h2>
             <p className="text-[var(--text-muted)] mt-1">
-              Manage your product inventory
+              Manage your Etsy product inventory
             </p>
           </div>
           <div className="text-right">
