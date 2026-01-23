@@ -21,6 +21,8 @@ from app.services.rate_limiter import get_rate_limiter
 from app.services.listing_policy_checker import ListingPolicyChecker
 from app.core.redis import get_redis_client
 from app.worker.rbac_helpers import enforce_task_rbac, TaskRBACError
+from app.services.notification_service import notify_tenant_admins
+from app.models.notifications import NotificationType
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +136,8 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         shop = db.query(Shop).filter(Shop.id == job.shop_id).first()
         if not shop:
             raise Exception("Shop not found")
+
+        product_label = _get_product_label(product)
         
         ai_generation = (
             db.query(AIGeneration)
@@ -169,6 +173,16 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             db.commit()
             
             logger.error(f"[{request_id}] Job {job_id} blocked by policy: {job.policy_block_reason}")
+
+            notify_tenant_admins(
+                db=db,
+                tenant_id=job.tenant_id,
+                notification_type=NotificationType.WARNING,
+                title="Listing blocked by policy",
+                message=f"{product_label} blocked by policy. {job.policy_block_reason}",
+                action_url="/listings",
+                action_label="Review listing",
+            )
             
             # Release concurrency slot
             _release_shop_concurrency_slot(redis_client, shop_id)
@@ -418,6 +432,16 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         job.error_message = None
         job.error_code = None
         db.commit()
+
+        notify_tenant_admins(
+            db=db,
+            tenant_id=job.tenant_id,
+            notification_type=NotificationType.LISTING,
+            title="Listing published",
+            message=f"{product_label} published to Etsy.",
+            action_url="/listings",
+            action_label="View listings",
+        )
         
         result = {
             "success": True,
@@ -446,6 +470,17 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         job.error_code = "INTERNAL_ERROR"
         job.completed_at = datetime.utcnow()
         db.commit()
+
+        product_label = _get_product_label(locals().get("product"))
+        notify_tenant_admins(
+            db=db,
+            tenant_id=job.tenant_id,
+            notification_type=NotificationType.ERROR,
+            title="Listing publish failed",
+            message=f"{product_label} failed to publish. {str(e)}",
+            action_url="/listings",
+            action_label="View listing jobs",
+        )
         
         result = {
             "success": False,
@@ -542,6 +577,18 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
             "note": "Client error - not retrying"
         }
         db.commit()
+
+        product = db.query(Product).filter(Product.id == job.product_id).first()
+        product_label = _get_product_label(product)
+        notify_tenant_admins(
+            db=db,
+            tenant_id=job.tenant_id,
+            notification_type=NotificationType.ERROR,
+            title="Listing publish failed",
+            message=f"{product_label} failed to publish. {str(error)}",
+            action_url="/listings",
+            action_label="View listing jobs",
+        )
         
         result = {
             "success": False,
@@ -599,6 +646,18 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
                 "note": f"Max retries ({max_retries}) reached"
             }
             db.commit()
+
+            product = db.query(Product).filter(Product.id == job.product_id).first()
+            product_label = _get_product_label(product)
+            notify_tenant_admins(
+                db=db,
+                tenant_id=job.tenant_id,
+                notification_type=NotificationType.ERROR,
+                title="Listing publish failed",
+                message=f"{product_label} failed after retries. {str(error)}",
+                action_url="/listings",
+                action_label="View listing jobs",
+            )
             
             return {
                 "success": False,
@@ -631,6 +690,18 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
         job.status = "failed"
         job.completed_at = datetime.utcnow()
         db.commit()
+
+        product = db.query(Product).filter(Product.id == job.product_id).first()
+        product_label = _get_product_label(product)
+        notify_tenant_admins(
+            db=db,
+            tenant_id=job.tenant_id,
+            notification_type=NotificationType.ERROR,
+            title="Listing publish failed",
+            message=f"{product_label} failed to publish. {str(error)}",
+            action_url="/listings",
+            action_label="View listing jobs",
+        )
         
         return {
             "success": False,
@@ -643,6 +714,16 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
     job.status = "pending"
     db.commit()
     raise task.retry(exc=error, countdown=120)
+
+
+def _get_product_label(product: Optional[Product]) -> str:
+    if not product:
+        return "Product"
+    if product.title_raw:
+        return product.title_raw.strip()
+    if product.sku:
+        return f"Product {product.sku}"
+    return f"Product {product.id}"
 
 
 def _prepare_listing_data(product: Product, shop: Shop, ai_generation: AIGeneration = None) -> Dict[str, Any]:

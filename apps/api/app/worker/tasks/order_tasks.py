@@ -13,6 +13,8 @@ from app.models.listings import Order
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
 from app.services.rate_limiter import get_rate_limiter
+from app.services.notification_service import notify_tenant_admins
+from app.models.notifications import NotificationType
 from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -198,6 +200,18 @@ async def _sync_shop_orders(db, etsy_client: EtsyClient, shop: Shop) -> Dict[str
             f"Shop {shop.id} sync: {result['orders_synced']} orders "
             f"({result['orders_created']} new, {result['orders_updated']} updated)"
         )
+
+        if result["orders_created"] > 0:
+            shop_name = shop.display_name or f"Shop {shop.id}"
+            notify_tenant_admins(
+                db=db,
+                tenant_id=shop.tenant_id,
+                notification_type=NotificationType.ORDER,
+                title="New orders synced",
+                message=f"{result['orders_created']} new order(s) synced for {shop_name}.",
+                action_url="/orders",
+                action_label="View orders",
+            )
 
         return result
 

@@ -26,6 +26,62 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SAFE_AUTH_DEFAULT = 'Something went wrong. Please try again.';
+
+const UNSAFE_ERROR_PATTERNS = [
+  'psycopg2',
+  'sqlalchemy',
+  'traceback',
+  'stack trace',
+  'column',
+  'undefinedcolumn',
+  'sql:',
+  'select ',
+  'insert ',
+  'update ',
+  'delete ',
+  'exception',
+  'error:',
+  '\n',
+];
+
+function normalizeErrorDetail(detail: any): string {
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((error: any) => error.msg).join('\n');
+  }
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  return '';
+}
+
+function isUnsafeDetail(detail: string): boolean {
+  const lower = detail.toLowerCase();
+  return UNSAFE_ERROR_PATTERNS.some((pattern) => lower.includes(pattern));
+}
+
+function getSafeAuthError(err: any, fallback: string = SAFE_AUTH_DEFAULT): string {
+  const status = err?.status;
+  const detail = normalizeErrorDetail(err?.detail);
+
+  if (status === 401) {
+    return 'Invalid email or password.';
+  }
+  if (status === 403) {
+    return 'Access denied.';
+  }
+  if (status === 429) {
+    return 'Too many attempts. Please try again later.';
+  }
+  if (status && status >= 500) {
+    return fallback;
+  }
+  if (!detail || isUnsafeDetail(detail) || detail.length > 200) {
+    return fallback;
+  }
+  return detail;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -76,14 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Redirect to dashboard
       router.push('/');
     } catch (err: any) {
-      let detail = err?.detail || '';
-
-      // Handle FastAPI validation errors (array format)
-      if (Array.isArray(detail) && detail.length > 0) {
-        detail = detail.map((error: any) => error.msg).join('\n');
-      }
-
-      setError(detail || 'Login failed');
+      setError(getSafeAuthError(err, 'Login failed. Please try again.'));
       throw err;
     } finally {
       setIsLoading(false);
@@ -129,13 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Status 202 means account created successfully but needs email verification
       // Check both err.status and fall through to message check
       const status = err?.status;
-      let detail = err?.detail || '';
-
-      // Handle FastAPI validation errors (array format)
-      if (Array.isArray(detail) && detail.length > 0) {
-        // Extract error messages from validation errors
-        detail = detail.map((error: any) => error.msg).join('\n');
-      }
+      let detail = normalizeErrorDetail(err?.detail);
 
       // 202 status OR success message indicates account was created
       if (status === 202 || (typeof detail === 'string' && detail.toLowerCase().includes('account created'))) {
@@ -147,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setError(detail || 'Registration failed');
+      setError(getSafeAuthError(err, 'Registration failed. Please try again.'));
       throw err;
     } finally {
       setIsLoading(false);
@@ -190,9 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push('/');
       }
     } catch (err) {
-      const apiError = err as ApiError;
-      // Provide detailed error message from backend
-      setError(apiError.detail || 'Google sign in failed. Please try again.');
+      setError(getSafeAuthError(err, 'Google sign in failed. Please try again.'));
       throw err;
     } finally {
       setIsLoading(false);

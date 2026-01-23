@@ -6,6 +6,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { translations } from '@/lib/translations';
 
 type Language = 'en' | 'he';
 
@@ -13,6 +14,7 @@ interface LanguageContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   isRTL: boolean;
+  t: (key: string) => string;
 }
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -44,9 +46,13 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   };
 
   const isRTL = language === 'he';
+  const t = (key: string) => {
+    const languageTranslations = translations[language] || translations.en;
+    return languageTranslations[key as keyof typeof languageTranslations] || translations.en[key as keyof typeof translations.en] || key;
+  };
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, isRTL }}>
+    <LanguageContext.Provider value={{ language, setLanguage, isRTL, t }}>
       {children}
     </LanguageContext.Provider>
   );

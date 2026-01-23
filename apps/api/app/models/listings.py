@@ -18,6 +18,8 @@ class Product(Base):
     
     id = Column(BigInteger, primary_key=True, index=True)
     tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)
+    etsy_listing_id = Column(String(50), nullable=True, index=True)
     
     # Raw product data
     sku = Column(String(255), nullable=True, index=True)  # Product SKU
@@ -57,7 +59,7 @@ class Product(Base):
     processing_max = Column(Integer, default=3)  # Days
     
     # Import tracking
-    source = Column(String(50), CheckConstraint("source IN ('csv','json','api','manual')"), default='manual')
+    source = Column(String(50), CheckConstraint("source IN ('csv','json','api','manual','etsy')"), default='manual')
     ingest_batch_id = Column(String(255))
     
     # Timestamps

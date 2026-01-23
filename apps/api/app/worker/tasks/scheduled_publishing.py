@@ -12,6 +12,8 @@ from app.models.listings import Schedule, Product, ListingJob
 from app.services.quota_manager import QuotaManager
 from app.services.rate_limiter import RateLimiter
 from app.worker.tasks.publish_listing import publish_listing
+from app.services.notification_service import notify_tenant_admins
+from app.models.notifications import NotificationType
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +83,15 @@ def process_schedule(schedule_id: int):
             schedule.last_run_at = datetime.now(timezone.utc)
             schedule.next_run_at = calculate_next_run(schedule)
             db.commit()
+            notify_tenant_admins(
+                db=db,
+                tenant_id=schedule.tenant_id,
+                notification_type=NotificationType.WARNING,
+                title="Schedule paused (quota exceeded)",
+                message=f"Schedule '{schedule.name}' paused: {quota_reason}",
+                action_url="/schedules",
+                action_label="View schedules",
+            )
             return
         
         # Check if shop has rate limit capacity
@@ -183,6 +194,15 @@ def process_schedule(schedule_id: int):
             schedule.last_run_at = datetime.now(timezone.utc)
             schedule.next_run_at = calculate_next_run(schedule, delay_minutes=30)  # Retry in 30 minutes on error
             db.commit()
+            notify_tenant_admins(
+                db=db,
+                tenant_id=schedule.tenant_id,
+                notification_type=NotificationType.ERROR,
+                title="Schedule error",
+                message=f"Schedule '{schedule.name}' failed to run. {str(e)}",
+                action_url="/schedules",
+                action_label="View schedules",
+            )
     
     finally:
         db.close()

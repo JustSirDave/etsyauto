@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useLanguage } from '@/lib/language-context';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 
@@ -17,6 +18,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   useEffect(() => {
@@ -30,7 +32,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="flex h-screen items-center justify-center bg-[var(--background)]">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-[var(--text-muted)]">Loading...</p>
+          <p className="text-[var(--text-muted)]">{t('loading')}</p>
         </div>
       </div>
     );

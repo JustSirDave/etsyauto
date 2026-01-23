@@ -23,6 +23,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/lib/language-context';
 
 interface NavItem {
   name: string;
@@ -38,30 +39,30 @@ interface NavSection {
 const navigation: NavSection[] = [
   {
     items: [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'nav.dashboard', href: '/', icon: LayoutDashboard },
     ],
   },
   {
-    title: 'SHOP MANAGEMENT',
+    title: 'nav.shopManagement',
     items: [
-  { name: 'Products', href: '/products', icon: Package },
-  { name: 'Listings', href: '/listings', icon: FileText },
-  { name: 'Orders', href: '/orders', icon: ShoppingCart },
+  { name: 'nav.products', href: '/products', icon: Package },
+  { name: 'nav.listings', href: '/listings', icon: FileText },
+  { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
     ],
   },
   {
-    title: 'AUTOMATION',
+    title: 'nav.automation',
     items: [
-      { name: 'AI Generation', href: '/ai', icon: Sparkles },
-      { name: 'AI Review', href: '/ai-review', icon: BookOpen },
-  { name: 'Schedules', href: '/schedules', icon: Calendar },
+      { name: 'nav.aiGeneration', href: '/ai', icon: Sparkles },
+      { name: 'nav.aiReview', href: '/ai-review', icon: BookOpen },
+  { name: 'nav.schedules', href: '/schedules', icon: Calendar },
     ],
   },
   {
-    title: 'SETTINGS',
+    title: 'nav.settingsSection',
     items: [
-      { name: 'Settings', href: '/settings', icon: Settings },
-      { name: 'Audit Logs', href: '/audit', icon: Shield },
+      { name: 'nav.settings', href: '/settings', icon: Settings },
+      { name: 'nav.auditLogs', href: '/audit', icon: Shield },
     ],
   },
 ];
@@ -70,6 +71,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showHelpCard, setShowHelpCard] = useState(true);
+  const { t } = useLanguage();
 
   // Load saved state from localStorage
   useEffect(() => {
@@ -138,7 +140,7 @@ export function Sidebar() {
           <div key={sectionIndex} className={cn(sectionIndex > 0 && 'mt-6')}>
             {section.title && !isCollapsed && (
               <p className="px-3 mb-2 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                {section.title}
+                {t(section.title)}
               </p>
             )}
             {section.title && isCollapsed && (
@@ -160,20 +162,20 @@ export function Sidebar() {
                         ? 'bg-gradient-to-r from-[var(--primary)] to-[var(--info)] text-white shadow-md shadow-[var(--primary)]/30'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
               )}
-                    title={isCollapsed ? item.name : undefined}
+                    title={isCollapsed ? t(item.name) : undefined}
             >
                     <Icon className={cn(
                       'w-5 h-5 flex-shrink-0',
                       isActive ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
                     )} />
                     {!isCollapsed && (
-              <span className="font-medium">{item.name}</span>
+              <span className="font-medium">{t(item.name)}</span>
                     )}
                     
                     {/* Tooltip for collapsed state */}
                     {isCollapsed && (
                       <div className="absolute left-full ml-2 px-3 py-1.5 bg-[var(--card-bg)] text-[var(--text-primary)] text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 whitespace-nowrap z-50 border border-[var(--border-color)]">
-                        {item.name}
+                        {t(item.name)}
                       </div>
                     )}
             </Link>
@@ -200,16 +202,16 @@ export function Sidebar() {
                 <LifeBuoy className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-[var(--text-primary)] font-semibold mb-1">Need Help?</h4>
+                <h4 className="text-[var(--text-primary)] font-semibold mb-1">{t('help.title')}</h4>
                 <p className="text-[var(--text-muted)] text-sm mb-3">
-                  Check our docs for guides and tutorials
+                  {t('help.body')}
                 </p>
                 <Link
                   href="/docs"
                   className="inline-flex items-center gap-2 text-sm font-medium text-[var(--primary)] hover:underline"
                 >
                   <BookOpen className="w-4 h-4" />
-                  View Docs
+                  {t('help.cta')}
                 </Link>
               </div>
             </div>

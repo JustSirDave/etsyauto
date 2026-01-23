@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabType = 'connections' | 'team' | 'notifications';
+type TabType = 'connections' | 'shops' | 'team' | 'notifications';
 
 function SettingsContent() {
   const { user } = useAuth();
@@ -30,6 +30,13 @@ function SettingsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [connectingEtsy, setConnectingEtsy] = useState(false);
+  const [shopNameInput, setShopNameInput] = useState('');
+  const [editingShopId, setEditingShopId] = useState<number | null>(null);
+  const [shopNameDraft, setShopNameDraft] = useState('');
+  const [savingShopName, setSavingShopName] = useState(false);
+  const [shopAccessMember, setShopAccessMember] = useState<TeamMember | null>(null);
+  const [shopAccessSelections, setShopAccessSelections] = useState<number[]>([]);
+  const [savingShopAccess, setSavingShopAccess] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -65,8 +72,61 @@ function SettingsContent() {
   };
 
   const handleConnectEtsy = async () => {
-    try { setConnectingEtsy(true); setError(null); const { authorization_url } = await shopsApi.getEtsyConnectUrl(); window.location.href = authorization_url; }
+    try { setConnectingEtsy(true); setError(null); const { authorization_url } = await shopsApi.getEtsyConnectUrl(shopNameInput || undefined); window.location.href = authorization_url; }
     catch (err) { setError((err as ApiError).detail || 'Failed'); setConnectingEtsy(false); }
+  };
+
+  const handleStartRename = (shopId: number, currentName: string) => {
+    setShopNameDraft(currentName || '');
+    setEditingShopId(shopId);
+  };
+
+  const handleCancelRename = () => {
+    setEditingShopId(null);
+    setShopNameDraft('');
+  };
+
+  const handleSaveRename = async (shopId: number) => {
+    if (!shopNameDraft.trim()) {
+      setError('Shop name is required');
+      return;
+    }
+    try {
+      setSavingShopName(true);
+      setError(null);
+      await shopsApi.updateDisplayName(shopId, shopNameDraft.trim());
+      setEditingShopId(null);
+      await loadShops();
+    } catch (err) {
+      setError((err as ApiError).detail || 'Failed to update shop name');
+    } finally {
+      setSavingShopName(false);
+    }
+  };
+
+  const openShopAccessModal = (member: TeamMember) => {
+    setShopAccessMember(member);
+    setShopAccessSelections(member.allowed_shop_ids || []);
+  };
+
+  const closeShopAccessModal = () => {
+    setShopAccessMember(null);
+    setShopAccessSelections([]);
+  };
+
+  const saveShopAccess = async () => {
+    if (!shopAccessMember) return;
+    try {
+      setSavingShopAccess(true);
+      setError(null);
+      await teamApi.updateShopAccess(shopAccessMember.user_id, shopAccessSelections);
+      await loadTeamMembers();
+      closeShopAccessModal();
+    } catch (err) {
+      setError((err as ApiError).detail || 'Failed to update shop access');
+    } finally {
+      setSavingShopAccess(false);
+    }
   };
 
   const handleDisconnectShop = async (shopId: number, shopName: string) => {
@@ -174,10 +234,21 @@ function SettingsContent() {
 
   const getRoleColor = (role: string) => ({ owner: 'text-[var(--warning)] bg-[var(--warning-bg)]', admin: 'text-[var(--primary)] bg-[var(--primary-bg)]', creator: 'text-[var(--info)] bg-[var(--info-bg)]', viewer: 'text-[var(--text-muted)] bg-[var(--background)]' }[role] || 'text-[var(--text-muted)] bg-[var(--background)]');
   const getRoleIcon = (role: string) => ({ owner: <Crown className="w-4 h-4" />, admin: <Shield className="w-4 h-4" />, creator: <Edit className="w-4 h-4" />, viewer: <Eye className="w-4 h-4" /> }[role] || <Users className="w-4 h-4" />);
+  const getShopAccessLabel = (member: TeamMember) => {
+    if (member.role === 'owner' || member.role === 'admin') return 'All shops';
+    const count = member.allowed_shop_ids?.length || 0;
+    if (count === 0) return 'No shops';
+    return `${count} shop${count > 1 ? 's' : ''}`;
+  };
 
   const canManageTeam = user?.role === 'owner' || user?.role === 'admin';
   const etsyShop = Array.isArray(shops) ? shops.find(s => s.status === 'connected') : null;
-  const tabs = [{ id: 'connections' as TabType, label: 'Connections', icon: LinkIcon }, { id: 'team' as TabType, label: 'Team', icon: Users }, { id: 'notifications' as TabType, label: 'Notifications', icon: Bell }];
+  const tabs = [
+    { id: 'connections' as TabType, label: 'Connections', icon: LinkIcon },
+    { id: 'shops' as TabType, label: 'Shops', icon: Store },
+    { id: 'team' as TabType, label: 'Team', icon: Users },
+    { id: 'notifications' as TabType, label: 'Notifications', icon: Bell }
+  ];
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
@@ -221,37 +292,119 @@ function SettingsContent() {
             </div>
           </DashboardCard>
 
-          <DashboardCard>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3"><Store className="w-5 h-5 text-[var(--warning)]" /><h2 className="text-lg font-semibold text-[var(--text-primary)]">Etsy Shop</h2></div>
-              {etsyShop ? <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--success-bg)] text-[var(--success)] rounded-full text-sm"><CheckCircle className="w-4 h-4" />Connected</div> : <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--background)] text-[var(--text-muted)] rounded-full text-sm"><XCircle className="w-4 h-4" />Not Connected</div>}
-            </div>
-            {isLoading ? <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" /></div>
-            : etsyShop ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div><p className="text-sm text-[var(--text-muted)]">Shop Name</p><p className="text-[var(--text-primary)] font-medium">{etsyShop.display_name}</p></div>
-                  <div><p className="text-sm text-[var(--text-muted)]">Shop ID</p><p className="text-[var(--text-primary)] font-mono text-sm">{etsyShop.etsy_shop_id}</p></div>
-                  <div><p className="text-sm text-[var(--text-muted)]">Connected</p><p className="text-[var(--text-primary)] text-sm">{new Date(etsyShop.created_at).toLocaleDateString()}</p></div>
-                </div>
-                <button onClick={() => handleDisconnectShop(etsyShop.id, etsyShop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20"><Unlink className="w-4 h-4" />Disconnect</button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to start automating listings, orders, and inventory management.</p>
-                <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
-                  {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Connecting...</> : <><LinkIcon className="w-4 h-4" />Connect Etsy</>}
-                </button>
-              </div>
-            )}
-          </DashboardCard>
-
           <DashboardCard className="opacity-60">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3"><Store className="w-5 h-5 text-[var(--success)]" /><h2 className="text-lg font-semibold text-[var(--text-primary)]">Printful</h2></div>
               <span className="px-3 py-1.5 bg-[var(--background)] text-[var(--text-muted)] rounded-full text-xs">Coming Soon</span>
             </div>
           </DashboardCard>
+        </div>
+      )}
+
+      {activeTab === 'shops' && (
+        <div className="space-y-6">
+          <DashboardCard>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3"><Store className="w-5 h-5 text-[var(--warning)]" /><h2 className="text-lg font-semibold text-[var(--text-primary)]">Etsy Shop</h2></div>
+              {etsyShop ? <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--success-bg)] text-[var(--success)] rounded-full text-sm"><CheckCircle className="w-4 h-4" />Connected</div> : <div className="flex items-center gap-2 px-3 py-1.5 bg-[var(--background)] text-[var(--text-muted)] rounded-full text-sm"><XCircle className="w-4 h-4" />Not Connected</div>}
+            </div>
+            {isLoading ? <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" /></div>
+            : (
+              <div className="space-y-4">
+                <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to start automating listings, orders, and inventory management.</p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    value={shopNameInput}
+                    onChange={(e) => setShopNameInput(e.target.value)}
+                    placeholder="Shop display name"
+                    className="flex-1 px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                  <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
+                    {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Connecting...</> : <><LinkIcon className="w-4 h-4" />Connect Etsy</>}
+                  </button>
+                </div>
+              </div>
+            )}
+          </DashboardCard>
+
+          {shops.length > 0 && (
+            <DashboardCard>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Connected Shops</h2>
+                <span className="text-sm text-[var(--text-muted)]">{shops.length} total</span>
+              </div>
+              <div className="space-y-3">
+                {shops.map((shop) => (
+                  <div key={shop.id} className="p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                        <div>
+                          <p className="text-sm text-[var(--text-muted)]">Shop Name</p>
+                          {editingShopId === shop.id ? (
+                            <div className="flex items-center gap-2 mt-1">
+                              <input
+                                value={shopNameDraft}
+                                onChange={(e) => setShopNameDraft(e.target.value)}
+                                className="flex-1 px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                              />
+                              <button
+                                onClick={() => handleSaveRename(shop.id)}
+                                disabled={savingShopName}
+                                className="px-3 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                              >
+                                {savingShopName ? 'Saving…' : 'Save'}
+                              </button>
+                              <button
+                                onClick={handleCancelRename}
+                                className="px-3 py-2 bg-[var(--background)] text-[var(--text-muted)] rounded-lg border border-[var(--border-color)]"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <p className="text-[var(--text-primary)] font-medium">{shop.display_name || 'Unnamed shop'}</p>
+                              <button
+                                onClick={() => handleStartRename(shop.id, shop.display_name || '')}
+                                className="text-[var(--primary)] text-sm hover:underline"
+                              >
+                                Rename
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm text-[var(--text-muted)]">Shop ID</p>
+                          <p className="text-[var(--text-primary)] font-mono text-sm">{shop.etsy_shop_id}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-[var(--text-muted)]">Status</p>
+                          <div className="flex items-center gap-2">
+                            {shop.status === 'connected' ? (
+                              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--success-bg)] text-[var(--success)] rounded-full text-sm">
+                                <CheckCircle className="w-4 h-4" />Connected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--background)] text-[var(--text-muted)] rounded-full text-sm">
+                                <XCircle className="w-4 h-4" />Not Connected
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {shop.status === 'connected' && (
+                          <button onClick={() => handleDisconnectShop(shop.id, shop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20">
+                            <Unlink className="w-4 h-4" />Disconnect
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </DashboardCard>
+          )}
         </div>
       )}
 
@@ -284,6 +437,17 @@ function SettingsContent() {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className={cn('flex items-center gap-2 px-3 py-1.5 rounded-full', getRoleColor(member.role))}>{getRoleIcon(member.role)}<span className="text-sm font-medium capitalize">{member.role}</span></div>
+                      <span className="px-2 py-1 rounded-full text-xs bg-[var(--background)] text-[var(--text-muted)] border border-[var(--border-color)]">
+                        {getShopAccessLabel(member)}
+                      </span>
+                      {canManageTeam && member.user_id !== user?.id && (member.role === 'creator' || member.role === 'viewer') && (
+                        <button
+                          onClick={() => openShopAccessModal(member)}
+                          className="px-3 py-1.5 text-xs bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                        >
+                          Shop Access
+                        </button>
+                      )}
                       {canManageTeam && member.user_id !== user?.id && <button onClick={() => handleRemoveMember(member.user_id, member.name)} className="p-2 text-[var(--text-muted)] hover:text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg"><Trash2 className="w-4 h-4" /></button>}
                     </div>
                   </div>
@@ -374,6 +538,54 @@ function SettingsContent() {
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowInviteModal(false)} className="flex-1 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg">Cancel</button>
               <button onClick={handleInviteMember} disabled={inviting} className="flex-1 px-4 py-3 gradient-primary text-white rounded-lg disabled:opacity-50 shadow-lg shadow-[var(--primary)]/25">{inviting ? 'Inviting...' : 'Send'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shop Access Modal */}
+      {shopAccessMember && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-[var(--text-primary)]">Shop Access</h2>
+              <button onClick={closeShopAccessModal} className="text-[var(--text-muted)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-[var(--text-muted)] mb-4">
+              Select the shops {shopAccessMember.name} can access. Changes apply after next login.
+            </p>
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {shops.length === 0 ? (
+                <p className="text-sm text-[var(--text-muted)]">No shops connected yet.</p>
+              ) : (
+                shops.map((shop) => (
+                  <label key={shop.id} className="flex items-center gap-3 p-3 bg-[var(--background)] rounded-lg border border-[var(--border-color)]">
+                    <input
+                      type="checkbox"
+                      checked={shopAccessSelections.includes(shop.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShopAccessSelections((prev) => [...prev, shop.id]);
+                        } else {
+                          setShopAccessSelections((prev) => prev.filter((id) => id !== shop.id));
+                        }
+                      }}
+                    />
+                    <div>
+                      <p className="text-[var(--text-primary)] font-medium">{shop.display_name || 'Unnamed shop'}</p>
+                      <p className="text-xs text-[var(--text-muted)]">{shop.etsy_shop_id}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={closeShopAccessModal} className="flex-1 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg">Cancel</button>
+              <button onClick={saveShopAccess} disabled={savingShopAccess} className="flex-1 px-4 py-3 gradient-primary text-white rounded-lg disabled:opacity-50 shadow-lg shadow-[var(--primary)]/25">
+                {savingShopAccess ? 'Saving...' : 'Save'}
+              </button>
             </div>
           </div>
         </div>

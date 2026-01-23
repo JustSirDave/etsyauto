@@ -2,7 +2,7 @@
 JWT Manager with RS256 and Proper Security
 Implements secure JWT handling with key rotation support
 """
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from enum import Enum

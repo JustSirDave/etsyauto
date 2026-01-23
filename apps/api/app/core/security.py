@@ -5,7 +5,7 @@ Provides JWT authentication, logging sanitization and security helpers
 import re
 from typing import Any, Dict
 import logging
-import jwt
+from jose import jwt
 from datetime import datetime, timedelta, timezone
 from app.core.config import settings
 

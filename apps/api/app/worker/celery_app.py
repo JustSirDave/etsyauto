@@ -21,6 +21,7 @@ celery_app = Celery(
         "app.worker.tasks.ingestion_tasks",
         "app.worker.tasks.scheduled_publishing",
         "app.worker.tasks.audit_cleanup",
+        "app.worker.tasks.product_sync_tasks",
     ]
 )
 

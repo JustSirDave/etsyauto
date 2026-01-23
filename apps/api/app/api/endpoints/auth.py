@@ -317,8 +317,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     # Get tenant info
     tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
 
-    # Get user's shops (empty for now)
-    shop_ids = []
+    # Get user's allowed shops (creator/viewer) or empty for owner/admin
+    shop_ids = membership.allowed_shop_ids or []
 
     # Reset failed login attempts and update last login
     user.failed_login_attempts = 0
@@ -827,8 +827,8 @@ async def google_oauth(
     if not tenant:
         tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
 
-    # Get user's shops (empty for now)
-    shop_ids = []
+    # Get user's allowed shops (creator/viewer) or empty for owner/admin
+    shop_ids = membership.allowed_shop_ids or []
 
     # Generate JWT token with conservative expiry
     token = create_access_token(

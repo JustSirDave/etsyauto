@@ -40,8 +40,13 @@ class OAuthCallbackRequest(BaseModel):
     state: str
 
 
+class UpdateShopRequest(BaseModel):
+    display_name: str
+
+
 @router.get("/etsy/connect", response_model=ConnectShopResponse, tags=["Shops"])
 async def connect_etsy_shop(
+    shop_name: str = Query(None, max_length=120),
     context: UserContext = Depends(require_permission(Permission.CONNECT_SHOP))
 ):
     """
@@ -61,6 +66,7 @@ async def connect_etsy_shop(
         )
     
     auth_data = etsy_oauth.get_authorization_url()
+    shop_name_clean = shop_name.strip() if shop_name else None
 
     # Store code_verifier in Redis with state as key (expires in 10 minutes)
     redis_client.setex(
@@ -69,7 +75,8 @@ async def connect_etsy_shop(
         json.dumps({
             "code_verifier": auth_data["code_verifier"],
             "user_id": context.user_id,
-            "tenant_id": context.tenant_id
+            "tenant_id": context.tenant_id,
+            "shop_name": shop_name_clean
         })
     )
 
@@ -118,6 +125,7 @@ async def etsy_oauth_callback(
 
         # Get shop information
         shop_info = await etsy_oauth.get_shop_info(token_data["access_token"])
+        preferred_name = state_data.get("shop_name") or shop_info.get("shop_name")
         
         # Check if shop already exists
         existing_shop = db.query(Shop).filter(
@@ -127,14 +135,14 @@ async def etsy_oauth_callback(
         if existing_shop:
             # Update existing shop
             shop = existing_shop
-            shop.display_name = shop_info.get("shop_name")
+            shop.display_name = preferred_name
             shop.status = "connected"
         else:
             # Create new shop
             shop = Shop(
                 tenant_id=context.tenant_id,
                 etsy_shop_id=str(shop_info["shop_id"]),
-                display_name=shop_info.get("shop_name"),
+                display_name=preferred_name,
                 status="connected"
             )
             db.add(shop)
@@ -203,6 +211,42 @@ async def list_shops(
             }
             for shop in shops
         ]
+    }
+
+
+@router.patch("/{shop_id}", tags=["Shops"])
+async def update_shop(
+    shop_id: int,
+    request: UpdateShopRequest,
+    context: UserContext = Depends(require_permission(Permission.MANAGE_SHOP_SETTINGS)),
+    db: Session = Depends(get_db)
+):
+    """
+    Update shop display name.
+    Requires: MANAGE_SHOP_SETTINGS permission (Owner, Admin)
+    """
+    ensure_shop_access(shop_id, context, db)
+    shop = db.query(Shop).filter(
+        Shop.id == shop_id,
+        Shop.tenant_id == context.tenant_id
+    ).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+
+    shop.display_name = request.display_name.strip()
+    shop.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(shop)
+
+    return {
+        "message": "Shop updated",
+        "shop": {
+            "id": shop.id,
+            "etsy_shop_id": shop.etsy_shop_id,
+            "display_name": shop.display_name,
+            "status": shop.status,
+            "created_at": shop.created_at.isoformat()
+        }
     }
 
 

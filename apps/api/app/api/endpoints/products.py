@@ -19,7 +19,7 @@ from app.api.dependencies import (
     require_any_permission
 )
 from app.core.rbac import Permission
-from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
+from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
 from app.models.tenancy import User
 from app.models.listings import Product, AIGeneration
 from app.schemas.products import (
@@ -31,6 +31,7 @@ from app.schemas.products import (
 )
 from app.services.ai_generation_service import AIGenerationService
 from app.services.ai_providers import AIProviderType
+from app.worker.tasks.product_sync_tasks import sync_products_from_etsy
 
 router = APIRouter()
 
@@ -179,6 +180,21 @@ async def import_csv(
     }
 
 
+@router.post("/sync/etsy", tags=["Products"])
+async def sync_products_from_shop(
+    shop_id: int,
+    context: UserContext = Depends(require_permission(Permission.CREATE_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger a sync of Etsy listings into products for a specific shop.
+    Requires: CREATE_PRODUCT permission (Owner, Admin, Creator)
+    """
+    ensure_shop_access(shop_id, context, db)
+    sync_products_from_etsy.delay(shop_id=shop_id, tenant_id=context.tenant_id)
+    return {"message": "Etsy product sync started", "shop_id": shop_id}
+
+
 @router.get("/", tags=["Products"])
 async def list_products(
     skip: int = 0,
@@ -208,6 +224,8 @@ async def list_products(
         "products": [
             {
                 "id": p.id,
+                "shop_id": p.shop_id,
+                "etsy_listing_id": p.etsy_listing_id,
                 "title_raw": p.title_raw,
                 "description_raw": p.description_raw,
                 "tags_raw": p.tags_raw,
@@ -249,6 +267,8 @@ async def get_product(
     
     return {
         "id": product.id,
+        "shop_id": product.shop_id,
+        "etsy_listing_id": product.etsy_listing_id,
         "title_raw": product.title_raw,
         "description_raw": product.description_raw,
         "tags_raw": product.tags_raw,

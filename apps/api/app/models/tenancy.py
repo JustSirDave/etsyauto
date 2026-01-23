@@ -107,6 +107,9 @@ class Membership(Base):
     invited_at = Column(DateTime(timezone=True), nullable=True)
     accepted_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Per-shop access for creator/viewer roles (empty = no access)
+    allowed_shop_ids = Column(JSONB, nullable=True)
+
     __table_args__ = (
         UniqueConstraint('user_id', 'tenant_id', name='uq_user_tenant'),
         Index('idx_membership_user', 'user_id'),

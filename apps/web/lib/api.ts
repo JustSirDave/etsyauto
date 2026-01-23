@@ -220,8 +220,9 @@ export const shopsApi = {
     return response.shops;
   },
 
-  getEtsyConnectUrl: async (): Promise<{ authorization_url: string }> => {
-    return apiRequest<{ authorization_url: string }>('/api/shops/etsy/connect');
+  getEtsyConnectUrl: async (shopName?: string): Promise<{ authorization_url: string }> => {
+    const params = shopName ? `?shop_name=${encodeURIComponent(shopName)}` : '';
+    return apiRequest<{ authorization_url: string }>(`/api/shops/etsy/connect${params}`);
   },
 
   connectEtsy: async (code: string, state: string): Promise<Shop> => {
@@ -234,6 +235,13 @@ export const shopsApi = {
   disconnect: async (shopId: number): Promise<void> => {
     return apiRequest<void>(`/api/shops/${shopId}`, {
       method: 'DELETE',
+    });
+  },
+
+  updateDisplayName: async (shopId: number, displayName: string): Promise<Shop> => {
+    return apiRequest<Shop>(`/api/shops/${shopId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ display_name: displayName }),
     });
   },
 };
@@ -253,6 +261,8 @@ export interface ProductVariant {
 
 export interface Product {
   id: number;
+  shop_id?: number | null;
+  etsy_listing_id?: string | null;
   title_raw: string;
   description_raw: string;
   tags_raw: string[];
@@ -333,6 +343,12 @@ export const productsApi = {
     return apiRequest<any>(`/api/products/${productId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    });
+  },
+
+  syncFromEtsy: async (shopId: number): Promise<{ message: string; shop_id: number }> => {
+    return apiRequest<{ message: string; shop_id: number }>(`/api/products/sync/etsy?shop_id=${shopId}`, {
+      method: 'POST',
     });
   },
 
@@ -593,6 +609,7 @@ export interface TeamMember {
   invitation_status: string;  // pending, accepted, rejected
   joined_at: string;
   last_login: string | null;
+  allowed_shop_ids?: number[];
 }
 
 export interface InviteMemberRequest {
@@ -634,6 +651,13 @@ export const teamApi = {
   removeMember: async (userId: number): Promise<any> => {
     return apiRequest<any>(`/api/team/members/${userId}`, {
       method: 'DELETE',
+    });
+  },
+
+  updateShopAccess: async (userId: number, shopIds: number[]): Promise<any> => {
+    return apiRequest<any>(`/api/team/members/${userId}/shops`, {
+      method: 'PATCH',
+      body: JSON.stringify({ shop_ids: shopIds }),
     });
   },
 

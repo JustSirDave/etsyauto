@@ -11,6 +11,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
+import { useLanguage } from '@/lib/language-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import OnboardingModal from '@/components/OnboardingModal';
 import { onboardingApi, shopsApi, dashboardApi, type DashboardStats, type DashboardOrder } from '@/lib/api';
@@ -33,10 +34,11 @@ import {
 function WelcomeHandler() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (searchParams.get('welcome') === 'true') {
-      showToast('Welcome! Your account has been created successfully.', 'success');
+      showToast(t('dashboard.welcomeToast'), 'success');
       window.history.replaceState({}, '', '/');
     }
   }, [searchParams, showToast]);
@@ -50,11 +52,17 @@ function ConnectionItem({
   status,
   storeName,
   onConnect,
+  connectedLabel,
+  notConnectedLabel,
+  connectLabel,
 }: {
   name: string;
   status: 'connected' | 'disconnected';
   storeName?: string;
   onConnect?: () => void;
+  connectedLabel: string;
+  notConnectedLabel: string;
+  connectLabel: string;
 }) {
   const isConnected = status === 'connected';
 
@@ -72,9 +80,9 @@ function ConnectionItem({
           <div className="min-w-0 flex-1">
             <p className="text-[var(--text-primary)] font-medium truncate text-sm">{name}</p>
             {isConnected ? (
-              <p className="text-[var(--success)] text-xs truncate">{storeName || 'Connected'}</p>
+              <p className="text-[var(--success)] text-xs truncate">{storeName || connectedLabel}</p>
             ) : (
-              <p className="text-[var(--danger)] text-xs">Not Connected</p>
+              <p className="text-[var(--danger)] text-xs">{notConnectedLabel}</p>
             )}
           </div>
         </div>
@@ -83,7 +91,7 @@ function ConnectionItem({
             onClick={onConnect}
             className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
           >
-            Connect
+            {connectLabel}
           </button>
         )}
       </div>
@@ -162,6 +170,8 @@ function TransactionRow({
   amount,
   status,
   onMessage,
+  statusLabels,
+  messageLabel,
 }: {
   orderId: string;
   customer: string;
@@ -169,19 +179,14 @@ function TransactionRow({
   amount: string;
   status: 'paid' | 'pending' | 'refunded' | 'processing';
   onMessage: () => void;
+  statusLabels: Record<'paid' | 'pending' | 'refunded' | 'processing', string>;
+  messageLabel: string;
 }) {
   const statusStyles = {
     paid: 'bg-[var(--success-bg)] text-[var(--success)]',
     pending: 'bg-[var(--warning-bg)] text-[var(--warning)]',
     refunded: 'bg-[var(--danger-bg)] text-[var(--danger)]',
     processing: 'bg-[var(--info-bg)] text-[var(--info)]',
-  };
-
-  const statusLabels = {
-    paid: 'Paid',
-    pending: 'Pending',
-    refunded: 'Refunded',
-    processing: 'Processing',
   };
 
   return (
@@ -212,7 +217,7 @@ function TransactionRow({
           className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white text-sm font-medium rounded-lg transition-colors"
         >
           <MessageCircle className="w-4 h-4" />
-          Message
+          {messageLabel}
         </button>
       </div>
     </div>
@@ -222,6 +227,7 @@ function TransactionRow({
 function DashboardContent() {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [shops, setShops] = useState<any[]>([]);
   const [loadingShops, setLoadingShops] = useState(true);
@@ -296,11 +302,11 @@ function DashboardContent() {
   const handleCompleteOnboarding = async (shopName: string, description: string | null) => {
     try {
       await onboardingApi.complete(shopName, description);
-      showToast('Shop setup complete!', 'success');
+      showToast(t('dashboard.onboardingComplete'), 'success');
       setUser((prev: any) => prev ? { ...prev, tenant_name: shopName, onboarding_completed: true } : null);
       setShowOnboarding(false);
     } catch (error: any) {
-      showToast(error.detail || 'Failed to complete onboarding', 'error');
+      showToast(error.detail || t('dashboard.onboardingFailed'), 'error');
       throw error;
     }
   };
@@ -309,15 +315,15 @@ function DashboardContent() {
     try {
       await onboardingApi.complete(user?.tenant_name || 'My Shop', null);
       setUser((prev: any) => prev ? { ...prev, onboarding_completed: true } : null);
-      showToast('You can complete setup anytime from Settings', 'info');
+      showToast(t('dashboard.onboardingSkip'), 'info');
       setShowOnboarding(false);
     } catch (error: any) {
-      showToast(error.detail || 'Failed to skip', 'error');
+      showToast(error.detail || t('dashboard.onboardingSkipFailed'), 'error');
     }
   };
 
   const handleMessageCustomer = (customer: string) => {
-    showToast(`Opening message interface for ${customer}...`, 'info');
+    showToast(`${t('dashboard.messageOpening')} ${customer}...`, 'info');
   };
 
   const etsyShop = shops.find((s) => s.status === 'connected');
@@ -330,8 +336,8 @@ function DashboardContent() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">Dashboard</h1>
-          <p className="text-[var(--text-muted)] mt-1">Welcome back! Here's your Etsy shop overview.</p>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('dashboard.title')}</h1>
+          <p className="text-[var(--text-muted)] mt-1">{t('dashboard.subtitle')}</p>
       </div>
 
       {/* Main Grid: Left (Connection Status + Quick Actions) / Right (KPIs) */}
@@ -340,7 +346,7 @@ function DashboardContent() {
         <div className="flex flex-col gap-3 min-w-0">
           {/* Connection Status Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Connection Status</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">{t('dashboard.connectionStatus')}</h2>
             {loadingShops ? (
               <div className="flex items-center justify-center py-2">
                 <div className="w-5 h-5 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
@@ -348,15 +354,21 @@ function DashboardContent() {
             ) : (
               <div className="flex gap-3">
                 <ConnectionItem
-                  name="Etsy Shop"
+                  name={t('dashboard.etsyShop')}
                   status={etsyShop ? 'connected' : 'disconnected'}
                   storeName={etsyShop?.display_name || user?.tenant_name}
                   onConnect={() => window.location.href = '/settings'}
+                  connectedLabel={t('dashboard.connected')}
+                  notConnectedLabel={t('dashboard.notConnected')}
+                  connectLabel={t('dashboard.connect')}
                 />
                 <ConnectionItem
-                  name="Printful"
+                  name={t('dashboard.printful')}
                   status="disconnected"
-                  onConnect={() => showToast('Printful connection coming soon!', 'info')}
+                  onConnect={() => showToast(t('dashboard.printfulSoon'), 'info')}
+                  connectedLabel={t('dashboard.connected')}
+                  notConnectedLabel={t('dashboard.notConnected')}
+                  connectLabel={t('dashboard.connect')}
                 />
               </div>
             )}
@@ -364,26 +376,26 @@ function DashboardContent() {
 
           {/* Quick Actions Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">Quick Actions</h2>
+            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">{t('dashboard.quickActions')}</h2>
             <div className="grid grid-cols-3 gap-3">
               <QuickActionButton
                 icon={Upload}
-                label="Import Products"
-                subtitle="Upload CSV"
+                label={t('dashboard.action.importProducts')}
+                subtitle={t('dashboard.action.importProductsSubtitle')}
                 href="/products/import"
                 color="bg-[var(--primary)]"
               />
               <QuickActionButton
                 icon={Sparkles}
-                label="AI Content"
-                subtitle="Generate"
+                label={t('dashboard.action.aiContent')}
+                subtitle={t('dashboard.action.aiContentSubtitle')}
                 href="/ai"
                 color="bg-[var(--info)]"
               />
               <QuickActionButton
                 icon={LinkIcon}
-                label="Connect Etsy"
-                subtitle="Link shop"
+                label={t('dashboard.action.connectEtsy')}
+                subtitle={t('dashboard.action.connectEtsySubtitle')}
                 href="/settings"
                 color="bg-[var(--success)]"
               />
@@ -402,28 +414,28 @@ function DashboardContent() {
               <MetricCard
                 icon={Package}
                 value={metrics?.total_products || 0}
-                label="Total Products"
+                label={t('dashboard.totalProducts')}
                 change={metrics?.changes.products || 0}
                 iconBg="bg-[var(--primary)]"
               />
               <MetricCard
                 icon={Users}
                 value={metrics?.total_customers || 0}
-                label="Total Customers"
+                label={t('dashboard.totalCustomers')}
                 change={metrics?.changes.customers || 0}
                 iconBg="bg-[var(--info)]"
               />
               <MetricCard
                 icon={ShoppingCart}
                 value={metrics?.total_orders || 0}
-                label="Total Orders"
+                label={t('dashboard.totalOrders')}
                 change={metrics?.changes.orders || 0}
                 iconBg="bg-[var(--warning)]"
               />
               <MetricCard
                 icon={FileText}
                 value={metrics?.active_listings || 0}
-                label="Active Listings"
+                label={t('dashboard.activeListings')}
                 change={metrics?.changes.listings || 0}
                 iconBg="bg-[var(--success)]"
               />
@@ -436,25 +448,25 @@ function DashboardContent() {
       <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Recent Transactions</h2>
-            <p className="text-[var(--text-muted)] text-sm">Latest customer transactions</p>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('dashboard.recentTransactions')}</h2>
+            <p className="text-[var(--text-muted)] text-sm">{t('dashboard.recentTransactionsSubtitle')}</p>
           </div>
           <a
             href="/orders"
             className="text-[var(--primary)] hover:underline text-sm font-medium"
           >
-            View All
+            {t('dashboard.viewAll')}
           </a>
         </div>
 
         {/* Table Header */}
         <div className="grid grid-cols-[100px_1fr_120px_100px_100px_120px] gap-4 pb-3 border-b border-[var(--border-color)] text-sm font-medium text-[var(--text-muted)]">
-          <div>Order ID</div>
-          <div>Customer</div>
-          <div>Date</div>
-          <div>Amount</div>
-          <div>Status</div>
-          <div>Actions</div>
+          <div>{t('dashboard.table.orderId')}</div>
+          <div>{t('dashboard.table.customer')}</div>
+          <div>{t('dashboard.table.date')}</div>
+          <div>{t('dashboard.table.amount')}</div>
+          <div>{t('dashboard.table.status')}</div>
+          <div>{t('dashboard.table.actions')}</div>
         </div>
 
         {/* Transaction Rows */}
@@ -466,8 +478,8 @@ function DashboardContent() {
           ) : transactions.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
-              <p className="text-[var(--text-muted)]">No orders yet</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">Orders will appear here once you start selling</p>
+              <p className="text-[var(--text-muted)]">{t('dashboard.noOrders')}</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{t('dashboard.noOrdersHint')}</p>
             </div>
           ) : (
             transactions.map((transaction) => (
@@ -479,6 +491,13 @@ function DashboardContent() {
                 amount={transaction.amount}
                 status={transaction.status as 'paid' | 'pending' | 'refunded' | 'processing'}
                 onMessage={() => handleMessageCustomer(transaction.customer)}
+                statusLabels={{
+                  paid: t('dashboard.status.paid'),
+                  pending: t('dashboard.status.pending'),
+                  refunded: t('dashboard.status.refunded'),
+                  processing: t('dashboard.status.processing'),
+                }}
+                messageLabel={t('dashboard.message')}
               />
             ))
           )}

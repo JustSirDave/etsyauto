@@ -13,86 +13,13 @@ import os
 from typing import Optional, Dict, Any
 
 from app.core.config import settings
-
-
-# Sensitive keys that should be redacted
-SENSITIVE_KEYS = {
-    'password', 'token', 'secret', 'api_key', 'access_token', 'refresh_token',
-    'authorization', 'cookie', 'csrf', 'jwt', 'key', 'apikey', 'auth',
-    'client_secret', 'private_key', 'encryption_key', 'bearer',
-    'credentials', 'passwd', 'pwd', 'pass'
-}
-
-# PII fields that should be scrubbed
-PII_KEYS = {
-    'email', 'phone', 'ssn', 'credit_card', 'card_number', 'cvv',
-    'address', 'first_name', 'last_name', 'full_name', 'name',
-    'ip_address', 'user_agent', 'location', 'zip', 'postal_code'
-}
-
-
-def scrub_sensitive_data(data: Any) -> Any:
-    """
-    Recursively scrub sensitive data from dictionaries and lists
-    
-    Args:
-        data: Data to scrub (dict, list, or primitive)
-    
-    Returns:
-        Scrubbed data with sensitive values redacted
-    """
-    if isinstance(data, dict):
-        result = {}
-        for key, value in data.items():
-            # Check if key contains sensitive term
-            if any(sensitive in key.lower() for sensitive in SENSITIVE_KEYS):
-                result[key] = '[REDACTED]'
-            else:
-                # Recursively scrub the value
-                result[key] = scrub_sensitive_data(value)
-        return result
-    elif isinstance(data, list):
-        return [scrub_sensitive_data(item) for item in data]
-    elif isinstance(data, tuple):
-        return tuple(scrub_sensitive_data(item) for item in data)
-    else:
-        return data
-
-
-def scrub_pii(data: Any) -> Any:
-    """
-    Scrub PII (Personally Identifiable Information) from data
-    
-    Args:
-        data: Data to scrub
-    
-    Returns:
-        Data with PII redacted
-    """
-    if isinstance(data, dict):
-        result = {}
-        for key, value in data.items():
-            # Check if key contains any PII term (substring match)
-            lower_key = key.lower()
-            if any(pii in lower_key for pii in PII_KEYS):
-                result[key] = '[PII]'
-            else:
-                # Recursively scrub the value
-                result[key] = scrub_pii(value)
-        return result
-    elif isinstance(data, list):
-        return [scrub_pii(item) for item in data]
-    elif isinstance(data, tuple):
-        return tuple(scrub_pii(item) for item in data)
-    else:
-        return data
-
-
-def scrub_all(data: Any) -> Any:
-    """Scrub both sensitive data and PII"""
-    data = scrub_sensitive_data(data)
-    data = scrub_pii(data)
-    return data
+from app.core.redaction import (
+    SENSITIVE_KEYS,
+    PII_KEYS,
+    scrub_sensitive_data,
+    scrub_pii,
+    scrub_all,
+)
 
 
 def before_send(event: Dict[str, Any], hint: Dict[str, Any]) -> Optional[Dict[str, Any]]:

@@ -24,7 +24,7 @@ import {
 
 export function TopBar() {
   const { user, logout } = useAuth();
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -84,7 +84,7 @@ export function TopBar() {
               onClick={() => setShowSearchModal(true)}
               className="w-full pl-12 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-muted)] hover:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition text-left"
             >
-              Search [CTRL + K]
+              {t('topbar.search')}
             </button>
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-1 bg-[var(--card-bg)] border border-[var(--border-color)] rounded text-xs text-[var(--text-muted)]">
               ⌘ K
@@ -99,7 +99,7 @@ export function TopBar() {
             <button
               onClick={() => setShowLanguageMenu(!showLanguageMenu)}
               className="flex items-center gap-2 px-3 h-10 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
-              title="Change Language"
+              title={t('topbar.changeLanguage')}
             >
               <Globe className="w-5 h-5" />
               <span className="text-sm font-medium">{currentLanguage.code.toUpperCase()}</span>

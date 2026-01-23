@@ -147,6 +147,7 @@ async def google_callback(
                     role=membership.role,
                     email=user.email,
                     name=user.name or "",
+                    shop_ids=membership.allowed_shop_ids or [],
                     remember_me=True
                 )
                 
@@ -171,6 +172,7 @@ async def google_callback(
                 role=membership.role,
                 email=user.email,
                 name=user.name or "",
+                shop_ids=membership.allowed_shop_ids or [],
                 remember_me=True
             )
             

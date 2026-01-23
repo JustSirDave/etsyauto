@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { notificationsApi, type Notification } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { useLanguage } from '@/lib/language-context';
 import {
   Bell,
   Check,
@@ -32,6 +33,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
   const [loading, setLoading] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const router = useRouter();
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
       setNotifications(data);
     } catch (error) {
       console.error('Failed to load notifications:', error);
-      showToast('Failed to load notifications', 'error');
+      showToast(t('notifications.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -73,10 +75,10 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
       await notificationsApi.markAllAsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       onCountChange(0);
-      showToast('All notifications marked as read', 'success');
+      showToast(t('notifications.markAllRead'), 'success');
     } catch (error) {
       console.error('Failed to mark all as read:', error);
-      showToast('Failed to mark all as read', 'error');
+      showToast(t('notifications.markAllFailed'), 'error');
     }
   };
 
@@ -90,10 +92,10 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
       if (deletedNotification && !deletedNotification.read) {
         onCountChange(Math.max(0, unreadCount - 1));
       }
-      showToast('Notification deleted', 'success');
+      showToast(t('notifications.deleted'), 'success');
     } catch (error) {
       console.error('Failed to delete notification:', error);
-      showToast('Failed to delete notification', 'error');
+      showToast(t('notifications.deleteFailed'), 'error');
     }
   };
 
@@ -141,7 +143,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
+    if (diffMins < 1) return t('notifications.justNow');
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
@@ -162,7 +164,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <Bell className="w-5 h-5" />
-              Notifications
+              {t('notifications.title')}
             </h3>
             <button
               onClick={onClose}
@@ -182,16 +184,16 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
                   : 'bg-[var(--background)] text-[var(--text-secondary)] hover:bg-[var(--card-bg)]'
               }`}
             >
-              {showUnreadOnly ? 'Unread' : 'All'}
+              {showUnreadOnly ? t('notifications.unread') : t('notifications.all')}
             </button>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllAsRead}
                 className="flex items-center gap-2 px-3 py-1.5 bg-[var(--background)] hover:bg-[var(--card-bg)] rounded-lg text-sm font-medium text-[var(--text-secondary)] transition-colors"
-                title="Mark all as read"
+                title={t('notifications.markAllRead')}
               >
                 <CheckCheck className="w-4 h-4" />
-                Mark all read
+                {t('notifications.markAllRead')}
               </button>
             )}
           </div>
@@ -207,10 +209,10 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
             <div className="text-center py-12 px-4">
               <Bell className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
               <p className="text-[var(--text-muted)]">
-                {showUnreadOnly ? 'No unread notifications' : 'No notifications yet'}
+                {showUnreadOnly ? t('notifications.noneUnread') : t('notifications.none')}
               </p>
               <p className="text-[var(--text-muted)] text-sm mt-1">
-                {showUnreadOnly ? 'All caught up!' : 'Notifications will appear here'}
+                {showUnreadOnly ? t('notifications.allCaughtUp') : t('notifications.willAppear')}
               </p>
             </div>
           ) : (

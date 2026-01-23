@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 import secrets
 
 from ...core.database import get_db
-from ...models.tenancy import User, Tenant, Membership
+from ...models.tenancy import User, Tenant, Membership, Shop
 from ...models.notifications import Notification, NotificationType
 from ..dependencies import get_current_user, get_user_context, UserContext, require_role, require_role_with_context, require_permission
 from ...core.rbac import Permission
@@ -52,6 +52,10 @@ class UpdateRoleRequest(BaseModel):
     role: str
 
 
+class UpdateShopAccessRequest(BaseModel):
+    shop_ids: List[int]
+
+
 class AcceptInvitationRequest(BaseModel):
     token: str
     password: str | None = None  # For new users creating account
@@ -67,6 +71,7 @@ class MemberResponse(BaseModel):
     invitation_status: str  # pending, accepted, rejected
     joined_at: str
     last_login: str | None
+    allowed_shop_ids: List[int] | None = None
 
     class Config:
         from_attributes = True
@@ -104,7 +109,8 @@ async def list_team_members(
             role=membership.role,
             invitation_status=membership.invitation_status,
             joined_at=user.created_at.isoformat() if user.created_at else "",
-            last_login=user.last_login_at.isoformat() if user.last_login_at else None
+            last_login=user.last_login_at.isoformat() if user.last_login_at else None,
+            allowed_shop_ids=membership.allowed_shop_ids or []
         ))
 
     return result
@@ -443,6 +449,57 @@ async def update_member_role(
         "old_role": old_role,
         "new_role": request.role
     }
+
+
+@router.patch("/members/{user_id}/shops")
+async def update_member_shop_access(
+    user_id: int,
+    request: UpdateShopAccessRequest,
+    context: UserContext = Depends(require_permission(Permission.MANAGE_TEAM)),
+    db: Session = Depends(get_db)
+):
+    """
+    Update per-shop access for a team member (creator/viewer only).
+    Requires: MANAGE_TEAM permission (Owner, Admin)
+    """
+    tenant_id = context.tenant_id
+    current_user_id = context.user_id
+
+    if user_id == current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You cannot change your own shop access"
+        )
+
+    membership = db.query(Membership).filter(
+        Membership.user_id == user_id,
+        Membership.tenant_id == tenant_id
+    ).first()
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this organization")
+
+    if membership.role not in ("creator", "viewer"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Shop access can only be configured for creator/viewer roles"
+        )
+
+    # Validate shop IDs belong to tenant
+    if request.shop_ids:
+        shop_ids = list(set(request.shop_ids))
+        valid_count = db.query(Shop).filter(
+            Shop.tenant_id == tenant_id,
+            Shop.id.in_(shop_ids)
+        ).count()
+        if valid_count != len(shop_ids):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="One or more shop IDs are invalid")
+    else:
+        shop_ids = []
+
+    membership.allowed_shop_ids = shop_ids
+    db.commit()
+
+    return {"message": "Shop access updated", "user_id": user_id, "shop_ids": shop_ids}
 
 
 @router.delete("/members/{user_id}")

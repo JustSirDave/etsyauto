@@ -8,11 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
 import os
 
 from app.core.config import settings
+from app.core.sentry_config import initialize_sentry
+from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
 from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors
 from app.api.endpoints import metrics as metrics_endpoint
@@ -21,14 +21,9 @@ from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.sentry_middleware import SentryContextMiddleware
 from app.middleware.audit_middleware import AuditMiddleware
 
-# Initialize Sentry
-if settings.SENTRY_DSN:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        integrations=[FastApiIntegration()],
-        traces_sample_rate=0.1,
-        environment=settings.ENVIRONMENT,
-    )
+# Initialize logging redaction and Sentry
+setup_log_redaction()
+initialize_sentry()
 
 
 @asynccontextmanager

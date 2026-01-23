@@ -10,14 +10,16 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
 import { Package, Upload, Plus } from 'lucide-react';
-import { productsApi, type Product } from '@/lib/api';
+import { productsApi, listingsApi, shopsApi, type Product, type Shop } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { useLanguage } from '@/lib/language-context';
 import { ProductImportModal } from '@/components/products/ProductImportModal';
 import { AddProductModal } from '@/components/products/AddProductModal';
 
 function ProductsContent() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -27,11 +29,30 @@ function ProductsContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   // Load products
   useEffect(() => {
     loadProducts();
   }, [currentPage, pageSize]);
+
+  useEffect(() => {
+    const loadShops = async () => {
+      try {
+        const data = await shopsApi.getAll();
+        setShops(data);
+        if (!selectedShopId && data.length > 0) {
+          setSelectedShopId(data[0].id);
+        }
+      } catch (error: any) {
+        console.error('Failed to load shops:', error);
+        showToast(error.detail || t('toast.loadShopsFailed'), 'error');
+      }
+    };
+    loadShops();
+  }, []);
 
   const loadProducts = async () => {
     try {
@@ -41,7 +62,7 @@ function ProductsContent() {
       setTotal(data.total);
     } catch (error: any) {
       console.error('Failed to load products:', error);
-      showToast(error.detail || 'Failed to load products', 'error');
+      showToast(error.detail || t('toast.loadProductsFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -52,12 +73,44 @@ function ProductsContent() {
 
     try {
       await productsApi.delete(productId);
-      showToast('Product deleted successfully', 'success');
+      showToast(t('toast.productDeleted'), 'success');
       loadProducts();
       setSelectedProducts(prev => prev.filter(id => id !== productId));
     } catch (error: any) {
       console.error('Failed to delete product:', error);
-      showToast(error.detail || 'Failed to delete product', 'error');
+      showToast(error.detail || t('toast.deleteProductFailed'), 'error');
+    }
+  };
+
+  const handleSyncFromEtsy = async () => {
+    if (!selectedShopId) {
+      showToast(t('toast.connectShopFirst'), 'error');
+      return;
+    }
+    try {
+      setSyncing(true);
+      await productsApi.syncFromEtsy(selectedShopId);
+      showToast(t('toast.syncQueued'), 'success');
+    } catch (error: any) {
+      console.error('Failed to sync from Etsy:', error);
+      showToast(error.detail || t('toast.syncFailed'), 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handlePublishToEtsy = async (product: Product) => {
+    const targetShopId = product.shop_id ?? selectedShopId;
+    if (!targetShopId) {
+      showToast(t('toast.selectShop'), 'error');
+      return;
+    }
+    try {
+      await listingsApi.create({ product_id: product.id, shop_id: targetShopId });
+      showToast(t('toast.publishQueued'), 'success');
+    } catch (error: any) {
+      console.error('Failed to publish listing:', error);
+      showToast(error.detail || t('toast.publishFailed'), 'error');
     }
   };
 
@@ -102,44 +155,68 @@ function ProductsContent() {
       <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-[var(--text-primary)]">Products</h2>
+            <h2 className="text-2xl font-bold text-[var(--text-primary)]">{t('products.title')}</h2>
             <p className="text-[var(--text-muted)] mt-1">
-              Manage your Etsy product inventory
+              {t('products.subtitle')}
             </p>
           </div>
           <div className="text-right">
             <p className="text-3xl font-bold text-[var(--text-primary)]">{total}</p>
-            <p className="text-sm text-[var(--text-muted)]">Total Products</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('products.total')}</p>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <DashboardCard title="Filter" noPadding>
+      <DashboardCard title={t('products.filter')} noPadding>
         <div className="p-5 space-y-4">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
             <div className="w-full sm:w-80">
               <SearchInput
-                placeholder="Search products..."
+                placeholder={t('products.searchPlaceholder')}
                 value={searchQuery}
                 onChange={setSearchQuery}
               />
             </div>
             <div className="flex items-center gap-3">
               <PageSizeDropdown value={pageSize} onChange={setPageSize} />
+              {shops.length > 0 && (
+                <select
+                  value={selectedShopId ?? ''}
+                  onChange={(e) => setSelectedShopId(e.target.value ? Number(e.target.value) : null)}
+                  className="appearance-none px-4 py-2.5 pr-10 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition cursor-pointer"
+                  title="Select shop"
+                >
+                  <option value="">Select shop</option>
+                  {shops.map((shop) => (
+                    <option key={shop.id} value={shop.id}>
+                      {shop.display_name || shop.etsy_shop_id}
+                    </option>
+                  ))}
+                </select>
+              )}
+                <button
+                onClick={handleSyncFromEtsy}
+                disabled={!selectedShopId || syncing}
+                className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  title={t('products.syncEtsy')}
+              >
+                <Upload className="w-4 h-4" />
+                  {syncing ? t('products.syncing') : t('products.syncEtsy')}
+              </button>
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] transition-colors"
               >
                 <Upload className="w-4 h-4" />
-                Import CSV
+                {t('products.importCsv')}
               </button>
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
               >
                 <Plus className="w-4 h-4" />
-                Add Product
+                {t('products.add')}
               </button>
             </div>
           </div>
@@ -156,18 +233,18 @@ function ProductsContent() {
           ) : filteredProducts.length === 0 ? (
             <div className="text-center py-16 px-4">
               <Package className="w-16 h-16 text-[var(--text-muted)] mx-auto mb-4" />
-              <p className="text-[var(--text-muted)] text-lg">No products found</p>
+              <p className="text-[var(--text-muted)] text-lg">{t('products.noProducts')}</p>
               <p className="text-[var(--text-muted)] text-sm mt-1">
                 {searchQuery
-                  ? 'Try adjusting your search'
-                  : 'Get started by adding your first product'}
+                  ? t('products.trySearch')
+                  : t('products.noProductsHint')}
               </p>
               {!searchQuery && (
                 <button
                   onClick={() => setShowAddModal(true)}
                   className="mt-4 px-6 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
                 >
-                  Add Product
+                  {t('products.add')}
                 </button>
               )}
             </div>
@@ -187,22 +264,22 @@ function ProductsContent() {
                       />
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Product
+                      {t('products.table.product')}
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Source
+                      {t('products.table.source')}
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Price
+                      {t('products.table.price')}
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Images
+                      {t('products.table.images')}
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Tags
+                      {t('products.table.tags')}
                     </th>
                     <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                      Actions
+                      {t('products.table.actions')}
                     </th>
                   </tr>
                 </thead>
@@ -264,7 +341,7 @@ function ProductsContent() {
                               </span>
                             ))
                           ) : (
-                            <span className="text-sm text-[var(--text-muted)]">No tags</span>
+                            <span className="text-sm text-[var(--text-muted)]">{t('products.tags.none')}</span>
                           )}
                           {product.tags_raw && product.tags_raw.length > 3 && (
                             <span className="text-xs text-[var(--text-muted)]">
@@ -274,11 +351,21 @@ function ProductsContent() {
                         </div>
                       </td>
                       <td className="py-4 px-5">
-                        <TableActions
-                          onView={() => router.push(`/products/${product.id}`)}
-                          onEdit={() => router.push(`/products/${product.id}/edit`)}
-                          onDelete={() => handleDelete(product.id)}
-                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handlePublishToEtsy(product)}
+                            disabled={!!product.etsy_listing_id || (!selectedShopId && !product.shop_id)}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary)] disabled:opacity-60 disabled:cursor-not-allowed transition"
+                            title={product.etsy_listing_id ? t('products.alreadyOnEtsy') : t('products.publish')}
+                          >
+                            <Upload className="w-4 h-4" />
+                          </button>
+                          <TableActions
+                            onView={() => router.push(`/products/${product.id}`)}
+                            onEdit={() => router.push(`/products/${product.id}/edit`)}
+                            onDelete={() => handleDelete(product.id)}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}

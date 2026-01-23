@@ -219,6 +219,41 @@ class EtsyClient:
             json=listing_data
         )
 
+    async def get_shop_listings(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+        limit: int = 25,
+        offset: int = 0,
+        state: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get listings for a shop with pagination.
+
+        Args:
+            shop_id: Internal shop ID
+            etsy_shop_id: Etsy shop ID
+            limit: Number of listings to return (max 100)
+            offset: Pagination offset
+            state: Optional listing state (active, draft, inactive, expired, sold_out)
+
+        Returns:
+            dict: Listing data with results array and count
+        """
+        params = {
+            "limit": min(limit, 100),
+            "offset": offset,
+        }
+        if state:
+            params["state"] = state
+
+        return await self._make_request(
+            shop_id,
+            "GET",
+            f"/application/shops/{etsy_shop_id}/listings",
+            params=params
+        )
+
     async def update_listing(
         self,
         shop_id: int,
@@ -290,6 +325,28 @@ class EtsyClient:
             shop_id,
             "GET",
             f"/application/listings/{listing_id}"
+        )
+
+    async def get_listing_images(
+        self,
+        shop_id: int,
+        listing_id: str,
+        limit: int = 10,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Get listing images.
+        """
+        params = {
+            "limit": min(limit, 100),
+            "offset": offset,
+        }
+
+        return await self._make_request(
+            shop_id,
+            "GET",
+            f"/application/listings/{listing_id}/images",
+            params=params
         )
 
     async def delete_listing(

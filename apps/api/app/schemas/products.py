@@ -28,6 +28,8 @@ class ProductResponse(BaseModel):
     """Product response"""
     id: int
     sku: Optional[str]
+    shop_id: Optional[int]
+    etsy_listing_id: Optional[str]
     title_raw: Optional[str]
     description_raw: Optional[str]
     tags_raw: Optional[List[str]]
