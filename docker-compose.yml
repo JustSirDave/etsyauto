@@ -47,6 +47,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY}
       # Etsy API
@@ -106,12 +108,14 @@ services:
   # Celery Worker
   worker:
     build:
-      context: ./apps/worker
+      context: ./apps/api
       dockerfile: Dockerfile
     container_name: etsy-worker
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       # Etsy API
       ETSY_CLIENT_ID: ${ETSY_CLIENT_ID}
       ETSY_CLIENT_SECRET: ${ETSY_CLIENT_SECRET}
@@ -129,24 +133,26 @@ services:
       api:
         condition: service_healthy
     volumes:
-      - ./apps/worker:/app
-    command: celery -A tasks worker --loglevel=info --concurrency=4
+      - ./apps/api:/app
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
     networks:
       - etsy-network
 
   # Celery Beat (Scheduler)
   beat:
     build:
-      context: ./apps/worker
+      context: ./apps/api
       dockerfile: Dockerfile
     container_name: etsy-beat
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
       - redis
       - worker
-    command: celery -A tasks beat --loglevel=info
+    command: celery -A app.worker.celery_app beat --loglevel=info
     networks:
       - etsy-network
 

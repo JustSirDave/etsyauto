@@ -11,7 +11,7 @@ from app.core.database import SessionLocal
 from app.models.listings import Schedule, Product, ListingJob
 from app.services.quota_manager import QuotaManager
 from app.services.rate_limiter import RateLimiter
-from app.worker.tasks.publish_listing import publish_listing
+from app.worker.tasks.listing_tasks import publish_listing
 from app.services.notification_service import notify_tenant_admins
 from app.models.notifications import NotificationType
 

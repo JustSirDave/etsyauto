@@ -52,74 +52,85 @@ def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
             "errors": []
         }
 
-        offset = 0
         limit = 100
+        seen_listing_ids = set()
+        states = ["active", "inactive", "draft", "sold_out"]
 
-        while True:
-            response = asyncio.run(etsy_client.get_shop_listings(
-                shop_id=shop.id,
-                etsy_shop_id=shop.etsy_shop_id,
-                limit=limit,
-                offset=offset,
-                state="active"
-            ))
+        for state in states:
+            offset = 0
+            while True:
+                response = asyncio.run(etsy_client.get_shop_listings(
+                    shop_id=shop.id,
+                    etsy_shop_id=shop.etsy_shop_id,
+                    limit=limit,
+                    offset=offset,
+                    state=state
+                ))
 
-            listings = response.get("results", [])
-            count = response.get("count", 0)
-            if not listings:
-                break
+                listings = response.get("results", [])
+                count = response.get("count", 0)
+                if not listings:
+                    break
 
-            results["listings_fetched"] += len(listings)
-
-            for listing in listings:
-                try:
-                    product_data = _extract_listing_product_data(
-                        listing=listing,
-                        shop=shop,
-                        tenant_id=tenant_id,
-                        etsy_client=etsy_client
-                    )
-                    if not product_data:
+                for listing in listings:
+                    listing_id = listing.get("listing_id")
+                    if listing_id in seen_listing_ids:
                         continue
+                    seen_listing_ids.add(listing_id)
+                    results["listings_fetched"] += 1
 
-                    existing = db.query(Product).filter(
-                        Product.tenant_id == tenant_id,
-                        Product.etsy_listing_id == product_data["etsy_listing_id"]
-                    ).first()
+                    try:
+                        product_data = _extract_listing_product_data(
+                            listing=listing,
+                            shop=shop,
+                            tenant_id=tenant_id,
+                            etsy_client=etsy_client
+                        )
+                        if not product_data:
+                            continue
 
-                    if existing:
-                        for key, value in product_data.items():
-                            if hasattr(existing, key):
-                                setattr(existing, key, value)
-                        results["products_updated"] += 1
-                    else:
-                        db.add(Product(**product_data))
-                        results["products_created"] += 1
+                        existing = db.query(Product).filter(
+                            Product.tenant_id == tenant_id,
+                            Product.etsy_listing_id == product_data["etsy_listing_id"]
+                        ).first()
 
-                except Exception as e:
-                    logger.error(f"Error processing listing {listing.get('listing_id')}: {e}")
-                    results["errors"].append({
-                        "listing_id": listing.get("listing_id"),
-                        "error": str(e)
-                    })
+                        if existing:
+                            for key, value in product_data.items():
+                                if hasattr(existing, key):
+                                    setattr(existing, key, value)
+                            results["products_updated"] += 1
+                        else:
+                            db.add(Product(**product_data))
+                            results["products_created"] += 1
 
-            if len(listings) < limit or offset + len(listings) >= count:
-                break
-            offset += limit
+                    except Exception as e:
+                        logger.error(f"Error processing listing {listing_id}: {e}")
+                        results["errors"].append({
+                            "listing_id": listing_id,
+                            "error": str(e)
+                        })
+
+                if len(listings) < limit or offset + len(listings) >= count:
+                    break
+                offset += limit
 
         db.commit()
 
+        shop_name = shop.display_name or f"Shop {shop.id}"
         if results["products_created"] or results["products_updated"]:
-            shop_name = shop.display_name or f"Shop {shop.id}"
-            notify_tenant_admins(
-                db=db,
-                tenant_id=tenant_id,
-                notification_type=NotificationType.INFO,
-                title="Products synced from Etsy",
-                message=f"{shop_name}: {results['products_created']} new, {results['products_updated']} updated.",
-                action_url="/products",
-                action_label="View products",
-            )
+            message = f"{shop_name}: {results['products_created']} new, {results['products_updated']} updated."
+        else:
+            message = f"{shop_name}: no listings found to sync."
+
+        notify_tenant_admins(
+            db=db,
+            tenant_id=tenant_id,
+            notification_type=NotificationType.INFO,
+            title="Products synced from Etsy",
+            message=message,
+            action_url="/products",
+            action_label="View products",
+        )
 
         return results
 
