@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/lib/toast-context';
 import { AuditLogDetailModal } from '@/components/audit/AuditLogDetailModal';
+import { useShop } from '@/lib/shop-context';
 
 // Types
 interface AuditLog {
@@ -62,6 +63,7 @@ interface AuditStats {
 
 export default function AuditLogsPage() {
   const { showToast } = useToast();
+  const { selectedShopId } = useShop();
   
   // State
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -100,12 +102,13 @@ export default function AuditLogsPage() {
       if (filters.status) params.append('status', filters.status);
       if (filters.actor_email) params.append('actor_email', filters.actor_email);
       if (filters.shop_id) params.append('shop_id', filters.shop_id);
+      if (selectedShopId) params.set('shop_id', String(selectedShopId));
       if (filters.date_from) params.append('date_from', filters.date_from);
       if (filters.date_to) params.append('date_to', filters.date_to);
       
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/audit/logs/?${params}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         },
       });
       
@@ -126,9 +129,14 @@ export default function AuditLogsPage() {
   // Load statistics
   const loadStats = async () => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/audit/logs/stats`, {
+      const statsParams = new URLSearchParams();
+      if (selectedShopId) {
+        statsParams.append('shop_id', String(selectedShopId));
+      }
+      const statsQuery = statsParams.toString() ? `?${statsParams.toString()}` : '';
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/audit/logs/stats${statsQuery}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
         },
       });
       
@@ -143,11 +151,11 @@ export default function AuditLogsPage() {
   
   useEffect(() => {
     loadAuditLogs();
-  }, [page, filters]);
+  }, [page, filters, selectedShopId]);
   
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [selectedShopId]);
   
   // Apply filters
   const handleApplyFilters = () => {

@@ -63,13 +63,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const getColors = (type: Toast['type']) => {
     switch (type) {
       case 'success':
-        return 'bg-green-900/90 border-green-600 text-green-100';
+        return 'bg-[var(--background)] border-[var(--text-primary)] text-[var(--text-primary)]';
       case 'error':
-        return 'bg-red-900/90 border-red-600 text-red-100';
+        return 'bg-[var(--background)] border-[var(--text-secondary)] text-[var(--text-primary)]';
       case 'warning':
-        return 'bg-orange-900/90 border-orange-600 text-orange-100';
+        return 'bg-[var(--background)] border-[var(--border-color)] text-[var(--text-primary)]';
       case 'info':
-        return 'bg-blue-900/90 border-blue-600 text-blue-100';
+        return 'bg-[var(--background)] border-[var(--text-muted)] text-[var(--text-primary)]';
     }
   };
 
@@ -84,7 +84,6 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             <div
               key={toast.id}
               className={`flex items-start gap-3 p-4 rounded-lg border-2 shadow-xl pointer-events-auto ${getColors(toast.type)}`}
-              style={{ animation: 'slideIn 0.3s ease-out' }}
             >
               <div className="flex-shrink-0 mt-0.5">
                 {getIcon(toast.type)}
@@ -102,18 +101,6 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           ))}
         </div>
       )}
-      <style jsx global>{`
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `}</style>
     </ToastContext.Provider>
   );
 };

@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useLanguage } from '@/lib/language-context';
+import { useShop } from '@/lib/shop-context';
 import { ProfileSettingsModal } from '@/components/profile/ProfileSettingsModal';
 import { SearchModal } from '@/components/layout/SearchModal';
 import { NotificationPanel } from '@/components/layout/NotificationPanel';
@@ -25,10 +26,12 @@ import {
 export function TopBar() {
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
+  const { shops, selectedShopId, setSelectedShopId, isLoading: shopsLoading } = useShop();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [showShopMenu, setShowShopMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -94,6 +97,54 @@ export function TopBar() {
 
         {/* Right Side */}
         <div className="flex items-center gap-2">
+          {/* Shop Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowShopMenu(!showShopMenu)}
+              className="flex items-center gap-2 px-3 h-10 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors min-w-[180px] border border-[var(--border-color)]"
+              title={t('topbar.selectShop')}
+              disabled={shopsLoading}
+            >
+              <span className="text-sm font-medium flex-1 text-left truncate">
+                {shopsLoading ? 'Loading...' : shops.length === 0 ? 'No shop connected' : shops.find(s => s.id === selectedShopId)?.display_name || `Shop ${selectedShopId}`}
+              </span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${showShopMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Shop Dropdown */}
+            {showShopMenu && shops.length > 0 && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowShopMenu(false)}
+                />
+                <div className="absolute right-0 mt-2 w-56 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                  <div className="py-2">
+                    {shops.map((shop) => (
+                      <button
+                        key={shop.id}
+                        onClick={() => {
+                          setSelectedShopId(shop.id);
+                          setShowShopMenu(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                          selectedShopId === shop.id
+                            ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        <span className="font-medium truncate">{shop.display_name || `Shop ${shop.id}`}</span>
+                        {selectedShopId === shop.id && (
+                          <span className="ml-auto text-[var(--primary)]">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Language Selector */}
           <div className="relative">
             <button
@@ -113,7 +164,7 @@ export function TopBar() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowLanguageMenu(false)}
                 />
-                <div className="absolute right-0 mt-2 w-48 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                <div className="absolute right-0 mt-2 w-48 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden">
                   <div className="py-2">
                     {languages.map((lang) => (
                       <button
@@ -150,7 +201,7 @@ export function TopBar() {
             >
               <Bell className="w-5 h-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[var(--danger)] text-white text-xs font-bold rounded-full flex items-center justify-center">
+                <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 bg-[var(--primary)] text-white text-xs font-bold rounded-full flex items-center justify-center">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -198,7 +249,7 @@ export function TopBar() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowUserMenu(false)}
                 />
-                <div className="absolute right-0 mt-2 w-64 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                <div className="absolute right-0 mt-2 w-64 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden">
                   {/* User Info */}
                   <div className="p-4 border-b border-[var(--border-color)]">
                     <div className="flex items-center gap-3">
@@ -214,7 +265,7 @@ export function TopBar() {
                             className="w-full h-full object-cover"
                           />
                         ) : (
-                          <div className="w-full h-full gradient-primary flex items-center justify-center text-white font-semibold">
+                          <div className="w-full h-full bg-[var(--primary)] flex items-center justify-center text-white font-semibold">
                             {user?.name?.charAt(0).toUpperCase() || 'U'}
                           </div>
                         )}
@@ -258,7 +309,7 @@ export function TopBar() {
                   <div className="p-2 border-t border-[var(--border-color)]">
                     <button
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg transition-colors"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--text-primary)] hover:bg-[var(--background)] rounded-lg transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Logout</span>

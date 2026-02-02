@@ -8,6 +8,7 @@
 import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/lib/toast-context';
 import { LanguageProvider } from '@/lib/language-context';
+import { ShopProvider } from '@/lib/shop-context';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -17,7 +18,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <LanguageProvider>
         <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            <ShopProvider>{children}</ShopProvider>
+          </AuthProvider>
         </ToastProvider>
       </LanguageProvider>
     </GoogleOAuthProvider>

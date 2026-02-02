@@ -47,7 +47,7 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
   return (
     <div className="min-h-screen flex bg-[var(--background)]">
       {/* Left Panel - Hero/Brand Section */}
-      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-[45%] relative overflow-hidden bg-[var(--primary)]">
         {/* Background Image with Overlay */}
         <div className="absolute inset-0">
           {heroSlides.map((slide, index) => (
@@ -59,14 +59,14 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
             >
               <img
                 src={slide.image}
-                alt=""
+                alt={slide.tagline}
                 className="w-full h-full object-cover"
+                loading={index === 0 ? "eager" : "lazy"}
               />
             </div>
           ))}
-          {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-br from-[var(--background)]/95 via-[var(--primary)]/30 to-[var(--background)]/90" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[var(--background)] via-transparent to-transparent" />
+          {/* Solid overlay to keep contrast without gradients */}
+          <div className="absolute inset-0 bg-[rgba(15,23,42,0.6)]" />
         </div>
 
         {/* Content */}
@@ -74,10 +74,10 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
           {/* Logo & Back Button */}
           <div className="flex items-center justify-between">
             <Link href="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30">
-                <span className="text-white font-bold text-xl">E</span>
+              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
+                <span className="text-[var(--primary)] font-bold text-xl">E</span>
               </div>
-              <span className="text-[var(--text-primary)] font-bold text-xl tracking-tight">
+              <span className="text-white font-bold text-xl tracking-tight">
                 Etsy Auto
               </span>
             </Link>
@@ -124,7 +124,7 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
                 onClick={() => setCurrentSlide(index)}
                 className={`h-2 rounded-full transition-all duration-300 ${
                   index === currentSlide
-                    ? 'w-10 bg-[var(--primary)]'
+                    ? 'w-10 bg-white'
                     : 'w-4 bg-white/30 hover:bg-white/50'
                 }`}
                 aria-label={`Go to slide ${index + 1}`}
@@ -139,7 +139,7 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
         <div className="w-full max-w-[440px] mx-auto">
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30">
+            <div className="w-10 h-10 rounded-xl bg-[var(--primary)] flex items-center justify-center">
               <span className="text-white font-bold text-xl">E</span>
             </div>
             <span className="text-[var(--text-primary)] font-bold text-xl">Etsy Auto</span>

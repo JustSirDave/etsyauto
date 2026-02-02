@@ -10,9 +10,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
 import { Package, Upload, Plus } from 'lucide-react';
-import { productsApi, listingsApi, shopsApi, type Product, type Shop } from '@/lib/api';
+import { productsApi, listingsApi, type Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
+import { useShop } from '@/lib/shop-context';
 import { ProductImportModal } from '@/components/products/ProductImportModal';
 import { AddProductModal } from '@/components/products/AddProductModal';
 
@@ -20,6 +21,7 @@ function ProductsContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { t } = useLanguage();
+  const { shops, selectedShopId, setSelectedShopId } = useShop();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -29,30 +31,12 @@ function ProductsContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [shops, setShops] = useState<Shop[]>([]);
-  const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   // Load products
   useEffect(() => {
     loadProducts();
   }, [currentPage, pageSize]);
-
-  useEffect(() => {
-    const loadShops = async () => {
-      try {
-        const data = await shopsApi.getAll();
-        setShops(data);
-        if (!selectedShopId && data.length > 0) {
-          setSelectedShopId(data[0].id);
-        }
-      } catch (error: any) {
-        console.error('Failed to load shops:', error);
-        showToast(error.detail || t('toast.loadShopsFailed'), 'error');
-      }
-    };
-    loadShops();
-  }, []);
 
   const loadProducts = async () => {
     try {
@@ -116,6 +100,9 @@ function ProductsContent() {
 
   // Filter products client-side for now
   const filteredProducts = products.filter((product) => {
+    if (selectedShopId && product.shop_id && product.shop_id !== selectedShopId) {
+      return false;
+    }
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();

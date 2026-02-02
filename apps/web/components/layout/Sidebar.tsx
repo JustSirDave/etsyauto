@@ -101,7 +101,7 @@ export function Sidebar() {
       {/* Collapse Toggle Button - Outside main container */}
       <button
         onClick={toggleSidebar}
-        className="absolute right-0 top-20 translate-x-1/2 w-6 h-6 bg-[var(--primary)] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-[var(--primary-dark)] transition-colors z-50"
+        className="absolute right-0 top-20 translate-x-1/2 w-6 h-6 bg-[var(--text-inverse)] text-[var(--primary)] border border-[var(--border-color)] rounded-full flex items-center justify-center shadow-lg hover:bg-[var(--text-inverse)] hover:text-[var(--primary-dark)] transition-colors z-50"
         title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
       >
         {isCollapsed ? (
@@ -119,15 +119,15 @@ export function Sidebar() {
       >
         {/* Logo */}
         <div className={cn(
-          'h-16 flex items-center border-b border-[var(--border-color)]',
+          'h-16 flex items-center border-b border-[var(--border-color)] relative z-10',
           isCollapsed ? 'justify-center px-2' : 'px-6'
         )}>
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg gradient-primary flex items-center justify-center shadow-lg shadow-[var(--primary)]/30 flex-shrink-0">
-              <span className="text-white font-bold text-lg">E</span>
+          <Link href="/" className="flex items-center gap-3 cursor-pointer pointer-events-auto">
+            <div className="w-9 h-9 rounded-lg bg-[var(--text-inverse)] flex items-center justify-center flex-shrink-0">
+              <span className="text-[var(--primary)] font-bold text-lg">E</span>
             </div>
             {!isCollapsed && (
-              <span className="text-[var(--text-primary)] font-bold text-xl tracking-tight">
+              <span className="text-[var(--text-inverse)] font-bold text-xl tracking-tight">
                 Etsy Auto
               </span>
             )}
@@ -139,7 +139,7 @@ export function Sidebar() {
         {navigation.map((section, sectionIndex) => (
           <div key={sectionIndex} className={cn(sectionIndex > 0 && 'mt-6')}>
             {section.title && !isCollapsed && (
-              <p className="px-3 mb-2 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+              <p className="px-3 mb-2 text-xs font-semibold text-[var(--text-inverse)] opacity-60 uppercase tracking-wider">
                 {t(section.title)}
               </p>
             )}
@@ -159,17 +159,24 @@ export function Sidebar() {
                       'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative',
                       isCollapsed && 'justify-center',
                 isActive
-                        ? 'bg-gradient-to-r from-[var(--primary)] to-[var(--info)] text-white shadow-md shadow-[var(--primary)]/30'
-                        : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                        ? 'bg-[var(--text-inverse)] text-[var(--primary)]'
+                        : 'text-[var(--text-inverse)] opacity-80 hover:bg-[rgba(255,255,255,0.08)] hover:opacity-100'
               )}
                     title={isCollapsed ? t(item.name) : undefined}
             >
                     <Icon className={cn(
                       'w-5 h-5 flex-shrink-0',
-                      isActive ? 'text-white' : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
+                      isActive ? 'text-[var(--primary)]' : 'text-[var(--text-inverse)] opacity-70 group-hover:opacity-100'
                     )} />
                     {!isCollapsed && (
-              <span className="font-medium">{t(item.name)}</span>
+              <span
+                className={cn(
+                  'font-medium opacity-80 group-hover:opacity-100',
+                  isActive ? 'text-[var(--primary)]' : 'text-[var(--text-inverse)]'
+                )}
+              >
+                {t(item.name)}
+              </span>
                     )}
                     
                     {/* Tooltip for collapsed state */}
@@ -189,26 +196,26 @@ export function Sidebar() {
       {/* Help & Documentation Card */}
       {!isCollapsed && showHelpCard && (
         <div className="p-4">
-          <div className="bg-gradient-to-br from-[var(--primary-bg)] to-[var(--info-bg)] border border-[var(--primary)]/30 rounded-xl p-4 relative">
+          <div className="bg-[rgba(255,255,255,0.08)] border border-[var(--border-color)] rounded-xl p-4 relative">
             <button
               onClick={dismissHelpCard}
-              className="absolute top-2 right-2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              className="absolute top-2 right-2 text-[var(--text-inverse-muted)] hover:text-[var(--text-inverse)] transition-colors"
               title="Dismiss"
             >
               <X className="w-4 h-4" />
             </button>
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[var(--primary)] flex items-center justify-center flex-shrink-0">
-                <LifeBuoy className="w-5 h-5 text-white" />
+              <div className="w-10 h-10 rounded-lg bg-[var(--text-inverse)] flex items-center justify-center flex-shrink-0">
+                <LifeBuoy className="w-5 h-5 text-[var(--primary)]" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-[var(--text-primary)] font-semibold mb-1">{t('help.title')}</h4>
-                <p className="text-[var(--text-muted)] text-sm mb-3">
+                <h4 className="text-[var(--text-inverse)] font-semibold mb-1">{t('help.title')}</h4>
+                <p className="text-[var(--text-inverse-muted)] text-sm mb-3">
                   {t('help.body')}
                 </p>
                 <Link
                   href="/docs"
-                  className="inline-flex items-center gap-2 text-sm font-medium text-[var(--primary)] hover:underline"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-inverse)] hover:underline"
                 >
                   <BookOpen className="w-4 h-4" />
                   {t('help.cta')}
@@ -224,7 +231,7 @@ export function Sidebar() {
         <div className="p-3">
           <Link
             href="/docs"
-            className="flex items-center justify-center w-full py-2.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--primary)] hover:bg-[var(--primary-bg)] transition-colors"
+            className="flex items-center justify-center w-full py-2.5 rounded-lg text-[var(--text-inverse-muted)] hover:text-[var(--text-inverse)] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
             title="Documentation"
           >
             <BookOpen className="w-5 h-5" />
@@ -237,7 +244,7 @@ export function Sidebar() {
         'py-3 border-t border-[var(--border-color)]',
         isCollapsed ? 'px-2 text-center' : 'px-6'
       )}>
-        <p className="text-xs text-[var(--text-muted)]">
+        <p className="text-xs text-[var(--text-inverse-muted)]">
           {isCollapsed ? 'v1.0' : 'Etsy Auto v1.0.0'}
         </p>
       </div>

@@ -12,9 +12,10 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
+import { useShop } from '@/lib/shop-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import OnboardingModal from '@/components/OnboardingModal';
-import { onboardingApi, shopsApi, dashboardApi, type DashboardStats, type DashboardOrder } from '@/lib/api';
+import { onboardingApi, dashboardApi, type DashboardStats, type DashboardOrder } from '@/lib/api';
 import {
   Package,
   Users,
@@ -67,29 +68,29 @@ function ConnectionItem({
   const isConnected = status === 'connected';
 
   return (
-    <div className="flex-1 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)] min-w-0">
+    <div className="flex-1 p-4 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] min-w-0">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isConnected ? 'bg-[var(--success-bg)]' : 'bg-[var(--danger-bg)]'}`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--primary-bg)]`}>
             {isConnected ? (
-              <CheckCircle className="w-5 h-5 text-[var(--success)]" />
+              <CheckCircle className="w-5 h-5 text-[var(--text-primary)]" />
             ) : (
-              <XCircle className="w-5 h-5 text-[var(--danger)]" />
+              <XCircle className="w-5 h-5 text-[var(--text-muted)]" />
             )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[var(--text-primary)] font-medium truncate text-sm">{name}</p>
             {isConnected ? (
-              <p className="text-[var(--success)] text-xs truncate">{storeName || connectedLabel}</p>
+              <p className="text-[var(--text-secondary)] text-xs truncate">{storeName || connectedLabel}</p>
             ) : (
-              <p className="text-[var(--danger)] text-xs">{notConnectedLabel}</p>
+              <p className="text-[var(--text-muted)] text-xs">{notConnectedLabel}</p>
             )}
           </div>
         </div>
         {!isConnected && (
           <button
             onClick={onConnect}
-            className="px-3 py-1.5 bg-[var(--danger)] hover:bg-[var(--danger)]/80 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
+            className="px-3 py-1.5 bg-[var(--primary)] hover:bg-[var(--primary)]/80 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
           >
             {connectLabel}
           </button>
@@ -100,7 +101,7 @@ function ConnectionItem({
 }
 
 // Quick Action Button Component
-function QuickActionButton({
+function QuickActionCard({
   icon: Icon,
   label,
   subtitle,
@@ -116,9 +117,9 @@ function QuickActionButton({
   return (
     <a
       href={href}
-      className="flex flex-col p-3 bg-[var(--background)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:shadow-lg hover:shadow-[var(--primary)]/10 transition-all duration-200 group h-full"
+      className="flex flex-col p-4 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all duration-200 group h-full"
     >
-      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center mb-2 group-hover:scale-110 transition-transform`}>
+      <div className={`w-11 h-11 rounded-lg ${color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
         <Icon className="w-5 h-5 text-white" />
       </div>
       <p className="text-[var(--text-primary)] font-medium text-sm">{label}</p>
@@ -149,7 +150,7 @@ function MetricCard({
         <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon className="w-6 h-6 text-white" />
         </div>
-        <div className={`flex items-center gap-1 text-sm font-medium ${isPositive ? 'text-[var(--success)]' : 'text-[var(--danger)]'}`}>
+        <div className={`flex items-center gap-1 text-sm font-medium text-[var(--text-muted)]`}>
           {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
           {isPositive ? '+' : ''}{change}%
         </div>
@@ -228,9 +229,8 @@ function DashboardContent() {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLanguage();
+  const { shops, selectedShopId, isLoading: loadingShops } = useShop();
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [shops, setShops] = useState<any[]>([]);
-  const [loadingShops, setLoadingShops] = useState(true);
   const [metrics, setMetrics] = useState<DashboardStats | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(true);
   const [transactions, setTransactions] = useState<DashboardOrder[]>([]);
@@ -243,28 +243,14 @@ function DashboardContent() {
   }, [user]);
 
   useEffect(() => {
-    loadShops();
     loadMetrics();
     loadTransactions();
-  }, []);
-
-  const loadShops = async () => {
-    try {
-      setLoadingShops(true);
-      const data = await shopsApi.getAll();
-      setShops(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load shops:', error);
-      setShops([]);
-    } finally {
-      setLoadingShops(false);
-    }
-  };
+  }, [selectedShopId]);
 
   const loadMetrics = async () => {
     try {
       setLoadingMetrics(true);
-      const data = await dashboardApi.getStats();
+      const data = await dashboardApi.getStats({ shopId: selectedShopId });
       setMetrics(data);
     } catch (error) {
       console.error('Failed to load metrics:', error);
@@ -289,7 +275,7 @@ function DashboardContent() {
   const loadTransactions = async () => {
     try {
       setLoadingTransactions(true);
-      const data = await dashboardApi.getRecentOrders(5);
+      const data = await dashboardApi.getRecentOrders(5, { shopId: selectedShopId });
       setTransactions(data.orders);
     } catch (error) {
       console.error('Failed to load transactions:', error);
@@ -341,9 +327,9 @@ function DashboardContent() {
       </div>
 
       {/* Main Grid: Left (Connection Status + Quick Actions) / Right (KPIs) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start lg:items-stretch">
         {/* Left Column */}
-        <div className="flex flex-col gap-3 min-w-0">
+        <div className="flex flex-col gap-4 min-w-0 h-full">
           {/* Connection Status Card */}
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
             <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">{t('dashboard.connectionStatus')}</h2>
@@ -374,37 +360,34 @@ function DashboardContent() {
             )}
           </div>
 
-          {/* Quick Actions Card */}
-          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
-            <h2 className="text-base font-semibold text-[var(--text-primary)] mb-3">{t('dashboard.quickActions')}</h2>
-            <div className="grid grid-cols-3 gap-3">
-              <QuickActionButton
-                icon={Upload}
-                label={t('dashboard.action.importProducts')}
-                subtitle={t('dashboard.action.importProductsSubtitle')}
-                href="/products/import"
-                color="bg-[var(--primary)]"
-              />
-              <QuickActionButton
-                icon={Sparkles}
-                label={t('dashboard.action.aiContent')}
-                subtitle={t('dashboard.action.aiContentSubtitle')}
-                href="/ai"
-                color="bg-[var(--info)]"
-              />
-              <QuickActionButton
-                icon={LinkIcon}
-                label={t('dashboard.action.connectEtsy')}
-                subtitle={t('dashboard.action.connectEtsySubtitle')}
-                href="/settings"
-                color="bg-[var(--success)]"
-              />
-            </div>
+          {/* Quick Actions - Three Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 flex-1">
+            <QuickActionCard
+              icon={Upload}
+              label={t('dashboard.action.importProducts')}
+              subtitle={t('dashboard.action.importProductsSubtitle')}
+              href="/products/import"
+              color="bg-[var(--primary)]"
+            />
+            <QuickActionCard
+              icon={Sparkles}
+              label={t('dashboard.action.aiContent')}
+              subtitle={t('dashboard.action.aiContentSubtitle')}
+              href="/ai"
+              color="bg-[var(--info)]"
+            />
+            <QuickActionCard
+              icon={LinkIcon}
+              label={t('dashboard.action.connectEtsy')}
+              subtitle={t('dashboard.action.connectEtsySubtitle')}
+              href="/settings"
+              color="bg-[var(--success)]"
+            />
           </div>
         </div>
 
         {/* Right Column - Key Metrics 2x2 Grid */}
-        <div className="grid grid-cols-2 gap-4 min-w-0">
+        <div className="grid grid-cols-2 gap-4 min-w-0 h-full">
           {loadingMetrics ? (
             <div className="col-span-2 flex items-center justify-center py-12">
               <div className="w-6 h-6 border-2 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />

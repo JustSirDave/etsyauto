@@ -143,6 +143,7 @@ async def get_audit_logs(
 async def get_audit_stats(
     date_from: Optional[datetime] = Query(None),
     date_to: Optional[datetime] = Query(None),
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.READ_AUDIT_LOGS)),
     db: Session = Depends(get_db)
 ) -> AuditStatsResponse:
@@ -158,6 +159,8 @@ async def get_audit_stats(
     
     # Base query
     query = filter_by_tenant(db.query(AuditLog), context.tenant_id, AuditLog.tenant_id)
+    if shop_id:
+        query = query.filter(AuditLog.shop_id == shop_id)
     query = query.filter(AuditLog.created_at >= date_from, AuditLog.created_at <= date_to)
     
     # Total actions
@@ -174,17 +177,20 @@ async def get_audit_stats(
     
     # Top actions
     from sqlalchemy import func
-    top_actions = db.query(
+    top_actions_query = db.query(
         AuditLog.action,
         func.count(AuditLog.id).label('count')
     ).filter(
         AuditLog.tenant_id == context.tenant_id,
         AuditLog.created_at >= date_from,
         AuditLog.created_at <= date_to
-    ).group_by(AuditLog.action).order_by(desc('count')).limit(10).all()
+    )
+    if shop_id:
+        top_actions_query = top_actions_query.filter(AuditLog.shop_id == shop_id)
+    top_actions = top_actions_query.group_by(AuditLog.action).order_by(desc('count')).limit(10).all()
     
     # Top actors
-    top_actors = db.query(
+    top_actors_query = db.query(
         AuditLog.actor_email,
         func.count(AuditLog.id).label('count')
     ).filter(
@@ -192,7 +198,10 @@ async def get_audit_stats(
         AuditLog.created_at >= date_from,
         AuditLog.created_at <= date_to,
         AuditLog.actor_email.isnot(None)
-    ).group_by(AuditLog.actor_email).order_by(desc('count')).limit(10).all()
+    )
+    if shop_id:
+        top_actors_query = top_actors_query.filter(AuditLog.shop_id == shop_id)
+    top_actors = top_actors_query.group_by(AuditLog.actor_email).order_by(desc('count')).limit(10).all()
     
     return AuditStatsResponse(
         total_actions=total_actions,

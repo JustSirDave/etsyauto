@@ -4,15 +4,14 @@ Manage Etsy orders and synchronization
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_
+from sqlalchemy import or_, nullslast
 from sqlalchemy.orm import Session
 from typing import Optional
-from datetime import datetime, timezone
 
 from app.api.dependencies import get_user_context, UserContext, require_permission, require_any_permission
 from app.core.database import get_db
 from app.core.rbac import Permission
-from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
+from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
 from app.models.listings import Order
 from app.models.tenancy import Shop
 from app.services.order_utils import build_shipping_address, derive_payment_status
@@ -22,6 +21,7 @@ router = APIRouter()
 
 @router.get("/stats", tags=["Orders"])
 async def get_order_stats(
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
@@ -34,6 +34,9 @@ async def get_order_stats(
     """
     # Filter by tenant
     base_query = filter_by_tenant(db.query(Order), context.tenant_id, Order.tenant_id)
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        base_query = base_query.filter(Order.shop_id == shop_id)
 
     # Get total order count
     total_orders = base_query.count()
@@ -59,6 +62,7 @@ async def list_orders(
     limit: int = 20,
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
@@ -77,6 +81,10 @@ async def list_orders(
     """
     # Filter by tenant
     query = filter_by_tenant(db.query(Order), context.tenant_id, Order.tenant_id)
+
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        query = query.filter(Order.shop_id == shop_id)
 
     # Apply filters
     if status:
@@ -103,11 +111,34 @@ async def list_orders(
     total = query.count()
 
     # Apply pagination and ordering
-    orders = query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+    orders = (
+        query.order_by(
+            nullslast(Order.etsy_created_at.desc()),
+            Order.created_at.desc(),
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     # Format orders for response
     formatted_orders = []
     for order in orders:
+        first_item = None
+        if order.line_items:
+            for item in order.line_items:
+                if not first_item:
+                    first_item = item
+                if isinstance(item, dict) and item.get("image"):
+                    first_item = item
+                    break
+
+        item_image = None
+        item_title = None
+        if isinstance(first_item, dict):
+            item_image = first_item.get("image")
+            item_title = first_item.get("title") or first_item.get("product_name")
+
         formatted_orders.append({
             "id": order.id,
             "order_id": order.etsy_receipt_id or f"#{order.id}",
@@ -119,8 +150,18 @@ async def list_orders(
             "currency": order.currency or "USD",
             "status": order.status or "pending",
             "payment_status": derive_payment_status(order),
-            "created_at": order.created_at.isoformat() if order.created_at else None,
-            "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+            "item_image": item_image,
+            "item_title": item_title,
+            "created_at": (
+                (order.etsy_created_at or order.created_at).isoformat()
+                if (order.etsy_created_at or order.created_at)
+                else None
+            ),
+            "updated_at": (
+                (order.etsy_updated_at or order.updated_at).isoformat()
+                if (order.etsy_updated_at or order.updated_at)
+                else None
+            ),
         })
 
     return {
@@ -169,14 +210,24 @@ async def get_order(
         "payment_status": derive_payment_status(order),
         "shipping_address": build_shipping_address(order),
         "items": order.line_items or [],
-        "created_at": order.created_at.isoformat() if order.created_at else None,
-        "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+        "created_at": (
+            (order.etsy_created_at or order.created_at).isoformat()
+            if (order.etsy_created_at or order.created_at)
+            else None
+        ),
+        "updated_at": (
+            (order.etsy_updated_at or order.updated_at).isoformat()
+            if (order.etsy_updated_at or order.updated_at)
+            else None
+        ),
         "synced_at": order.synced_at.isoformat() if order.synced_at else None,
     }
 
 
 @router.post("/sync", tags=["Orders"])
 async def sync_orders(
+    force_full_sync: bool = False,
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.SYNC_ORDER)),
     db: Session = Depends(get_db)
 ):
@@ -190,15 +241,17 @@ async def sync_orders(
     3. Create new orders
     4. Return sync summary
     """
-    from app.services.etsy_client import EtsyClient
-    from app.core.redis import get_redis_client
-    from app.services.rate_limiter import get_rate_limiter
+    from app.worker.tasks.order_tasks import sync_orders as sync_orders_task
     
-    # Get all connected shops for this tenant
-    shops = db.query(Shop).filter(
+    # Get connected shops for this tenant (optionally scoped)
+    shops_query = db.query(Shop).filter(
         Shop.tenant_id == context.tenant_id,
         Shop.status == 'connected'
-    ).all()
+    )
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        shops_query = shops_query.filter(Shop.id == shop_id)
+    shops = shops_query.all()
     
     if not shops:
         raise HTTPException(
@@ -206,120 +259,20 @@ async def sync_orders(
             detail="No connected shops found. Please connect an Etsy shop first."
         )
     
-    # Initialize Etsy client
-    redis_client = get_redis_client()
-    rate_limiter = get_rate_limiter(redis_client)
-    etsy_client = EtsyClient(db, rate_limiter)
-    
-    total_synced = 0
-    total_new = 0
-    total_updated = 0
-    errors = []
-    
-    # Sync orders from each shop
-    for shop in shops:
-        try:
-            # Fetch receipts (orders) from Etsy
-            receipts_response = await etsy_client.get_shop_receipts(
-                shop_id=shop.id,
-                etsy_shop_id=shop.etsy_shop_id,
-                limit=100  # Fetch last 100 orders
-            )
-            
-            receipts = receipts_response.get("results", [])
-            
-            for receipt in receipts:
-                receipt_id = str(receipt.get("receipt_id"))
-                
-                # Check if order already exists
-                existing_order = db.query(Order).filter(
-                    Order.etsy_receipt_id == receipt_id
-                ).first()
-                
-                # Extract order data
-                buyer_name = f"{receipt.get('name', '')}".strip() or "Unknown"
-                buyer_email = receipt.get('buyer_email', 'unknown@example.com')
-                total_price = int(receipt.get('grandtotal', {}).get('amount', 0) or 0)
-                currency = receipt.get('grandtotal', {}).get('currency_code', 'USD')
-                
-                # Map Etsy status to our status
-                etsy_status = receipt.get('status', '').lower()
-                if etsy_status == "completed":
-                    order_status = "processing"
-                else:
-                    order_status = "pending"
-                
-                if existing_order:
-                    # Ensure existing order belongs to tenant
-                    ensure_tenant_access(existing_order.tenant_id, context)
-                    
-                    # Update existing order
-                    existing_order.buyer_name = buyer_name
-                    existing_order.buyer_email = buyer_email
-                    existing_order.total_price = total_price
-                    existing_order.currency = currency
-                    existing_order.status = order_status
-                    existing_order.etsy_status = etsy_status
-                    existing_order.shipping_name = receipt.get("name")
-                    existing_order.shipping_first_line = receipt.get("first_line")
-                    existing_order.shipping_second_line = receipt.get("second_line")
-                    existing_order.shipping_city = receipt.get("city")
-                    existing_order.shipping_state = receipt.get("state")
-                    existing_order.shipping_zip = receipt.get("zip")
-                    existing_order.shipping_country = receipt.get("country")
-                    existing_order.shipping_country_iso = receipt.get("country_iso")
-                    existing_order.synced_at = datetime.now(timezone.utc)
-                    existing_order.updated_at = datetime.now(timezone.utc)
-                    total_updated += 1
-                else:
-                    # Create new order
-                    new_order = Order(
-                        tenant_id=context.tenant_id,
-                        shop_id=shop.id,
-                        etsy_receipt_id=receipt_id,
-                        buyer_name=buyer_name,
-                        buyer_email=buyer_email,
-                        total_price=total_price,
-                        currency=currency,
-                        status=order_status,
-                        etsy_status=etsy_status,
-                        shipping_name=receipt.get("name"),
-                        shipping_first_line=receipt.get("first_line"),
-                        shipping_second_line=receipt.get("second_line"),
-                        shipping_city=receipt.get("city"),
-                        shipping_state=receipt.get("state"),
-                        shipping_zip=receipt.get("zip"),
-                        shipping_country=receipt.get("country"),
-                        shipping_country_iso=receipt.get("country_iso"),
-                        synced_at=datetime.now(timezone.utc)
-                    )
-                    db.add(new_order)
-                    total_new += 1
-                
-                total_synced += 1
-            
-            db.commit()
-            
-        except Exception as e:
-            errors.append({
-                "shop_id": shop.id,
-                "shop_name": shop.display_name,
-                "error": str(e)
-            })
-            continue
-    
-    # Prepare response
-    response = {
-        "message": f"Successfully synced {total_synced} orders",
-        "total_synced": total_synced,
-        "new_orders": total_new,
-        "updated_orders": total_updated,
-        "shops_processed": len(shops),
-        "status": "completed"
+    try:
+        task = sync_orders_task.delay(
+            tenant_id=context.tenant_id,
+            shop_id=shop_id,
+            force_full_sync=force_full_sync,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to queue order sync: {str(e)}")
+
+    return {
+        "message": "Order sync queued",
+        "task_id": task.id,
+        "shops_queued": len(shops),
+        "status": "queued",
+        "force_full_sync": force_full_sync,
+        "shop_id": shop_id,
     }
-    
-    if errors:
-        response["errors"] = errors
-        response["status"] = "completed_with_errors"
-    
-    return response

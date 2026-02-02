@@ -12,6 +12,7 @@ import { ArrowLeft, Package, Calendar, User, MapPin, CreditCard, RefreshCcw } fr
 import { ordersApi, OrderDetail } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { cn } from '@/lib/utils';
+import { useShop } from '@/lib/shop-context';
 
 function PaymentStatus({ status }: { status: string }) {
   const styles: Record<string, { dot: string; text: string; bg: string }> = {
@@ -58,6 +59,7 @@ function OrderDetailContent() {
   const router = useRouter();
   const params = useParams();
   const { showToast } = useToast();
+  const { selectedShopId } = useShop();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -90,7 +92,7 @@ function OrderDetailContent() {
     try {
       setSyncing(true);
       showToast('Syncing order from Etsy...', 'info');
-      await ordersApi.sync();
+      await ordersApi.sync({ shopId: selectedShopId });
       showToast('Order synced successfully!', 'success');
       await loadOrder();
     } catch (error: any) {

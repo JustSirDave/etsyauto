@@ -67,20 +67,20 @@ function LoginContent() {
     <AuthLayout mode="login">
       {/* Success Message */}
       {successMessage && (
-        <div className="mb-6 bg-[var(--success-bg)] border border-[var(--success)]/30 rounded-lg p-4 flex items-start gap-3">
-          <CheckCircle className="w-5 h-5 text-[var(--success)] flex-shrink-0 mt-0.5" />
+        <div className="mb-6 bg-[var(--primary-bg)] border border-[var(--border-color)] rounded-lg p-4 flex items-start gap-3">
+          <CheckCircle className="w-5 h-5 text-[var(--text-primary)] flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-[var(--success)] text-sm font-medium">Registration Successful!</p>
-            <p className="text-[var(--success)]/80 text-sm mt-0.5">{successMessage}</p>
+            <p className="text-[var(--text-primary)] text-sm font-medium">Registration Successful!</p>
+            <p className="text-[var(--text-secondary)] text-sm mt-0.5">{successMessage}</p>
           </div>
         </div>
       )}
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 bg-[var(--danger-bg)] border border-[var(--danger)]/30 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-[var(--danger)] flex-shrink-0 mt-0.5" />
-          <p className="text-[var(--danger)] text-sm">{error}</p>
+        <div className="mb-6 bg-[var(--primary-bg)] border border-[var(--border-color)] rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-[var(--text-primary)] flex-shrink-0 mt-0.5" />
+          <p className="text-[var(--text-primary)] text-sm">{error}</p>
         </div>
       )}
 
@@ -163,7 +163,7 @@ function LoginContent() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3 px-4 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] transition shadow-lg shadow-[var(--primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3 px-4 bg-[var(--primary)] text-white font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">

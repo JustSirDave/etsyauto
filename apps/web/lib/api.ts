@@ -363,7 +363,7 @@ export const productsApi = {
  * Listings API
  */
 export const listingsApi = {
-  getAll: async (page: number = 1, limit: number = 20, status?: string) => {
+  getAll: async (page: number = 1, limit: number = 20, status?: string, options: ShopQueryOptions = {}) => {
     const params = new URLSearchParams({
       skip: String((page - 1) * limit),
       limit: String(limit),
@@ -371,6 +371,9 @@ export const listingsApi = {
 
     if (status) {
       params.append('status', status);
+    }
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
     }
 
     return apiRequest<{
@@ -417,6 +420,8 @@ export interface Order {
   currency: string;
   status: string;
   payment_status: string;
+  item_image?: string | null;
+  item_title?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -435,12 +440,35 @@ export interface OrderStats {
   total: number;
 }
 
+export interface OrderQueryOptions {
+  shopId?: number | null;
+}
+
+export interface OrderSyncOptions {
+  forceFullSync?: boolean;
+}
+
+export interface ShopQueryOptions {
+  shopId?: number | null;
+}
+
 export const ordersApi = {
-  getStats: async (): Promise<OrderStats> => {
-    return apiRequest<OrderStats>('/api/orders/stats');
+  getStats: async (options: OrderQueryOptions = {}): Promise<OrderStats> => {
+    const params = new URLSearchParams();
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
+    }
+    const url = params.toString() ? `/api/orders/stats?${params.toString()}` : '/api/orders/stats';
+    return apiRequest<OrderStats>(url);
   },
 
-  getAll: async (page: number = 1, limit: number = 20, status?: string, paymentStatus?: string) => {
+  getAll: async (
+    page: number = 1,
+    limit: number = 20,
+    status?: string,
+    paymentStatus?: string,
+    options: OrderQueryOptions = {}
+  ) => {
     const params = new URLSearchParams({
       skip: String((page - 1) * limit),
       limit: String(limit),
@@ -451,6 +479,9 @@ export const ordersApi = {
     }
     if (paymentStatus) {
       params.append('payment_status', paymentStatus);
+    }
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
     }
 
     return apiRequest<{
@@ -465,8 +496,17 @@ export const ordersApi = {
     return apiRequest<OrderDetail>(`/api/orders/${id}`);
   },
 
-  sync: async () => {
-    return apiRequest<any>('/api/orders/sync', {
+  sync: async (options: OrderSyncOptions & OrderQueryOptions = {}) => {
+    const params = new URLSearchParams();
+    if (options.forceFullSync) {
+      params.append('force_full_sync', 'true');
+    }
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
+    }
+
+    const url = params.toString() ? `/api/orders/sync?${params.toString()}` : '/api/orders/sync';
+    return apiRequest<any>(url, {
       method: 'POST',
     });
   },
@@ -519,9 +559,16 @@ export interface ScheduleUpdate {
 }
 
 export const schedulesApi = {
-  getAll: async (status?: string): Promise<{ schedules: Schedule[]; stats: ScheduleStats }> => {
-    const params = status ? `?status=${status}` : '';
-    return apiRequest<{ schedules: Schedule[]; stats: ScheduleStats }>(`/api/schedules/${params}`);
+  getAll: async (status?: string, options: ShopQueryOptions = {}): Promise<{ schedules: Schedule[]; stats: ScheduleStats }> => {
+    const params = new URLSearchParams();
+    if (status) {
+      params.append('status', status);
+    }
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest<{ schedules: Schedule[]; stats: ScheduleStats }>(`/api/schedules/${query}`);
   },
 
   getById: async (id: number): Promise<Schedule> => {
@@ -722,12 +769,21 @@ export interface DashboardOrder {
 }
 
 export const dashboardApi = {
-  getStats: async (): Promise<DashboardStats> => {
-    return apiRequest<DashboardStats>('/api/dashboard/stats');
+  getStats: async (options: ShopQueryOptions = {}): Promise<DashboardStats> => {
+    const params = new URLSearchParams();
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest<DashboardStats>(`/api/dashboard/stats${query}`);
   },
 
-  getRecentOrders: async (limit: number = 5): Promise<{ orders: DashboardOrder[]; total: number }> => {
-    return apiRequest<{ orders: DashboardOrder[]; total: number }>(`/api/dashboard/recent-orders?limit=${limit}`);
+  getRecentOrders: async (limit: number = 5, options: ShopQueryOptions = {}): Promise<{ orders: DashboardOrder[]; total: number }> => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
+    }
+    return apiRequest<{ orders: DashboardOrder[]; total: number }>(`/api/dashboard/recent-orders?${params.toString()}`);
   },
 };
 

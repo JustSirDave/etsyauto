@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import ErrorListTable from '@/components/errors/ErrorListTable';
+import { useShop } from '@/lib/shop-context';
 
 interface ErrorItem {
   id: number;
@@ -20,13 +21,19 @@ interface ErrorItem {
 export default function ErrorsPage() {
   const [errors, setErrors] = useState<ErrorItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { selectedShopId } = useShop();
 
   const fetchErrors = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/listings/errors', {
+      const params = new URLSearchParams();
+      if (selectedShopId) {
+        params.append('shop_id', String(selectedShopId));
+      }
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const response = await fetch(`/api/listings/errors${query}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         }
       });
       
@@ -65,7 +72,7 @@ export default function ErrorsPage() {
 
   useEffect(() => {
     fetchErrors();
-  }, []);
+  }, [selectedShopId]);
 
   return (
     <div className="max-w-7xl mx-auto p-6">

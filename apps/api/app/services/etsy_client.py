@@ -374,7 +374,8 @@ class EtsyClient:
         min_last_modified: Optional[int] = None,
         max_last_modified: Optional[int] = None,
         was_paid: Optional[bool] = None,
-        was_shipped: Optional[bool] = None
+        was_shipped: Optional[bool] = None,
+        include_transactions: bool = True
     ) -> Dict[str, Any]:
         """
         Get shop receipts (orders) with filtering and pagination.
@@ -398,6 +399,8 @@ class EtsyClient:
             "limit": min(limit, 100),  # Etsy max is 100
             "offset": offset,
         }
+        if include_transactions:
+            params["includes"] = "Transactions"
         
         # Add optional time filters
         if min_created is not None:

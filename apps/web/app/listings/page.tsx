@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { listingsApi } from '@/lib/api';
+import { useShop } from '@/lib/shop-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { Clock, CheckCircle, XCircle, RefreshCw, Loader } from 'lucide-react';
@@ -50,18 +51,19 @@ function ListingsContent() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [retrying, setRetrying] = useState<Set<number>>(new Set());
+  const { selectedShopId } = useShop();
   const limit = 20;
 
   useEffect(() => {
     loadJobs();
     const interval = setInterval(loadJobs, 5000);
     return () => clearInterval(interval);
-  }, [page, filterStatus]);
+  }, [page, filterStatus, selectedShopId]);
 
   const loadJobs = async () => {
     try {
       setLoading(true);
-      const response = await listingsApi.getAll(page, limit, filterStatus);
+      const response = await listingsApi.getAll(page, limit, filterStatus, { shopId: selectedShopId });
       setJobs(response.jobs);
       setTotal(response.total);
     } catch (error) {

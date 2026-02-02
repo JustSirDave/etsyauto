@@ -82,4 +82,8 @@ celery_app.conf.beat_schedule = {
         "task": "audit.cleanup_old_logs",
         "schedule": 86400.0,  # Every 24 hours (daily at midnight UTC)
     },
+    "sync-orders-every-15-minutes": {
+        "task": "app.worker.tasks.order_tasks.sync_orders",
+        "schedule": 900.0,  # Every 15 minutes
+    },
 }

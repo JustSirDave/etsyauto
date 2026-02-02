@@ -5,7 +5,7 @@ Handles syncing orders from Etsy to local database
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
@@ -21,12 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="app.worker.tasks.order_tasks.sync_orders")
-def sync_orders(shop_id: int = None) -> Dict[str, Any]:
+def sync_orders(
+    shop_id: int = None,
+    tenant_id: Optional[int] = None,
+    force_full_sync: bool = False
+) -> Dict[str, Any]:
     """
     Sync orders from Etsy for one or all shops.
 
     Args:
         shop_id: Optional specific shop ID, or None for all shops
+        tenant_id: Optional tenant scope to limit shops
+        force_full_sync: If true, ignore incremental filters and fetch all
 
     Returns:
         dict: Summary of sync operation
@@ -36,11 +42,20 @@ def sync_orders(shop_id: int = None) -> Dict[str, Any]:
     try:
         # Get shops to sync
         if shop_id:
-            shops = [db.query(Shop).filter(Shop.id == shop_id).first()]
-            if not shops[0]:
+            shop_query = db.query(Shop).filter(Shop.id == shop_id)
+            if tenant_id is not None:
+                shop_query = shop_query.filter(Shop.tenant_id == tenant_id)
+            shop = shop_query.first()
+            if not shop:
                 return {"success": False, "error": "Shop not found"}
+            if shop.status != "connected":
+                return {"success": False, "error": "Shop is not connected"}
+            shops = [shop]
         else:
-            shops = db.query(Shop).filter(Shop.status == "connected").all()
+            shops_query = db.query(Shop).filter(Shop.status == "connected")
+            if tenant_id is not None:
+                shops_query = shops_query.filter(Shop.tenant_id == tenant_id)
+            shops = shops_query.all()
 
         results = {
             "shops_processed": 0,
@@ -59,7 +74,14 @@ def sync_orders(shop_id: int = None) -> Dict[str, Any]:
 
         for shop in shops:
             try:
-                shop_result = asyncio.run(_sync_shop_orders(db, etsy_client, shop))
+                shop_result = asyncio.run(
+                    _sync_shop_orders(
+                        db,
+                        etsy_client,
+                        shop,
+                        force_full_sync=force_full_sync,
+                    )
+                )
 
                 results["shops_processed"] += 1
                 results["orders_synced"] += shop_result["orders_synced"]
@@ -85,7 +107,12 @@ def sync_orders(shop_id: int = None) -> Dict[str, Any]:
         db.close()
 
 
-async def _sync_shop_orders(db, etsy_client: EtsyClient, shop: Shop) -> Dict[str, Any]:
+async def _sync_shop_orders(
+    db,
+    etsy_client: EtsyClient,
+    shop: Shop,
+    force_full_sync: bool = False
+) -> Dict[str, Any]:
     """
     Sync orders for a specific shop.
 
@@ -114,7 +141,7 @@ async def _sync_shop_orders(db, etsy_client: EtsyClient, shop: Shop) -> Dict[str
         
         # Use incremental sync if we have a last sync time (fetch orders modified since then)
         min_last_modified = None
-        if last_order and last_order.synced_at:
+        if not force_full_sync and last_order and last_order.synced_at and last_order.etsy_receipt_id:
             # Subtract 5 minutes for safety (avoid missing updates)
             from datetime import timedelta
             sync_from = last_order.synced_at - timedelta(minutes=5)
@@ -128,32 +155,46 @@ async def _sync_shop_orders(db, etsy_client: EtsyClient, shop: Shop) -> Dict[str
         offset = 0
         limit = 100
         
-        while True:
-            receipts_response = await etsy_client.get_shop_receipts(
-                shop_id=shop.id,
-                etsy_shop_id=shop.etsy_shop_id,
-                limit=limit,
-                offset=offset,
-                min_last_modified=min_last_modified
-            )
-            
-            receipts = receipts_response.get("results", [])
-            count = receipts_response.get("count", 0)
-            
-            if not receipts:
-                break
-            
-            all_receipts.extend(receipts)
-            logger.debug(f"Fetched {len(receipts)} receipts at offset {offset} (total: {count})")
-            
-            # Check if there are more pages
-            if len(receipts) < limit or offset + len(receipts) >= count:
-                break
-            
-            offset += limit
+        async def _fetch_receipts(min_modified: Optional[int]) -> List[Dict[str, Any]]:
+            receipts_collected: List[Dict[str, Any]] = []
+            current_offset = 0
+            while True:
+                receipts_response = await etsy_client.get_shop_receipts(
+                    shop_id=shop.id,
+                    etsy_shop_id=shop.etsy_shop_id,
+                    limit=limit,
+                    offset=current_offset,
+                    min_last_modified=min_modified
+                )
+
+                receipts = receipts_response.get("results", [])
+                count = receipts_response.get("count", 0)
+
+                if not receipts:
+                    break
+
+                receipts_collected.extend(receipts)
+                logger.debug(
+                    f"Fetched {len(receipts)} receipts at offset {current_offset} "
+                    f"(total: {count})"
+                )
+
+                # Check if there are more pages
+                if len(receipts) < limit or current_offset + len(receipts) >= count:
+                    break
+
+                current_offset += limit
+
+            return receipts_collected
+
+        receipts = await _fetch_receipts(min_last_modified)
+
+        # If incremental sync yields nothing, retry once with full sync
+        if not receipts and min_last_modified is not None:
+            logger.info(f"No receipts with incremental sync for shop {shop.id}. Retrying full sync.")
+            receipts = await _fetch_receipts(None)
         
-        logger.info(f"Fetched {len(all_receipts)} total receipts for shop {shop.id}")
-        receipts = all_receipts
+        logger.info(f"Fetched {len(receipts)} total receipts for shop {shop.id}")
 
         for receipt in receipts:
             try:
@@ -170,7 +211,13 @@ async def _sync_shop_orders(db, etsy_client: EtsyClient, shop: Shop) -> Dict[str
                 )
 
                 # Extract comprehensive order data
-                order_data = _extract_order_data(receipt, shop.id, shop.tenant_id)
+                    order_data = await _extract_order_data(
+                        receipt,
+                        shop.id,
+                        shop.tenant_id,
+                        shop.etsy_shop_id,
+                        etsy_client,
+                    )
 
                 if existing_order:
                     # Update existing order with all fields
@@ -248,7 +295,13 @@ def _map_etsy_status(etsy_status: str) -> str:
     return status_map.get(etsy_status, "pending")
 
 
-def _extract_order_data(receipt: Dict[str, Any], shop_id: int, tenant_id: int) -> Dict[str, Any]:
+async def _extract_order_data(
+    receipt: Dict[str, Any],
+    shop_id: int,
+    tenant_id: int,
+    etsy_shop_id: str,
+    etsy_client: EtsyClient,
+) -> Dict[str, Any]:
     """
     Extract comprehensive order data from Etsy receipt.
 
@@ -278,13 +331,63 @@ def _extract_order_data(receipt: Dict[str, Any], shop_id: int, tenant_id: int) -
     discount = receipt.get("discount_amt", {})
     gift_wrap = receipt.get("gift_wrap_price", {})
     
+    async def _get_listing_image_url(listing_id: Optional[str]) -> Optional[str]:
+        if not listing_id:
+            return None
+        try:
+            images = await etsy_client.get_listing_images(
+                shop_id=shop_id,
+                listing_id=str(listing_id),
+                limit=1,
+                offset=0,
+            )
+            results = images.get("results", []) if isinstance(images, dict) else []
+            if not results:
+                return None
+            image = results[0] or {}
+            return (
+                image.get("url_fullxfull")
+                or image.get("url_570xN")
+                or image.get("url_170x135")
+                or image.get("url_75x75")
+                or image.get("url")
+            )
+        except Exception as e:
+            logger.warning(f"Failed to fetch listing image for {listing_id}: {e}")
+            return None
+
     # Extract line items (transactions)
     line_items = []
     transactions = receipt.get("transactions", [])
+    if not transactions and receipt.get("receipt_id"):
+        try:
+            full_receipt = await etsy_client.get_receipt(
+                shop_id=shop_id,
+                etsy_shop_id=etsy_shop_id,
+                receipt_id=str(receipt.get("receipt_id")),
+            )
+            if isinstance(full_receipt, dict):
+                transactions = full_receipt.get("transactions", []) or transactions
+        except Exception as e:
+            logger.warning(f"Failed to fetch receipt details for {receipt.get('receipt_id')}: {e}")
     for txn in transactions:
+        listing_id = txn.get("listing_id")
+        listing_image = txn.get("listing_image") or {}
+        image_url = (
+            txn.get("image_url")
+            or txn.get("listing_image_url")
+            or listing_image.get("url_fullxfull")
+            or listing_image.get("url_570xN")
+            or listing_image.get("url_170x135")
+            or listing_image.get("url_75x75")
+            or listing_image.get("url")
+        )
+        if not image_url:
+            image_url = await _get_listing_image_url(listing_id)
+
         line_item = {
             "transaction_id": str(txn.get("transaction_id")),
-            "listing_id": str(txn.get("listing_id")),
+            "listing_id": str(listing_id) if listing_id is not None else None,
             "quantity": txn.get("quantity", 1),
             "title": txn.get("title", ""),
             "description": txn.get("description", ""),
@@ -292,7 +395,8 @@ def _extract_order_data(receipt: Dict[str, Any], shop_id: int, tenant_id: int) -
             "price": txn.get("price", {}).get("amount", 0),
             "currency": txn.get("price", {}).get("currency_code", "USD"),
             "variations": txn.get("variations", []),
-            "product_data": txn.get("product_data", {})
+            "product_data": txn.get("product_data", {}),
+            "image": image_url,
         }
         line_items.append(line_item)
     
@@ -410,7 +514,15 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
         )
 
         # Extract comprehensive order data
-        order_data = _extract_order_data(receipt, shop.id, shop.tenant_id)
+        order_data = asyncio.run(
+            _extract_order_data(
+                receipt,
+                shop.id,
+                shop.tenant_id,
+                shop.etsy_shop_id,
+                etsy_client,
+            )
+        )
 
         if existing_order:
             # Update with all extracted data

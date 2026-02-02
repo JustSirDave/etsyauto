@@ -9,9 +9,10 @@ interface NewScheduleModalProps {
   onClose: () => void;
   onSuccess: () => void;
   showToast: (message: string, type: 'success' | 'error' | 'info') => void;
+  defaultShopId?: number | null;
 }
 
-export function NewScheduleModal({ isOpen, onClose, onSuccess, showToast }: NewScheduleModalProps) {
+export function NewScheduleModal({ isOpen, onClose, onSuccess, showToast, defaultShopId }: NewScheduleModalProps) {
   const [formData, setFormData] = useState<ScheduleCreate>({
     name: '',
     description: '',
@@ -39,7 +40,10 @@ export function NewScheduleModal({ isOpen, onClose, onSuccess, showToast }: NewS
       setShops(data);
       // Set first shop as default if available
       if (data.length > 0 && !formData.shop_id) {
-        setFormData(prev => ({ ...prev, shop_id: data[0].id }));
+        const nextShopId = defaultShopId && data.some((shop) => shop.id === defaultShopId)
+          ? defaultShopId
+          : data[0].id;
+        setFormData(prev => ({ ...prev, shop_id: nextShopId }));
       }
     } catch (err: any) {
       console.error('Failed to load shops:', err);

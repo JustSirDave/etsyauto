@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { schedulesApi, Schedule, ScheduleStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { useShop } from '@/lib/shop-context';
 import { ConfirmActionModal } from '@/components/schedules/ConfirmActionModal';
 import { NewScheduleModal } from '@/components/schedules/NewScheduleModal';
 import { QuotaDisplay } from '@/components/schedules/QuotaDisplay';
@@ -169,6 +170,7 @@ function ScheduleItem({
 
 export default function SchedulesPage() {
   const { showToast } = useToast();
+  const { selectedShopId } = useShop();
   const [filter, setFilter] = useState<'all' | 'active' | 'paused'>('all');
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [stats, setStats] = useState<ScheduleStats>({ total: 0, active: 0, paused: 0, executions_today: 0 });
@@ -197,7 +199,10 @@ export default function SchedulesPage() {
   const loadSchedules = async (statusFilter?: string) => {
     try {
       setLoading(true);
-      const data = await schedulesApi.getAll(statusFilter === 'all' ? undefined : statusFilter);
+      const data = await schedulesApi.getAll(
+        statusFilter === 'all' ? undefined : statusFilter,
+        { shopId: selectedShopId }
+      );
       setSchedules(data.schedules);
       setStats(data.stats);
     } catch (error: any) {
@@ -236,7 +241,7 @@ export default function SchedulesPage() {
   // Load on mount and when filter changes
   useEffect(() => {
     loadSchedules(filter);
-  }, [filter]);
+  }, [filter, selectedShopId]);
 
   // Handle toggle schedule
   const handleToggle = async (id: number) => {
@@ -589,6 +594,7 @@ export default function SchedulesPage() {
         onClose={() => setShowNewScheduleModal(false)}
         onSuccess={() => loadSchedules(filter)}
         showToast={showToast}
+        defaultShopId={selectedShopId}
       />
 
       {/* Quota Configuration Modal */}

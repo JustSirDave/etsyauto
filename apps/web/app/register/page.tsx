@@ -70,9 +70,9 @@ export default function RegisterPage() {
     <AuthLayout mode="register">
       {/* Error Message */}
       {displayError && (
-        <div className="mb-6 bg-[var(--danger-bg)] border border-[var(--danger)]/30 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-[var(--danger)] flex-shrink-0 mt-0.5" />
-          <p className="text-[var(--danger)] text-sm">{displayError}</p>
+        <div className="mb-6 bg-[var(--primary-bg)] border border-[var(--border-color)] rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-[var(--text-primary)] flex-shrink-0 mt-0.5" />
+          <p className="text-[var(--text-primary)] text-sm">{displayError}</p>
         </div>
       )}
 
@@ -172,7 +172,7 @@ export default function RegisterPage() {
         <button
           type="submit"
           disabled={isLoading || !agreedToTerms}
-          className="w-full py-3 px-4 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-2 focus:ring-offset-[var(--card-bg)] transition shadow-lg shadow-[var(--primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full py-3 px-4 bg-[var(--primary)] text-white font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">

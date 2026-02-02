@@ -70,6 +70,7 @@ class ScheduleResponse(BaseModel):
 @router.get("/", tags=["Schedules"])
 async def get_schedules(
     status: Optional[str] = None,
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.READ_SCHEDULE)),
     db: Session = Depends(get_db)
 ):
@@ -85,6 +86,9 @@ async def get_schedules(
     """
     # Filter by tenant
     query = filter_by_tenant(db.query(Schedule), context.tenant_id, Schedule.tenant_id)
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        query = query.filter(Schedule.shop_id == shop_id)
 
     if status:
         query = query.filter(Schedule.status == status)
@@ -92,23 +96,34 @@ async def get_schedules(
     schedules = query.order_by(Schedule.created_at.desc()).all()
 
     # Get statistics
-    total = db.query(Schedule).filter(Schedule.tenant_id == context.tenant_id).count()
-    active = db.query(Schedule).filter(
+    total_query = db.query(Schedule).filter(Schedule.tenant_id == context.tenant_id)
+    if shop_id:
+        total_query = total_query.filter(Schedule.shop_id == shop_id)
+    total = total_query.count()
+    active_query = db.query(Schedule).filter(
         Schedule.tenant_id == context.tenant_id,
         Schedule.status == 'active'
-    ).count()
-    paused = db.query(Schedule).filter(
+    )
+    paused_query = db.query(Schedule).filter(
         Schedule.tenant_id == context.tenant_id,
         Schedule.status == 'paused'
-    ).count()
+    )
+    if shop_id:
+        active_query = active_query.filter(Schedule.shop_id == shop_id)
+        paused_query = paused_query.filter(Schedule.shop_id == shop_id)
+    active = active_query.count()
+    paused = paused_query.count()
 
     # Calculate today's executions
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    executions_today = db.query(func.sum(Schedule.execution_count)).filter(
+    executions_query = db.query(func.sum(Schedule.execution_count)).filter(
         Schedule.tenant_id == context.tenant_id,
         Schedule.last_run_at >= today_start
-    ).scalar() or 0
+    )
+    if shop_id:
+        executions_query = executions_query.filter(Schedule.shop_id == shop_id)
+    executions_today = executions_query.scalar() or 0
 
     # Format schedules
     schedule_list = []

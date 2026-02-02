@@ -48,6 +48,7 @@ async def get_listing_jobs(
     status: Optional[str] = None,
     skip: int = 0,
     limit: int = 20,
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.READ_LISTING)),
     db: Session = Depends(get_db)
 ):
@@ -71,6 +72,9 @@ async def get_listing_jobs(
         context,
         db
     )
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        query = query.filter(ListingJob.shop_id == shop_id)
     
     if status:
         query = query.filter(ListingJob.status == status if hasattr(ListingJob, 'status') else ListingJob.state == status)

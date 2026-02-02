@@ -13,6 +13,7 @@ import { Calendar, CheckCircle, RotateCcw, XCircle, RefreshCcw } from 'lucide-re
 import { cn } from '@/lib/utils';
 import { ordersApi, Order, OrderStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { useShop } from '@/lib/shop-context';
 
 function PaymentStatus({ status }: { status: string }) {
   const styles: Record<string, { dot: string; text: string }> = {
@@ -40,6 +41,7 @@ function CustomerAvatar({ customer }: { customer: { name: string; initials: stri
 function OrdersContent() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { selectedShopId } = useShop();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
@@ -56,7 +58,7 @@ function OrdersContent() {
     try {
       setSyncing(true);
       showToast('Syncing orders from Etsy...', 'info');
-      await ordersApi.sync();
+      await ordersApi.sync({ forceFullSync: total === 0, shopId: selectedShopId });
       showToast('Orders synced successfully!', 'success');
       await loadOrders();
       await loadStats();
@@ -72,7 +74,7 @@ function OrdersContent() {
   const loadStats = async () => {
     try {
       setLoadingStats(true);
-      const data = await ordersApi.getStats();
+      const data = await ordersApi.getStats({ shopId: selectedShopId });
       setStats(data);
     } catch (error: any) {
       console.error('Failed to load order stats:', error);
@@ -85,7 +87,9 @@ function OrdersContent() {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const data = await ordersApi.getAll(currentPage, pageSize);
+      const data = await ordersApi.getAll(currentPage, pageSize, undefined, undefined, {
+        shopId: selectedShopId,
+      });
       setOrders(data.orders);
       setTotal(data.total);
     } catch (error: any) {
@@ -98,11 +102,11 @@ function OrdersContent() {
 
   useEffect(() => {
     loadStats();
-  }, []);
+  }, [selectedShopId]);
 
   useEffect(() => {
     loadOrders();
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, selectedShopId]);
 
   // Filter orders by search query
   const filteredOrders = orders.filter(order => {
@@ -205,7 +209,24 @@ function OrdersContent() {
                 {filteredOrders.map((order) => (
                   <tr key={order.id} className="border-b border-[var(--border-color)] hover:bg-[var(--background)] transition-colors">
                     <td className="py-4 px-5"><TableCheckbox checked={selectedOrders.includes(order.id)} onChange={() => toggleSelect(order.id)} /></td>
-                    <td className="py-4 px-5"><span className="font-medium text-[var(--primary)]">{order.order_id}</span></td>
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-3">
+                        {order.item_image && (
+                          <div className="w-10 h-10 rounded-md overflow-hidden border border-[var(--border-color)] flex-shrink-0">
+                            <img
+                              src={order.item_image}
+                              alt={order.item_title || order.order_id}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40"%3E%3Crect fill="%23f0f0f0" width="40" height="40"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="10" dy="52%25" dx="50%25" text-anchor="middle"%3ENo%3C/text%3E%3C/svg%3E';
+                              }}
+                            />
+                          </div>
+                        )}
+                        <span className="font-medium text-[var(--primary)]">{order.order_id}</span>
+                      </div>
+                    </td>
                     <td className="py-4 px-5 text-[var(--text-muted)] text-sm">{formatDate(order.created_at)}</td>
                     <td className="py-4 px-5">
                       <div className="flex items-center gap-3">

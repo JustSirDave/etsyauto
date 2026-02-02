@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Upload, CheckCircle, XCircle, AlertCircle, Download, RefreshCw } from "lucide-react";
 import { API_BASE_URL } from "@/lib/api";
+import { useShop } from '@/lib/shop-context';
 
 // Helper function for API requests
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -67,18 +68,19 @@ export default function ProductIngestionPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
-  const [shopId, setShopId] = useState<number | null>(null);
+  const { selectedShopId, selectedShop } = useShop();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadBatches();
     const interval = setInterval(loadBatches, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedShopId]);
 
   const loadBatches = async () => {
     try {
-      const response = await apiRequest<{ batches: IngestionBatch[] }>("/products/ingestion/batch");
+      const params = selectedShopId ? `?shop_id=${selectedShopId}` : "";
+      const response = await apiRequest<{ batches: IngestionBatch[] }>(`/products/ingestion/batch${params}`);
       setBatches(response.batches || []);
     } catch (error) {
       console.error("Failed to load batches:", error);
@@ -120,7 +122,7 @@ export default function ProductIngestionPage() {
 
       const fileType = uploadedFile.name.endsWith(".json") ? "json" : "csv";
       const endpoint = `/products/ingestion/upload/${fileType}${
-        shopId ? `?shop_id=${shopId}` : ""
+        selectedShopId ? `?shop_id=${selectedShopId}` : ""
       }`;
 
       const response = await apiRequest<{ batch_id: string; message: string }>(endpoint, {
@@ -235,20 +237,14 @@ export default function ProductIngestionPage() {
             </div>
           </div>
 
-          {/* Optional Shop Selection */}
+          {/* Current Shop */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Associate with Shop (Optional)
+              Current Shop
             </label>
-            <select
-              value={shopId || ""}
-              onChange={(e) => setShopId(e.target.value ? parseInt(e.target.value) : null)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              disabled={uploading}
-            >
-              <option value="">No specific shop</option>
-              {/* TODO: Populate from connected shops */}
-            </select>
+            <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-700">
+              {selectedShop ? (selectedShop.display_name || `Shop ${selectedShop.id}`) : 'No shop selected'}
+            </div>
           </div>
 
           {/* Error Message */}
