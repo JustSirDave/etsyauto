@@ -216,6 +216,21 @@ class Order(Base):
         default='pending'
     )
     etsy_status = Column(String(50), nullable=True)  # Original Etsy status
+    lifecycle_status = Column(
+        String(30),
+        CheckConstraint("lifecycle_status IN ('processing','in_transit','completed','cancelled','refunded')"),
+        nullable=True
+    )
+    payment_status = Column(
+        String(20),
+        CheckConstraint("payment_status IN ('paid','unpaid')"),
+        nullable=True
+    )
+    fulfillment_status = Column(
+        String(20),
+        CheckConstraint("fulfillment_status IN ('unshipped','shipped','delivered')"),
+        nullable=True
+    )
     
     # Buyer information
     buyer_user_id = Column(String(50), nullable=True)  # Etsy buyer user ID
@@ -273,7 +288,44 @@ class Order(Base):
     __table_args__ = (
         Index('idx_orders_status_shop', 'shop_id', 'status'),
         Index('idx_orders_etsy_status', 'etsy_status'),
+        Index('idx_orders_lifecycle_status', 'lifecycle_status'),
+        Index('idx_orders_payment_status', 'payment_status'),
+        Index('idx_orders_fulfillment_status', 'fulfillment_status'),
         Index('idx_orders_synced_at', 'synced_at'),
+    )
+
+
+class SupplierOrderAssignment(Base):
+    """Assign a supplier to fulfill a specific order."""
+    __tablename__ = "supplier_order_assignments"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False, index=True)
+    order_id = Column(BigInteger, ForeignKey('orders.id'), nullable=False, unique=True, index=True)
+    supplier_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=False, index=True)
+    assigned_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    assigned_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_supplier_order_shop_user', 'shop_id', 'supplier_user_id'),
+    )
+
+
+class SupplierProductAssignment(Base):
+    """Assign a supplier to fulfill a specific product."""
+    __tablename__ = "supplier_product_assignments"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False, index=True)
+    product_id = Column(BigInteger, ForeignKey('products.id'), nullable=False, unique=True, index=True)
+    supplier_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=False, index=True)
+    assigned_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    assigned_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_supplier_product_shop_user', 'shop_id', 'supplier_user_id'),
     )
 
 

@@ -195,14 +195,3 @@ async def google_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"OAuth authentication failed: {str(e)}"
         )
-
-
-@router.get("/google/test")
-async def test_google_oauth():
-    """Test endpoint to check if Google OAuth is configured"""
-    return {
-        "configured": bool(settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET),
-        "client_id": settings.GOOGLE_CLIENT_ID[:10] + "..." if settings.GOOGLE_CLIENT_ID else None,
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI
-    }
-

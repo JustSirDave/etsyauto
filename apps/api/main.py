@@ -2,15 +2,19 @@
 Etsy Automation Platform - FastAPI Backend
 Main application entry point
 """
+import logging
+import os
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
-import os
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.core.sentry_config import initialize_sentry
 from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
@@ -30,9 +34,9 @@ initialize_sentry()
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    print("🚀 Starting Etsy Automation Platform API...")
-    print(f"📊 Environment: {settings.ENVIRONMENT}")
-    print(f"🔐 JWT Issuer: {settings.JWT_ISSUER}")
+    logger.info("Starting Etsy Automation Platform API...")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    logger.info(f"JWT Issuer: {settings.JWT_ISSUER}")
     
     # Create tables (for dev - use Alembic in prod)
     if settings.ENVIRONMENT == "development":
@@ -41,7 +45,7 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    print("🛑 Shutting down API...")
+    logger.info("Shutting down API...")
 
 
 # Create FastAPI app

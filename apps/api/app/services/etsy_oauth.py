@@ -26,6 +26,7 @@ class EtsyOAuthService:
         "listings_w",      # Write/create listings
         "listings_d",      # Delete listings
         "transactions_r",  # Read orders/transactions
+        "transactions_w",  # Update orders/fulfillment
         "shops_r",         # Read shop information
         "profile_r",       # Read user profile
     ]

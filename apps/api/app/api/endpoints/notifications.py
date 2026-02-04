@@ -94,6 +94,7 @@ async def get_notifications(
 
 @router.get("/unread-count", tags=["Notifications"])
 async def get_unread_count(
+    type: Optional[NotificationType] = None,
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -105,12 +106,43 @@ async def get_unread_count(
     """
     user_id = int(current_user["sub"])
 
-    count = db.query(Notification).filter(
+    query = db.query(Notification).filter(
         Notification.user_id == user_id,
         Notification.read == False
-    ).count()
+    )
+    if type:
+        query = query.filter(Notification.type == type)
+    count = query.count()
 
     return {"count": count}
+
+
+@router.post("/mark-read-by-type", tags=["Notifications"])
+async def mark_read_by_type(
+    type: NotificationType,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Mark all notifications of a given type as read.
+    """
+    user_id = int(current_user["sub"])
+
+    result = db.query(Notification).filter(
+        Notification.user_id == user_id,
+        Notification.read == False,
+        Notification.type == type
+    ).update({
+        Notification.read: True,
+        Notification.read_at: datetime.now(timezone.utc)
+    })
+
+    db.commit()
+
+    return {
+        "message": f"Marked {result} {type.value} notifications as read",
+        "count": result
+    }
 
 
 @router.post("/{notification_id}/read", tags=["Notifications"])

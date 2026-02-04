@@ -2,9 +2,12 @@
 Migration Utilities for Idempotent Schema Changes
 Ensures migrations can be run multiple times safely
 """
+import logging
 from alembic import op
 from sqlalchemy import inspect
 from sqlalchemy.engine import reflection
+
+logger = logging.getLogger(__name__)
 
 
 def column_exists(table_name: str, column_name: str) -> bool:
@@ -57,24 +60,24 @@ def add_column_if_not_exists(table_name: str, column):
     """Add a column only if it doesn't exist"""
     if not column_exists(table_name, column.name):
         op.add_column(table_name, column)
-        print(f"Added column {column.name} to {table_name}")
+        logger.info(f"Added column {column.name} to {table_name}")
     else:
-        print(f"Column {column.name} already exists in {table_name}, skipping")
+        logger.info(f"Column {column.name} already exists in {table_name}, skipping")
 
 
 def create_table_if_not_exists(table_name: str, *args, **kwargs):
     """Create a table only if it doesn't exist"""
     if not table_exists(table_name):
         op.create_table(table_name, *args, **kwargs)
-        print(f"Created table {table_name}")
+        logger.info(f"Created table {table_name}")
     else:
-        print(f"Table {table_name} already exists, skipping")
+        logger.info(f"Table {table_name} already exists, skipping")
 
 
 def drop_column_if_exists(table_name: str, column_name: str):
     """Drop a column only if it exists"""
     if column_exists(table_name, column_name):
         op.drop_column(table_name, column_name)
-        print(f"Dropped column {column_name} from {table_name}")
+        logger.info(f"Dropped column {column_name} from {table_name}")
     else:
-        print(f"Column {column_name} doesn't exist in {table_name}, skipping")
+        logger.info(f"Column {column_name} doesn't exist in {table_name}, skipping")

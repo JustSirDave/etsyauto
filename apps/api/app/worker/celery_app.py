@@ -86,4 +86,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.worker.tasks.order_tasks.sync_orders",
         "schedule": 900.0,  # Every 15 minutes
     },
+    "reconcile-orders-hourly": {
+        "task": "app.worker.tasks.order_tasks.reconcile_orders",
+        "schedule": 3600.0,  # Every hour
+    },
 }

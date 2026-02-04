@@ -7,14 +7,33 @@ def derive_payment_status(order: Order) -> str:
     """
     Best-effort payment status derived from Etsy status fields.
     """
+    if getattr(order, "payment_status", None):
+        return order.payment_status
     etsy_status = (order.etsy_status or "").lower()
-    if etsy_status == "refunded" or order.status == "refunded":
-        return "refunded"
     if etsy_status in {"paid", "completed"}:
         return "paid"
-    if order.status == "cancelled":
-        return "failed"
-    return "pending"
+    return "unpaid"
+
+
+def derive_lifecycle_status(order: Order) -> str:
+    """
+    Best-effort lifecycle status derived from Etsy + legacy fields.
+    """
+    if getattr(order, "lifecycle_status", None):
+        return order.lifecycle_status
+
+    etsy_status = (order.etsy_status or "").lower()
+
+    if etsy_status in {"refunded", "fully refunded"} or order.status == "refunded":
+        return "refunded"
+    if etsy_status in {"canceled", "cancelled"} or order.status == "cancelled":
+        return "cancelled"
+    if etsy_status == "completed" or order.fulfillment_status == "delivered":
+        return "completed"
+    if order.fulfillment_status == "shipped" or order.status == "shipped":
+        return "in_transit"
+
+    return "processing"
 
 
 def build_shipping_address(order: Order) -> Dict[str, Any]:

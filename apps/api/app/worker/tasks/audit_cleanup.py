@@ -2,12 +2,15 @@
 Audit Log Cleanup Task
 Removes audit logs older than 30 days (TTL enforcement)
 """
+import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import delete
 
 from app.worker.celery_app import celery_app
 from app.core.database import get_db
 from app.models.listings import AuditLog
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="audit.cleanup_old_logs")
@@ -39,7 +42,7 @@ def cleanup_old_audit_logs():
             
             deleted_count = result.rowcount
             
-            print(f"✅ Deleted {deleted_count} audit logs older than {cutoff_date.date()}")
+            logger.info(f"Deleted {deleted_count} audit logs older than {cutoff_date.date()}")
             
             return {
                 "success": True,
@@ -58,7 +61,7 @@ def cleanup_old_audit_logs():
     
     except Exception as e:
         db.rollback()
-        print(f"❌ Audit cleanup failed: {str(e)}")
+        logger.error(f"Audit cleanup failed: {str(e)}")
         return {
             "success": False,
             "error": str(e),

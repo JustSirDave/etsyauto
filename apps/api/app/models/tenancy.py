@@ -91,7 +91,7 @@ class Membership(Base):
     tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)
     role = Column(
         String(20),
-        CheckConstraint("role IN ('owner', 'admin', 'creator', 'viewer')"),
+        CheckConstraint("role IN ('owner', 'admin', 'creator', 'viewer', 'supplier')"),
         nullable=False
     )
 
@@ -106,6 +106,9 @@ class Membership(Base):
     invitation_token_expires = Column(DateTime(timezone=True), nullable=True)
     invited_at = Column(DateTime(timezone=True), nullable=True)
     accepted_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Order read tracking (per-tenant)
+    last_orders_viewed_at = Column(DateTime(timezone=True), nullable=True)
 
     # Per-shop access for creator/viewer roles (empty = no access)
     allowed_shop_ids = Column(JSONB, nullable=True)

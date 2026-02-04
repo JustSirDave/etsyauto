@@ -416,10 +416,12 @@ export interface Order {
   shop_id: number;
   buyer_name: string;
   buyer_email: string;
-  total_price: number;
+  total_price: number | null;
   currency: string;
   status: string;
+  lifecycle_status?: string;
   payment_status: string;
+  fulfillment_status?: string;
   item_image?: string | null;
   item_title?: string | null;
   created_at: string;
@@ -433,10 +435,17 @@ export interface OrderDetail extends Order {
 }
 
 export interface OrderStats {
-  pending_payment: number;
-  completed: number;
-  refunded: number;
-  failed: number;
+  order_status: {
+    processing: number;
+    in_transit: number;
+    completed: number;
+    cancelled: number;
+    refunded: number;
+  };
+  payment_status: {
+    paid: number;
+    unpaid: number;
+  };
   total: number;
 }
 
@@ -496,6 +505,29 @@ export const ordersApi = {
     return apiRequest<OrderDetail>(`/api/orders/${id}`);
   },
 
+  assignSupplier: async (orderId: number, supplierUserId: number): Promise<any> => {
+    return apiRequest(`/api/orders/${orderId}/assign-supplier`, {
+      method: 'POST',
+      body: JSON.stringify({ supplier_user_id: supplierUserId }),
+    });
+  },
+
+  fulfill: async (
+    orderId: number,
+    payload: {
+      tracking_code: string;
+      carrier_name?: string;
+      ship_date?: string;
+      note?: string;
+      send_bcc?: boolean;
+    }
+  ): Promise<any> => {
+    return apiRequest(`/api/orders/${orderId}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   sync: async (options: OrderSyncOptions & OrderQueryOptions = {}) => {
     const params = new URLSearchParams();
     if (options.forceFullSync) {
@@ -507,6 +539,11 @@ export const ordersApi = {
 
     const url = params.toString() ? `/api/orders/sync?${params.toString()}` : '/api/orders/sync';
     return apiRequest<any>(url, {
+      method: 'POST',
+    });
+  },
+  markViewed: async (): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>('/api/orders/mark-viewed', {
       method: 'POST',
     });
   },
@@ -673,6 +710,8 @@ export interface UserPermissions {
   can_create_products: boolean;
   can_generate_ai: boolean;
   can_publish_listings: boolean;
+  can_assign_orders?: boolean;
+  can_update_fulfillment?: boolean;
   is_owner: boolean;
 }
 
@@ -750,6 +789,7 @@ export interface DashboardStats {
   total_customers: number;
   total_orders: number;
   active_listings: number;
+  new_orders_unread: number;
   changes: {
     products: number;
     customers: number;
@@ -812,8 +852,13 @@ export const notificationsApi = {
     return apiRequest<Notification[]>(`/api/notifications/?${params.toString()}`);
   },
 
-  getUnreadCount: async (): Promise<{ count: number }> => {
-    return apiRequest<{ count: number }>('/api/notifications/unread-count');
+  getUnreadCount: async (type?: string): Promise<{ count: number }> => {
+    const params = new URLSearchParams();
+    if (type) {
+      params.append('type', type);
+    }
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return apiRequest<{ count: number }>(`/api/notifications/unread-count${query}`);
   },
 
   markAsRead: async (notificationId: number): Promise<{ message: string }> => {
@@ -824,6 +869,12 @@ export const notificationsApi = {
 
   markAllAsRead: async (): Promise<{ message: string; count: number }> => {
     return apiRequest<{ message: string; count: number }>('/api/notifications/mark-all-read', {
+      method: 'POST',
+    });
+  },
+  markReadByType: async (type: string): Promise<{ message: string; count: number }> => {
+    const query = `?type=${encodeURIComponent(type)}`;
+    return apiRequest<{ message: string; count: number }>(`/api/notifications/mark-read-by-type${query}`, {
       method: 'POST',
     });
   },

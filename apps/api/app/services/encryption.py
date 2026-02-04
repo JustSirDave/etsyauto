@@ -2,11 +2,14 @@
 Token Encryption Service
 Encrypts/decrypts OAuth tokens using AES-GCM
 """
+import base64
+import logging
+import os
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.backends import default_backend
-import os
-import base64
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class TokenEncryption:
@@ -24,7 +27,7 @@ class TokenEncryption:
         else:
             # Generate a random 32-byte key for development (NOT RECOMMENDED for production)
             self.key = AESGCM.generate_key(bit_length=256)
-            print("WARNING: Using randomly generated encryption key. Set ENCRYPTION_KEY in .env for production!")
+            logger.warning("Using randomly generated encryption key. Set ENCRYPTION_KEY in .env for production!")
 
         self.aesgcm = AESGCM(self.key)
 

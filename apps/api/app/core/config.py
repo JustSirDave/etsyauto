@@ -2,8 +2,11 @@
 Application Configuration
 Using Pydantic Settings for environment variable management
 """
+import logging
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -74,7 +77,7 @@ class Settings(BaseSettings):
                     self.JWT_PUBLIC_KEY = f.read()
             except FileNotFoundError:
                 if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
-                    print("⚠️  Warning: JWT keys not found in files or environment. Authentication will not work.")
+                    logger.warning("JWT keys not found in files or environment. Authentication will not work.")
 
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]

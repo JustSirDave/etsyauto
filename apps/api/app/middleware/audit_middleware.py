@@ -2,17 +2,21 @@
 Audit Logging Middleware
 Automatically logs HTTP requests and responses for audit trail
 """
+import json
+import logging
+import time
+import uuid
+from typing import Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.datastructures import Headers
-from typing import Callable
-import time
-import uuid
-import json
 
 from app.core.database import get_db
 from app.services.audit_service import AuditService
 from app.models.audit_constants import AuditStatus
+
+logger = logging.getLogger(__name__)
 
 
 class AuditMiddleware(BaseHTTPMiddleware):
@@ -107,7 +111,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     db.close()
         except Exception as e:
             # Don't fail the request if audit logging fails
-            print(f"Audit logging failed: {str(e)}")
+            logger.error(f"Audit logging failed: {str(e)}")
         
         # Add request ID to response headers
         response.headers["X-Request-ID"] = request_id

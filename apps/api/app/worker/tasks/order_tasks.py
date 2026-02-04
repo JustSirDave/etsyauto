@@ -4,12 +4,13 @@ Handles syncing orders from Etsy to local database
 """
 import asyncio
 import logging
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import Order
+from app.models.listings import Order, AuditLog, Product, SupplierOrderAssignment, SupplierProductAssignment
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
 from app.services.rate_limiter import get_rate_limiter
@@ -211,15 +212,28 @@ async def _sync_shop_orders(
                 )
 
                 # Extract comprehensive order data
-                    order_data = await _extract_order_data(
-                        receipt,
-                        shop.id,
-                        shop.tenant_id,
-                        shop.etsy_shop_id,
-                        etsy_client,
-                    )
+                order_data = await _extract_order_data(
+                    receipt,
+                    shop.id,
+                    shop.tenant_id,
+                    shop.etsy_shop_id,
+                    etsy_client,
+                )
 
                 if existing_order:
+                    if (
+                        existing_order.etsy_updated_at
+                        and order_data.get("etsy_updated_at")
+                        and order_data["etsy_updated_at"] < existing_order.etsy_updated_at
+                    ):
+                        logger.info(
+                            f"Skipping stale update for receipt {receipt_id} "
+                            f"(etsy_updated_at {order_data['etsy_updated_at']} < {existing_order.etsy_updated_at})"
+                        )
+                        continue
+
+                    _log_order_mismatch(db, existing_order, order_data)
+
                     # Update existing order with all fields
                     for key, value in order_data.items():
                         if hasattr(existing_order, key):
@@ -227,11 +241,14 @@ async def _sync_shop_orders(
                     
                     result["orders_updated"] += 1
                     logger.debug(f"Updated order {receipt_id}")
+                    _assign_supplier_from_products(db, existing_order, order_data)
 
                 else:
                     # Create new order with all extracted data
                     order = Order(**order_data)
                     db.add(order)
+                    db.flush()
+                    _assign_supplier_from_products(db, order, order_data)
                     result["orders_created"] += 1
                     logger.debug(f"Created new order {receipt_id}")
 
@@ -271,28 +288,150 @@ async def _sync_shop_orders(
         raise
 
 
-def _map_etsy_status(etsy_status: str) -> str:
+def _derive_payment_status(etsy_status: str, receipt: Dict[str, Any]) -> str:
     """
-    Map Etsy receipt status to our internal status.
-
-    Args:
-        etsy_status: Etsy status string
-
-    Returns:
-        str: Our internal status
+    Derive payment status from Etsy receipt fields.
     """
-    status_map = {
-        "paid": "pending",
-        "completed": "processing",
-        "open": "pending",
-        "payment processing": "pending",
-        "shipped": "shipped",
-        "delivered": "delivered",
-        "canceled": "cancelled",
-        "refunded": "refunded",
-    }
+    is_paid = receipt.get("is_paid")
+    was_paid = receipt.get("was_paid")
+    if is_paid is True or was_paid is True or etsy_status in {"paid", "completed"}:
+        return "paid"
+    return "unpaid"
 
-    return status_map.get(etsy_status, "pending")
+
+def _derive_fulfillment_status(receipt: Dict[str, Any]) -> str:
+    """
+    Derive fulfillment status from Etsy receipt fields.
+    """
+    shipments = receipt.get("shipments", []) or []
+    if any(shipment.get("is_delivered") for shipment in shipments):
+        return "delivered"
+    if shipments or receipt.get("is_shipped") is True or receipt.get("was_shipped") is True:
+        return "shipped"
+    return "unshipped"
+
+
+def _derive_lifecycle_status(etsy_status: str, payment_status: str, fulfillment_status: str) -> str:
+    """
+    Derive lifecycle status from Etsy receipt and fulfillment signals.
+    """
+    if etsy_status in {"canceled", "cancelled"}:
+        return "cancelled"
+    if etsy_status in {"refunded", "fully refunded"}:
+        return "refunded"
+    if fulfillment_status == "delivered" or etsy_status == "completed":
+        return "completed"
+    if fulfillment_status == "shipped":
+        return "in_transit"
+    return "processing"
+
+
+def _legacy_status_from_lifecycle(lifecycle_status: str, fulfillment_status: str) -> str:
+    """
+    Map lifecycle/fulfillment statuses into legacy status field.
+    """
+    if lifecycle_status == "cancelled":
+        return "cancelled"
+    if lifecycle_status == "refunded":
+        return "refunded"
+    if lifecycle_status == "completed":
+        return "delivered" if fulfillment_status == "delivered" else "shipped"
+    if lifecycle_status == "in_transit":
+        return "shipped"
+    if lifecycle_status == "processing":
+        return "processing"
+    return "processing"
+
+
+def _log_order_mismatch(db: SessionLocal, order: Order, order_data: Dict[str, Any]) -> None:
+    """
+    Log an order status mismatch for observability.
+    """
+    mismatch_fields = {}
+    for key in ("etsy_status", "lifecycle_status", "payment_status", "fulfillment_status"):
+        if getattr(order, key, None) != order_data.get(key):
+            mismatch_fields[key] = {
+                "before": getattr(order, key, None),
+                "after": order_data.get(key),
+            }
+    if not mismatch_fields:
+        return
+
+    audit = AuditLog(
+        request_id=str(uuid.uuid4()),
+        actor_user_id=None,
+        actor_email="system",
+        actor_ip=None,
+        tenant_id=order.tenant_id,
+        shop_id=order.shop_id,
+        action="orders.sync.mismatch",
+        target_type="order",
+        target_id=str(order.etsy_receipt_id or order.id),
+        http_method=None,
+        http_path=None,
+        http_status=None,
+        status="success",
+        error_message=None,
+        request_metadata=AuditLog.sanitize_metadata({
+            "order_id": order.id,
+            "etsy_receipt_id": order.etsy_receipt_id,
+            "mismatch": mismatch_fields,
+        }),
+        response_metadata=None,
+        attempt=1,
+        latency_ms=None,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(audit)
+
+
+def _assign_supplier_from_products(
+    db: SessionLocal,
+    order: Order,
+    order_data: Dict[str, Any],
+) -> None:
+    """
+    Auto-assign supplier to an order based on product assignments.
+    """
+    if not order_data.get("line_items"):
+        return
+
+    listing_ids = []
+    for item in order_data.get("line_items", []):
+        if isinstance(item, dict) and item.get("listing_id"):
+            listing_ids.append(str(item["listing_id"]))
+
+    if not listing_ids:
+        return
+
+    products = db.query(Product).filter(
+        Product.shop_id == order.shop_id,
+        Product.etsy_listing_id.in_(listing_ids),
+    ).all()
+
+    for product in products:
+        assignment = db.query(SupplierProductAssignment).filter(
+            SupplierProductAssignment.product_id == product.id
+        ).first()
+        if not assignment:
+            continue
+
+        existing = db.query(SupplierOrderAssignment).filter(
+            SupplierOrderAssignment.order_id == order.id
+        ).first()
+        if existing:
+            return
+
+        supplier_order = SupplierOrderAssignment(
+            tenant_id=order.tenant_id,
+            shop_id=order.shop_id,
+            order_id=order.id,
+            supplier_user_id=assignment.supplier_user_id,
+            assigned_by_user_id=assignment.assigned_by_user_id,
+            assigned_at=datetime.now(timezone.utc),
+        )
+        db.add(supplier_order)
+        return
 
 
 async def _extract_order_data(
@@ -314,6 +453,9 @@ async def _extract_order_data(
         dict: Order data ready for database insertion/update
     """
     etsy_status = receipt.get("status", "").lower()
+    payment_status = _derive_payment_status(etsy_status, receipt)
+    fulfillment_status = _derive_fulfillment_status(receipt)
+    lifecycle_status = _derive_lifecycle_status(etsy_status, payment_status, fulfillment_status)
     
     # Get buyer information
     buyer_email = receipt.get("buyer_email", "")
@@ -427,8 +569,11 @@ async def _extract_order_data(
         "etsy_receipt_id": str(receipt.get("receipt_id")),
         "shop_id": shop_id,
         "tenant_id": tenant_id,
-        "status": _map_etsy_status(etsy_status),
+        "status": _legacy_status_from_lifecycle(lifecycle_status, fulfillment_status),
         "etsy_status": etsy_status,
+        "lifecycle_status": lifecycle_status,
+        "payment_status": payment_status,
+        "fulfillment_status": fulfillment_status,
         
         # Buyer info
         "buyer_user_id": buyer_user_id,
@@ -525,10 +670,24 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
         )
 
         if existing_order:
+            if (
+                existing_order.etsy_updated_at
+                and order_data.get("etsy_updated_at")
+                and order_data["etsy_updated_at"] < existing_order.etsy_updated_at
+            ):
+                return {
+                    "success": True,
+                    "order_id": existing_order.id,
+                    "action": "skipped_stale"
+                }
+
+            _log_order_mismatch(db, existing_order, order_data)
+
             # Update with all extracted data
             for key, value in order_data.items():
                 if hasattr(existing_order, key):
                     setattr(existing_order, key, value)
+            _assign_supplier_from_products(db, existing_order, order_data)
             
             db.commit()
 
@@ -542,6 +701,8 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
             # Create new order
             order = Order(**order_data)
             db.add(order)
+            db.flush()
+            _assign_supplier_from_products(db, order, order_data)
             db.commit()
 
             return {
@@ -558,5 +719,104 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
         logger.exception(f"Error syncing order {receipt_id}: {e}")
         return {"success": False, "error": str(e)}
 
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.worker.tasks.order_tasks.reconcile_orders")
+def reconcile_orders(shop_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
+    """
+    Periodic task to reconcile order states with Etsy.
+
+    Args:
+        shop_id: Optional specific shop ID, or None for all shops
+        days: Lookback window for orders to reconcile
+    """
+    db = SessionLocal()
+    try:
+        if shop_id:
+            shops = [db.query(Shop).filter(Shop.id == shop_id).first()]
+            if not shops[0]:
+                return {"success": False, "error": "shop_not_found"}
+        else:
+            shops = db.query(Shop).filter(Shop.status == "connected").all()
+
+        results = {
+            "shops_processed": 0,
+            "orders_checked": 0,
+            "orders_updated": 0,
+            "mismatches_logged": 0,
+        }
+
+        redis_client = get_redis_client()
+        rate_limiter = get_rate_limiter(redis_client)
+        etsy_client = EtsyClient(db, rate_limiter)
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        for shop in shops:
+            if not shop:
+                continue
+            results["shops_processed"] += 1
+
+            orders = db.query(Order).filter(
+                Order.shop_id == shop.id,
+                Order.etsy_receipt_id.isnot(None),
+                (Order.etsy_created_at >= cutoff)
+                | (Order.etsy_updated_at >= cutoff)
+                | (Order.lifecycle_status.in_(["processing", "in_transit"]))
+            ).all()
+
+            for order in orders:
+                try:
+                    receipt = asyncio.run(etsy_client.get_receipt(
+                        shop_id=shop.id,
+                        etsy_shop_id=shop.etsy_shop_id,
+                        receipt_id=str(order.etsy_receipt_id),
+                    ))
+                    order_data = asyncio.run(_extract_order_data(
+                        receipt,
+                        shop.id,
+                        shop.tenant_id,
+                        shop.etsy_shop_id,
+                        etsy_client,
+                    ))
+
+                    results["orders_checked"] += 1
+
+                    if (
+                        order.etsy_updated_at
+                        and order_data.get("etsy_updated_at")
+                        and order_data["etsy_updated_at"] < order.etsy_updated_at
+                    ):
+                        continue
+
+                    if any(
+                        getattr(order, key, None) != order_data.get(key)
+                        for key in ("etsy_status", "lifecycle_status", "payment_status", "fulfillment_status")
+                    ):
+                        _log_order_mismatch(db, order, order_data)
+                        results["mismatches_logged"] += 1
+
+                    updated = False
+                    for key, value in order_data.items():
+                        if hasattr(order, key) and getattr(order, key) != value:
+                            setattr(order, key, value)
+                            updated = True
+
+                    if updated:
+                        results["orders_updated"] += 1
+
+                except Exception as e:
+                    logger.error(f"Failed to reconcile order {order.etsy_receipt_id}: {e}", exc_info=True)
+                    continue
+
+            db.commit()
+
+        return {"success": True, **results}
+
+    except Exception as e:
+        logger.exception(f"Order reconciliation failed: {e}")
+        return {"success": False, "error": str(e)}
     finally:
         db.close()

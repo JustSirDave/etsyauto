@@ -12,6 +12,7 @@ class Role(str, Enum):
     ADMIN = "admin"
     CREATOR = "creator"
     VIEWER = "viewer"
+    SUPPLIER = "supplier"
 
 
 class Permission(str, Enum):
@@ -43,6 +44,8 @@ class Permission(str, Enum):
     # Order permissions
     READ_ORDER = "read_order"
     SYNC_ORDER = "sync_order"
+    ASSIGN_ORDER = "assign_order"
+    UPDATE_FULFILLMENT = "update_fulfillment"
     
     # Schedule permissions
     CREATE_SCHEDULE = "create_schedule"
@@ -86,6 +89,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         # Order
         Permission.READ_ORDER,
         Permission.SYNC_ORDER,
+        Permission.ASSIGN_ORDER,
+        Permission.UPDATE_FULFILLMENT,
         # Schedule
         Permission.CREATE_SCHEDULE,
         Permission.READ_SCHEDULE,
@@ -121,6 +126,8 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         # Order
         Permission.READ_ORDER,
         Permission.SYNC_ORDER,
+        Permission.ASSIGN_ORDER,
+        Permission.UPDATE_FULFILLMENT,
         # Schedule
         Permission.CREATE_SCHEDULE,
         Permission.READ_SCHEDULE,
@@ -160,6 +167,10 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.READ_ORDER,
         Permission.READ_SCHEDULE,
         Permission.READ_AUDIT_LOG,
+    },
+    Role.SUPPLIER: {
+        Permission.READ_ORDER,
+        Permission.UPDATE_FULFILLMENT,
     },
 }
 
@@ -233,7 +244,7 @@ def can_access_shop(role: str, shop_id: int, allowed_shop_ids: List[int]) -> boo
     if role_enum in (Role.OWNER, Role.ADMIN):
         return True
     
-    # Creator and Viewer are restricted to allowed shops
+    # Creator, Viewer, and Supplier are restricted to allowed shops
     return shop_id in allowed_shop_ids
 
 
@@ -258,6 +269,6 @@ def get_accessible_shop_ids(role: str, tenant_id: int, allowed_shop_ids: List[in
         all_shops = db.query(Shop.id).filter(Shop.tenant_id == tenant_id).all()
         return [shop.id for shop in all_shops]
     
-    # Creator and Viewer are restricted to explicitly allowed shops
+    # Creator, Viewer, and Supplier are restricted to explicitly allowed shops
     return allowed_shop_ids or []
 

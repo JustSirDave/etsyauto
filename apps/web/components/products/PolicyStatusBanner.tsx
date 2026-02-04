@@ -3,7 +3,8 @@
  * Shows policy compliance status and violations with remediation option
  */
 
-import { AlertTriangle, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, CheckCircle, XCircle, RefreshCw, X } from 'lucide-react';
 
 interface PolicyCheck {
   compliant: boolean;
@@ -22,14 +23,16 @@ interface PolicyStatusBannerProps {
 }
 
 export function PolicyStatusBanner({ policyCheck, onRemediate, onRecheck, loading }: PolicyStatusBannerProps) {
-  if (!policyCheck) return null;
+  const [isDismissed, setIsDismissed] = useState(false);
+  
+  if (!policyCheck || isDismissed) return null;
   
   const getStatusConfig = () => {
     switch (policyCheck.policy_status) {
       case 'passed':
         return {
           bg: 'bg-green-50',
-          border: 'border-green-200',
+          border: 'border-green-300',
           text: 'text-green-800',
           icon: CheckCircle,
           iconColor: 'text-green-600',
@@ -38,18 +41,18 @@ export function PolicyStatusBanner({ policyCheck, onRemediate, onRecheck, loadin
         };
       case 'warning':
         return {
-          bg: 'bg-yellow-50',
-          border: 'border-yellow-200',
-          text: 'text-yellow-800',
+          bg: 'bg-red-50',
+          border: 'border-red-300',
+          text: 'text-red-800',
           icon: AlertTriangle,
-          iconColor: 'text-yellow-600',
+          iconColor: 'text-red-600',
           title: '⚠ Policy Warnings',
           message: 'This product has minor policy warnings but can still be published.',
         };
       case 'failed':
         return {
           bg: 'bg-red-50',
-          border: 'border-red-200',
+          border: 'border-red-300',
           text: 'text-red-800',
           icon: XCircle,
           iconColor: 'text-red-600',
@@ -58,11 +61,11 @@ export function PolicyStatusBanner({ policyCheck, onRemediate, onRecheck, loadin
         };
       default:
         return {
-          bg: 'bg-gray-50',
-          border: 'border-gray-200',
-          text: 'text-gray-800',
+          bg: 'bg-red-50',
+          border: 'border-red-300',
+          text: 'text-red-800',
           icon: RefreshCw,
-          iconColor: 'text-gray-600',
+          iconColor: 'text-red-600',
           title: 'Policy Check Pending',
           message: 'Run a policy check before publishing.',
         };
@@ -74,10 +77,10 @@ export function PolicyStatusBanner({ policyCheck, onRemediate, onRecheck, loadin
   
   return (
     <div className={`rounded-lg border-2 ${config.border} ${config.bg} p-4`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3">
-          <Icon className={`w-6 h-6 ${config.iconColor} mt-0.5`} />
-          <div className="flex-1">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start space-x-3 flex-1 min-w-0">
+          <Icon className={`w-6 h-6 ${config.iconColor} mt-0.5 flex-shrink-0`} />
+          <div className="flex-1 min-w-0">
             <h4 className={`font-semibold ${config.text}`}>{config.title}</h4>
             <p className={`text-sm ${config.text} mt-1`}>{config.message}</p>
             
@@ -118,12 +121,12 @@ export function PolicyStatusBanner({ policyCheck, onRemediate, onRecheck, loadin
         </div>
         
         {/* Actions */}
-        <div className="flex flex-col gap-2 ml-4">
+        <div className="flex flex-col gap-2 flex-shrink-0">
           {policyCheck.remediation_required && (
             <button
               onClick={onRemediate}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium disabled:opacity-50 whitespace-nowrap"
             >
               Fix Issues
             </button>
@@ -131,12 +134,21 @@ export function PolicyStatusBanner({ policyCheck, onRemediate, onRecheck, loadin
           <button
             onClick={onRecheck}
             disabled={loading}
-            className="px-4 py-2 bg-white border-2 border-current rounded-lg hover:bg-opacity-10 transition-colors text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 bg-white border-2 border-current rounded-lg hover:bg-opacity-10 transition-colors text-sm font-medium disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
           >
             <RefreshCw className="w-4 h-4" />
             Re-check
           </button>
         </div>
+        
+        {/* Close Button */}
+        <button
+          onClick={() => setIsDismissed(true)}
+          className={`p-1 ${config.iconColor} hover:bg-red-100 rounded transition-colors flex-shrink-0`}
+          aria-label="Dismiss"
+        >
+          <X className="w-5 h-5" />
+        </button>
       </div>
     </div>
   );

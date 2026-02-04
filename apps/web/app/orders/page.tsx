@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
@@ -14,22 +14,51 @@ import { cn } from '@/lib/utils';
 import { ordersApi, Order, OrderStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useShop } from '@/lib/shop-context';
+import { useAuth } from '@/lib/auth-context';
+import {
+  ORDER_STATUS_BADGE_CLASSES,
+  ORDER_STATUS_CARD_COLORS,
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_STYLES,
+  normalizeOrderStatus,
+  normalizePaymentStatus,
+} from '@/lib/order-status';
 
 function PaymentStatus({ status }: { status: string }) {
-  const styles: Record<string, { dot: string; text: string }> = {
-    pending: { dot: 'bg-[var(--warning)]', text: 'text-[var(--warning)]' },
-    paid: { dot: 'bg-[var(--success)]', text: 'text-[var(--success)]' },
-    failed: { dot: 'bg-[var(--danger)]', text: 'text-[var(--danger)]' },
-    cancelled: { dot: 'bg-[var(--text-muted)]', text: 'text-[var(--text-muted)]' },
-  };
-  const style = styles[status] || styles.pending;
-  return <div className="flex items-center gap-2"><span className={cn('w-2 h-2 rounded-full', style.dot)} /><span className={cn('text-sm', style.text)}>{status.charAt(0).toUpperCase() + status.slice(1)}</span></div>;
+  const normalized = normalizePaymentStatus(status);
+  const isPaid = normalized === 'paid';
+  return (
+    <div className="flex items-center gap-2">
+      <span className={isPaid ? 'w-2 h-2 rounded-full bg-green-600' : 'w-2 h-2 rounded-full bg-yellow-500'} />
+      <span className={isPaid ? 'text-sm text-green-600' : 'text-sm text-yellow-700'}>
+        {normalized.charAt(0).toUpperCase() + normalized.slice(1)}
+      </span>
+    </div>
+  );
 }
 
 function OrderStatus({ status }: { status: string }) {
-  const styles: Record<string, string> = { delivered: 'bg-[var(--success-bg)] text-[var(--success)]', dispatched: 'bg-[var(--info-bg)] text-[var(--info)]', out_for_delivery: 'bg-[var(--warning-bg)] text-[var(--warning)]', pending: 'bg-[var(--primary-bg)] text-[var(--primary)]' };
-  const labels: Record<string, string> = { delivered: 'Delivered', dispatched: 'Dispatched', out_for_delivery: 'Out for Delivery', pending: 'Pending' };
-  return <span className={cn('inline-flex px-2.5 py-1 rounded-md text-xs font-medium', styles[status] || styles.pending)}>{labels[status] || status}</span>;
+  const normalized = normalizeOrderStatus(status);
+  
+  let badgeClass = '';
+  switch (normalized) {
+    case 'completed':
+      badgeClass = 'bg-green-50 text-green-700';
+      break;
+    case 'in_transit':
+      badgeClass = 'bg-yellow-50 text-yellow-700';
+      break;
+    case 'cancelled':
+      badgeClass = 'bg-red-50 text-red-700';
+      break;
+    case 'refunded':
+      badgeClass = 'bg-gray-200 text-gray-800';
+      break;
+    default:
+      badgeClass = 'bg-gray-100 text-gray-700';
+  }
+  
+  return <span className={`inline-flex px-2.5 py-1 rounded-md text-xs font-medium ${badgeClass}`}>{ORDER_STATUS_LABELS[normalized]}</span>;
 }
 
 function CustomerAvatar({ customer }: { customer: { name: string; initials: string } }) {
@@ -40,8 +69,10 @@ function CustomerAvatar({ customer }: { customer: { name: string; initials: stri
 
 function OrdersContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const { selectedShopId } = useShop();
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
@@ -70,6 +101,9 @@ function OrdersContent() {
     }
   };
 
+  const statusFilter = searchParams.get('status') || undefined;
+  const paymentFilter = searchParams.get('payment_status') || undefined;
+
   // Load stats
   const loadStats = async () => {
     try {
@@ -87,7 +121,7 @@ function OrdersContent() {
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const data = await ordersApi.getAll(currentPage, pageSize, undefined, undefined, {
+      const data = await ordersApi.getAll(currentPage, pageSize, statusFilter, paymentFilter, {
         shopId: selectedShopId,
       });
       setOrders(data.orders);
@@ -105,8 +139,16 @@ function OrdersContent() {
   }, [selectedShopId]);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, paymentFilter]);
+
+  useEffect(() => {
     loadOrders();
-  }, [currentPage, pageSize, selectedShopId]);
+  }, [currentPage, pageSize, selectedShopId, statusFilter, paymentFilter]);
+
+  useEffect(() => {
+    ordersApi.markViewed().catch(() => null);
+  }, []);
 
   // Filter orders by search query
   const filteredOrders = orders.filter(order => {
@@ -133,34 +175,136 @@ function OrdersContent() {
     });
   };
 
-  const statsData = [
-    { title: 'Pending Payment', value: stats?.pending_payment || 0, icon: <Calendar className="w-6 h-6" />, color: 'primary' },
-    { title: 'Completed', value: stats?.completed || 0, icon: <CheckCircle className="w-6 h-6" />, color: 'success' },
-    { title: 'Refunded', value: stats?.refunded || 0, icon: <RotateCcw className="w-6 h-6" />, color: 'warning' },
-    { title: 'Failed', value: stats?.failed || 0, icon: <XCircle className="w-6 h-6" />, color: 'danger' },
-  ];
+  const orderStatsData = [
+    { key: 'processing', title: 'Processing', value: stats?.order_status.processing || 0, icon: <Calendar className="w-6 h-6" /> },
+    { key: 'in_transit', title: 'In Transit', value: stats?.order_status.in_transit || 0, icon: <RefreshCcw className="w-6 h-6" /> },
+    { key: 'completed', title: 'Completed', value: stats?.order_status.completed || 0, icon: <CheckCircle className="w-6 h-6" /> },
+    { key: 'cancelled', title: 'Cancelled', value: stats?.order_status.cancelled || 0, icon: <XCircle className="w-6 h-6" /> },
+    { key: 'refunded', title: 'Refunded', value: stats?.order_status.refunded || 0, icon: <RotateCcw className="w-6 h-6" /> },
+  ] as const;
+
+  const paymentStatsData = [
+    { key: 'paid', title: 'Paid', value: stats?.payment_status.paid || 0 },
+    { key: 'unpaid', title: 'Unpaid', value: stats?.payment_status.unpaid || 0 },
+  ] as const;
 
   const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsData.map((stat, i) => (
-          <div key={i} className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                {loadingStats ? (
-                  <div className="w-16 h-9 bg-[var(--background)] animate-pulse rounded" />
-                ) : (
-                  <p className="text-3xl font-bold text-[var(--text-primary)]">{stat.value.toLocaleString()}</p>
-                )}
-                <p className="text-[var(--text-muted)] text-sm mt-1">{stat.title}</p>
-              </div>
-              <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', stat.color === 'primary' && 'bg-[var(--primary-bg)] text-[var(--primary)]', stat.color === 'success' && 'bg-[var(--success-bg)] text-[var(--success)]', stat.color === 'warning' && 'bg-[var(--warning-bg)] text-[var(--warning)]', stat.color === 'danger' && 'bg-[var(--danger-bg)] text-[var(--danger)]')}>{stat.icon}</div>
-            </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
+        {/* Order Status - Left Column */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Order Status</h2>
+            {(statusFilter || paymentFilter) && (
+              <button
+                onClick={() => router.push('/orders')}
+                className="text-xs text-[var(--primary)] hover:underline"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
-        ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {orderStatsData.map((stat) => {
+              const colors = ORDER_STATUS_CARD_COLORS[stat.key];
+              const isActive = statusFilter === stat.key;
+              
+              let borderColorClass = '';
+              let iconColorClass = '';
+              
+              switch (stat.key) {
+                case 'completed':
+                  borderColorClass = 'border-green-300';
+                  iconColorClass = 'text-green-600';
+                  break;
+                case 'in_transit':
+                  borderColorClass = 'border-yellow-300';
+                  iconColorClass = 'text-yellow-600';
+                  break;
+                case 'cancelled':
+                  borderColorClass = 'border-red-300';
+                  iconColorClass = 'text-red-600';
+                  break;
+                case 'refunded':
+                  borderColorClass = 'border-gray-400';
+                  iconColorClass = 'text-gray-600';
+                  break;
+                default:
+                  borderColorClass = 'border-gray-300';
+                  iconColorClass = 'text-gray-600';
+              }
+              
+              return (
+                <button
+                  key={stat.key}
+                  onClick={() => router.push(`/orders?status=${stat.key}`)}
+                  className={cn(
+                    'bg-[var(--card-bg)] border-2 rounded-xl p-5 text-left transition-colors hover:border-[var(--primary)]',
+                    borderColorClass,
+                    isActive && 'ring-1 ring-[var(--primary)]'
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      {loadingStats ? (
+                        <div className="w-16 h-9 bg-[var(--background)] animate-pulse rounded" />
+                      ) : (
+                        <p className="text-3xl font-bold text-[var(--text-primary)]">{stat.value.toLocaleString()}</p>
+                      )}
+                      <p className="text-[var(--text-muted)] text-sm mt-1">{stat.title}</p>
+                    </div>
+                    <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', colors.bg)}>
+                      <div className={iconColorClass}>
+                        {stat.icon}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Payment Status - Right Column */}
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment Status</h2>
+          <div className="grid grid-cols-1 gap-4">
+            {paymentStatsData.map((stat) => {
+              const paymentStyle = PAYMENT_STATUS_STYLES[stat.key];
+              const isActive = paymentFilter === stat.key;
+              const borderColorClass = stat.key === 'paid' ? 'border-green-300' : 'border-yellow-300';
+              const dotColorClass = stat.key === 'paid' ? 'bg-green-600' : 'bg-yellow-500';
+              
+              return (
+                <button
+                  key={stat.key}
+                  onClick={() => router.push(`/orders?payment_status=${stat.key}`)}
+                  className={cn(
+                    'bg-[var(--card-bg)] border-2 rounded-xl p-5 text-left transition-colors hover:border-[var(--primary)]',
+                    borderColorClass,
+                    isActive && 'ring-1 ring-[var(--primary)]'
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      {loadingStats ? (
+                        <div className="w-16 h-9 bg-[var(--background)] animate-pulse rounded" />
+                      ) : (
+                        <p className="text-3xl font-bold text-[var(--text-primary)]">{stat.value.toLocaleString()}</p>
+                      )}
+                      <p className="text-[var(--text-muted)] text-sm mt-1">{stat.title}</p>
+                    </div>
+                    <div className={cn('w-12 h-12 rounded-lg flex items-center justify-center', paymentStyle.bg)}>
+                      <span className={cn('w-4 h-4 rounded-full', dotColorClass)} />
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Table */}
@@ -168,14 +312,16 @@ function OrdersContent() {
         <div className="p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-[var(--border-color)]">
           <div className="w-full sm:w-80"><SearchInput placeholder="Search Order" value={searchQuery} onChange={setSearchQuery} /></div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleSyncOrders}
-              disabled={syncing}
-              className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCcw className={cn('w-4 h-4', syncing && 'animate-spin')} />
-              <span>{syncing ? 'Syncing...' : 'Sync Orders'}</span>
-            </button>
+            {(user?.role === 'owner' || user?.role === 'admin') && (
+              <button
+                onClick={handleSyncOrders}
+                disabled={syncing}
+                className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCcw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+                <span>{syncing ? 'Syncing...' : 'Sync Orders'}</span>
+              </button>
+            )}
             <PageSizeDropdown value={pageSize} onChange={setPageSize} />
           </div>
         </div>
@@ -235,10 +381,10 @@ function OrdersContent() {
                       </div>
                     </td>
                     <td className="py-4 px-5"><PaymentStatus status={order.payment_status} /></td>
-                    <td className="py-4 px-5"><OrderStatus status={order.status} /></td>
+                    <td className="py-4 px-5"><OrderStatus status={order.lifecycle_status || order.status} /></td>
                     <td className="py-4 px-5">
                       <span className="font-medium text-[var(--text-primary)]">
-                        {order.currency} {order.total_price.toFixed(2)}
+                        {order.total_price === null ? '--' : `${order.currency} ${order.total_price.toFixed(2)}`}
                       </span>
                     </td>
                     <td className="py-4 px-5"><TableActions onView={() => router.push(`/orders/${order.id}`)} onDelete={() => showToast('Delete functionality coming soon', 'info')} /></td>

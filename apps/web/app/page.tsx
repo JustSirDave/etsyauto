@@ -9,6 +9,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
@@ -16,6 +17,8 @@ import { useShop } from '@/lib/shop-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import OnboardingModal from '@/components/OnboardingModal';
 import { onboardingApi, dashboardApi, type DashboardStats, type DashboardOrder } from '@/lib/api';
+import { PAYMENT_STATUS_STYLES, normalizePaymentStatus } from '@/lib/order-status';
+import { cn } from '@/lib/utils';
 import {
   Package,
   Users,
@@ -135,17 +138,29 @@ function MetricCard({
   label,
   change,
   iconBg,
+  href,
+  badgeCount,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   value: string | number;
   label: string;
   change: number;
   iconBg: string;
+  href: string;
+  badgeCount?: number;
 }) {
   const isPositive = change >= 0;
 
   return (
-    <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 h-full flex flex-col justify-between">
+    <Link
+      href={href}
+      className="relative bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5 h-full flex flex-col justify-between hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-colors"
+    >
+      {badgeCount && badgeCount > 0 && (
+        <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-xs font-medium bg-[var(--primary-bg)] text-[var(--primary)]">
+          {badgeCount}
+        </span>
+      )}
       <div className="flex items-start justify-between mb-4">
         <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
           <Icon className="w-6 h-6 text-white" />
@@ -159,7 +174,7 @@ function MetricCard({
         <p className="text-3xl font-bold text-[var(--text-primary)] mb-1">{value}</p>
         <p className="text-[var(--text-muted)] text-sm">{label}</p>
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -178,17 +193,13 @@ function TransactionRow({
   customer: string;
   date: string;
   amount: string;
-  status: 'paid' | 'pending' | 'refunded' | 'processing';
+  status: 'paid' | 'unpaid';
   onMessage: () => void;
-  statusLabels: Record<'paid' | 'pending' | 'refunded' | 'processing', string>;
+  statusLabels: Record<'paid' | 'unpaid', string>;
   messageLabel: string;
 }) {
-  const statusStyles = {
-    paid: 'bg-[var(--success-bg)] text-[var(--success)]',
-    pending: 'bg-[var(--warning-bg)] text-[var(--warning)]',
-    refunded: 'bg-[var(--danger-bg)] text-[var(--danger)]',
-    processing: 'bg-[var(--info-bg)] text-[var(--info)]',
-  };
+  const normalized = normalizePaymentStatus(status);
+  const statusStyle = PAYMENT_STATUS_STYLES[normalized];
 
   return (
     <div className="grid grid-cols-[100px_1fr_120px_100px_100px_120px] gap-4 items-center py-4 border-b border-[var(--border-color)] last:border-0">
@@ -208,8 +219,8 @@ function TransactionRow({
         <p className="text-[var(--text-primary)] font-semibold">{amount}</p>
       </div>
       <div>
-        <span className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${statusStyles[status]}`}>
-          {statusLabels[status]}
+        <span className={cn('inline-flex px-3 py-1 rounded-full text-xs font-medium', statusStyle.bg, statusStyle.text)}>
+          {statusLabels[normalized]}
         </span>
       </div>
       <div>
@@ -247,9 +258,18 @@ function DashboardContent() {
     loadTransactions();
   }, [selectedShopId]);
 
-  const loadMetrics = async () => {
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadMetrics(true);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [selectedShopId]);
+
+  const loadMetrics = async (silent: boolean = false) => {
     try {
-      setLoadingMetrics(true);
+      if (!silent) {
+        setLoadingMetrics(true);
+      }
       const data = await dashboardApi.getStats({ shopId: selectedShopId });
       setMetrics(data);
     } catch (error) {
@@ -260,6 +280,7 @@ function DashboardContent() {
         total_customers: 0,
         total_orders: 0,
         active_listings: 0,
+        new_orders_unread: 0,
         changes: {
           products: 0,
           customers: 0,
@@ -268,7 +289,9 @@ function DashboardContent() {
         },
       });
     } finally {
-      setLoadingMetrics(false);
+      if (!silent) {
+        setLoadingMetrics(false);
+      }
     }
   };
 
@@ -400,6 +423,7 @@ function DashboardContent() {
                 label={t('dashboard.totalProducts')}
                 change={metrics?.changes.products || 0}
                 iconBg="bg-[var(--primary)]"
+                href="/products"
               />
               <MetricCard
                 icon={Users}
@@ -407,6 +431,7 @@ function DashboardContent() {
                 label={t('dashboard.totalCustomers')}
                 change={metrics?.changes.customers || 0}
                 iconBg="bg-[var(--info)]"
+                href="/orders"
               />
               <MetricCard
                 icon={ShoppingCart}
@@ -414,6 +439,8 @@ function DashboardContent() {
                 label={t('dashboard.totalOrders')}
                 change={metrics?.changes.orders || 0}
                 iconBg="bg-[var(--warning)]"
+                href="/orders"
+                badgeCount={metrics?.new_orders_unread || 0}
               />
               <MetricCard
                 icon={FileText}
@@ -421,6 +448,7 @@ function DashboardContent() {
                 label={t('dashboard.activeListings')}
                 change={metrics?.changes.listings || 0}
                 iconBg="bg-[var(--success)]"
+                href="/listings"
               />
             </>
           )}
@@ -472,13 +500,11 @@ function DashboardContent() {
                 customer={transaction.customer}
                 date={transaction.date}
                 amount={transaction.amount}
-                status={transaction.status as 'paid' | 'pending' | 'refunded' | 'processing'}
+                status={transaction.payment_status as 'paid' | 'unpaid'}
                 onMessage={() => handleMessageCustomer(transaction.customer)}
                 statusLabels={{
                   paid: t('dashboard.status.paid'),
-                  pending: t('dashboard.status.pending'),
-                  refunded: t('dashboard.status.refunded'),
-                  processing: t('dashboard.status.processing'),
+                  unpaid: t('dashboard.status.unpaid'),
                 }}
                 messageLabel={t('dashboard.message')}
               />

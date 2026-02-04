@@ -36,7 +36,7 @@ CORS_HEADERS = {
 class InviteMemberRequest(BaseModel):
     email: EmailStr
     name: str
-    role: str  # owner, admin, creator, viewer
+    role: str  # owner, admin, creator, viewer, supplier
 
     class Config:
         json_schema_extra = {
@@ -132,7 +132,7 @@ async def invite_team_member(
     tenant_id = context.tenant_id
 
     # Validate role
-    valid_roles = ["owner", "admin", "creator", "viewer"]
+    valid_roles = ["owner", "admin", "creator", "viewer", "supplier"]
     if request.role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -398,7 +398,7 @@ async def update_member_role(
     current_user_role = context.role
 
     # Validate role
-    valid_roles = ["owner", "admin", "creator", "viewer"]
+    valid_roles = ["owner", "admin", "creator", "viewer", "supplier"]
     if request.role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -459,7 +459,7 @@ async def update_member_shop_access(
     db: Session = Depends(get_db)
 ):
     """
-    Update per-shop access for a team member (creator/viewer only).
+    Update per-shop access for a team member (creator/viewer/supplier only).
     Requires: MANAGE_TEAM permission (Owner, Admin)
     """
     tenant_id = context.tenant_id
@@ -478,10 +478,10 @@ async def update_member_shop_access(
     if not membership:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this organization")
 
-    if membership.role not in ("creator", "viewer"):
+    if membership.role not in ("creator", "viewer", "supplier"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Shop access can only be configured for creator/viewer roles"
+            detail="Shop access can only be configured for creator/viewer/supplier roles"
         )
 
     # Validate shop IDs belong to tenant
@@ -592,6 +592,8 @@ async def get_my_role(
             "can_create_products": has_permission(context.role, Permission.CREATE_PRODUCT),
             "can_generate_ai": has_permission(context.role, Permission.GENERATE_CONTENT),
             "can_publish_listings": has_permission(context.role, Permission.PUBLISH_LISTING),
+            "can_assign_orders": has_permission(context.role, Permission.ASSIGN_ORDER),
+            "can_update_fulfillment": has_permission(context.role, Permission.UPDATE_FULFILLMENT),
             "is_owner": context.role == "owner",
         }
     }

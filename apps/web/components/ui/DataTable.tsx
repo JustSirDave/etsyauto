@@ -103,13 +103,13 @@ export function PageSizeDropdown({ value, onChange, options = [7, 10, 25, 50] }:
       <select
         value={value}
         onChange={(e) => onChange?.(Number(e.target.value))}
-        className="appearance-none px-4 py-2.5 pr-10 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition cursor-pointer"
+        className="appearance-none px-4 py-3 pr-10 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition cursor-pointer"
       >
         {options.map((opt) => (
           <option key={opt} value={opt}>{opt}</option>
         ))}
       </select>
-      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)] pointer-events-none" />
+      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)] pointer-events-none" />
     </div>
   )
 }

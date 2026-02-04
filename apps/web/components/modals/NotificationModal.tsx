@@ -36,30 +36,30 @@ export function NotificationModal({
   const typeConfig = {
     success: {
       icon: CheckCircle,
-      iconColor: 'text-[var(--success)]',
-      bgColor: 'bg-[var(--success-bg)]',
-      borderColor: 'border-[var(--success)]/30',
+      iconColor: 'text-green-600',
+      bgColor: 'bg-green-50',
+      borderColor: 'border-green-300',
       title: 'Success!'
     },
     error: {
       icon: XCircle,
-      iconColor: 'text-[var(--danger)]',
-      bgColor: 'bg-[var(--danger-bg)]',
-      borderColor: 'border-[var(--danger)]/30',
+      iconColor: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-300',
       title: 'Error'
     },
     warning: {
       icon: AlertCircle,
-      iconColor: 'text-[var(--warning)]',
-      bgColor: 'bg-[var(--warning-bg)]',
-      borderColor: 'border-[var(--warning)]/30',
+      iconColor: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-300',
       title: 'Warning'
     },
     info: {
       icon: Info,
-      iconColor: 'text-[var(--info)]',
-      bgColor: 'bg-[var(--info-bg)]',
-      borderColor: 'border-[var(--info)]/30',
+      iconColor: 'text-red-600',
+      bgColor: 'bg-red-50',
+      borderColor: 'border-red-300',
       title: 'Info'
     }
   };

@@ -14,7 +14,7 @@ import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
   Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, XCircle,
-  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X,
+  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -232,8 +232,20 @@ function SettingsContent() {
     }
   };
 
-  const getRoleColor = (role: string) => ({ owner: 'text-[var(--warning)] bg-[var(--warning-bg)]', admin: 'text-[var(--primary)] bg-[var(--primary-bg)]', creator: 'text-[var(--info)] bg-[var(--info-bg)]', viewer: 'text-[var(--text-muted)] bg-[var(--background)]' }[role] || 'text-[var(--text-muted)] bg-[var(--background)]');
-  const getRoleIcon = (role: string) => ({ owner: <Crown className="w-4 h-4" />, admin: <Shield className="w-4 h-4" />, creator: <Edit className="w-4 h-4" />, viewer: <Eye className="w-4 h-4" /> }[role] || <Users className="w-4 h-4" />);
+  const getRoleColor = (role: string) => ({
+    owner: 'text-[var(--warning)] bg-[var(--warning-bg)]',
+    admin: 'text-[var(--primary)] bg-[var(--primary-bg)]',
+    creator: 'text-[var(--info)] bg-[var(--info-bg)]',
+    viewer: 'text-[var(--text-muted)] bg-[var(--background)]',
+    supplier: 'text-[var(--success)] bg-[var(--success-bg)]',
+  }[role] || 'text-[var(--text-muted)] bg-[var(--background)]');
+  const getRoleIcon = (role: string) => ({
+    owner: <Crown className="w-4 h-4" />,
+    admin: <Shield className="w-4 h-4" />,
+    creator: <Edit className="w-4 h-4" />,
+    viewer: <Eye className="w-4 h-4" />,
+    supplier: <Truck className="w-4 h-4" />,
+  }[role] || <Users className="w-4 h-4" />);
   const getShopAccessLabel = (member: TeamMember) => {
     if (member.role === 'owner' || member.role === 'admin') return 'All shops';
     const count = member.allowed_shop_ids?.length || 0;
@@ -440,7 +452,7 @@ function SettingsContent() {
                       <span className="px-2 py-1 rounded-full text-xs bg-[var(--background)] text-[var(--text-muted)] border border-[var(--border-color)]">
                         {getShopAccessLabel(member)}
                       </span>
-                      {canManageTeam && member.user_id !== user?.id && (member.role === 'creator' || member.role === 'viewer') && (
+                      {canManageTeam && member.user_id !== user?.id && (member.role === 'creator' || member.role === 'viewer' || member.role === 'supplier') && (
                         <button
                           onClick={() => openShopAccessModal(member)}
                           className="px-3 py-1.5 text-xs bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -518,6 +530,19 @@ function SettingsContent() {
                   </p>
                 </div>
               </div>
+              <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
+                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('supplier'))}>
+                  {getRoleIcon('supplier')}
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-[var(--text-primary)]">Supplier</h3>
+                  </div>
+                  <p className="text-sm text-[var(--text-muted)]">
+                    Limited access to assigned orders only. Can update shipment and tracking details, but cannot view pricing, manage listings, or access team settings.
+                  </p>
+                </div>
+              </div>
             </div>
           </DashboardCard>
         </div>
@@ -533,7 +558,19 @@ function SettingsContent() {
             <div className="space-y-4">
               <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Email</label><input type="email" value={inviteForm.email} onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" /></div>
               <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Name</label><input type="text" value={inviteForm.name} onChange={e => setInviteForm({ ...inviteForm, name: e.target.value })} className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]" /></div>
-              <div><label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Role</label><select value={inviteForm.role} onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })} className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"><option value="creator">Creator</option><option value="admin">Admin</option><option value="viewer">Viewer</option></select></div>
+              <div>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Role</label>
+                <select
+                  value={inviteForm.role}
+                  onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })}
+                  className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                >
+                  <option value="creator">Creator</option>
+                  <option value="admin">Admin</option>
+                  <option value="viewer">Viewer</option>
+                  <option value="supplier">Supplier</option>
+                </select>
+              </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowInviteModal(false)} className="flex-1 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg">Cancel</button>

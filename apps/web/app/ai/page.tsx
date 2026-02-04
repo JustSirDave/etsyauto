@@ -22,6 +22,7 @@ import { aiApi, productsApi, AIStats, AIGeneration, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { parseAIError, AIErrorDetails } from '@/lib/ai-error-handler';
 import { AIErrorModal } from '@/components/modals/AIErrorModal';
+import { Alert } from '@/components/ui/Alert';
 
 // Recent Generation Item
 function RecentGeneration({
@@ -163,11 +164,7 @@ export default function AIGenerationPage() {
 
   // Handle Title Generation
   const handleGenerateTitle = async () => {
-    console.log('[AI Generation] Title generation started');
-    console.log('[AI Generation] Selected product ID:', selectedProductId);
-
     if (!selectedProductId) {
-      console.warn('[AI Generation] No product selected');
       showToast('Please select a product first to generate a title', 'error');
       return;
     }
@@ -196,7 +193,6 @@ export default function AIGenerationPage() {
       showToast(error.detail || error.message || 'Failed to generate title', 'error');
     } finally {
       setGenerating(false);
-      console.log('[AI Generation] Title generation completed');
     }
   };
 
@@ -268,12 +264,9 @@ export default function AIGenerationPage() {
 
         {/* Info Banner */}
         {!selectedProductId && (
-          <div className="bg-[var(--warning-bg)] border border-[var(--warning)] rounded-lg p-3 flex items-center gap-2">
-            <AlertCircle className="w-5 h-5 text-[var(--warning)] flex-shrink-0" />
-            <p className="text-sm text-[var(--warning)]">
-              Select a product below to enable AI generation features
-            </p>
-          </div>
+          <Alert>
+            Select a product below to enable AI generation features
+          </Alert>
         )}
 
         {/* Stats and Quick Actions */}

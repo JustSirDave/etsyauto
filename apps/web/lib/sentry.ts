@@ -114,8 +114,6 @@ export function initSentryClient() {
       'Failed to fetch'
     ],
   });
-
-  console.log(`✅ Sentry initialized (${ENVIRONMENT})`);
 }
 
 /**

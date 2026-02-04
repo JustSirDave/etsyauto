@@ -198,10 +198,10 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             email_sent = send_verification_email(user.email, user.name, verification_token)
             if not email_sent:
                 # Log warning but don't fail registration
-                print(f"⚠️  Warning: Failed to send verification email to {user.email}, but account was created")
+                logger.warning(f"Failed to send verification email to {user.email}, but account was created")
         except Exception as e:
             # Don't fail registration if email sending fails
-            print(f"⚠️  Warning: Exception sending verification email to {user.email}: {e}")
+            logger.warning(f"Exception sending verification email to {user.email}: {e}")
         
         # Return 202 Accepted - account created but requires email verification
         raise HTTPException(

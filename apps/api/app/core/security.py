@@ -157,10 +157,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 # ==================== OAuth Security ====================
 
-import re
-from typing import Any, Dict
-import logging
-
 
 class SanitizingFormatter(logging.Formatter):
     """

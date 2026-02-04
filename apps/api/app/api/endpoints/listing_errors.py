@@ -60,14 +60,19 @@ async def get_listing_errors(
     
     jobs = query.all()
     
+    # Preload products and shops to avoid N+1 queries
+    product_ids = [job.product_id for job in jobs if job.product_id]
+    shop_ids = [job.shop_id for job in jobs if job.shop_id]
+    
+    products_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+    shops_map = {s.id: s for s in db.query(Shop).filter(Shop.id.in_(shop_ids)).all()} if shop_ids else {}
+    
     # Build error list with context
     errors = []
     for job in jobs:
-        # Get product info
-        product = db.query(Product).filter(Product.id == job.product_id).first() if job.product_id else None
-        
-        # Get shop info
-        shop = db.query(Shop).filter(Shop.id == job.shop_id).first() if job.shop_id else None
+        # Get product and shop from preloaded maps
+        product = products_map.get(job.product_id)
+        shop = shops_map.get(job.shop_id)
         
         errors.append({
             "id": job.id,

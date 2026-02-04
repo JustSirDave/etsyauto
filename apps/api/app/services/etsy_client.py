@@ -435,3 +435,42 @@ class EtsyClient:
             "GET",
             f"/application/shops/{etsy_shop_id}/receipts/{receipt_id}"
         )
+
+    async def create_receipt_shipment(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+        receipt_id: str,
+        tracking_code: str,
+        carrier_name: Optional[str] = None,
+        ship_date: Optional[int] = None,
+        note: Optional[str] = None,
+        send_bcc: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Submit shipment tracking information for a receipt.
+
+        Args:
+            tracking_code: Tracking number
+            carrier_name: Carrier name (optional)
+            ship_date: Unix timestamp (seconds) for shipment date (optional)
+            note: Optional note to buyer
+            send_bcc: If true, sends a BCC email to the shop owner
+        """
+        payload: Dict[str, Any] = {
+            "tracking_code": tracking_code,
+            "send_bcc": send_bcc,
+        }
+        if carrier_name:
+            payload["carrier_name"] = carrier_name
+        if ship_date:
+            payload["ship_date"] = ship_date
+        if note:
+            payload["note"] = note
+
+        return await self._make_request(
+            shop_id,
+            "POST",
+            f"/application/shops/{etsy_shop_id}/receipts/{receipt_id}/tracking",
+            json=payload,
+        )

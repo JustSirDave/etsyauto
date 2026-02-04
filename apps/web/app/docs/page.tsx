@@ -151,8 +151,9 @@ export default function DocsPage() {
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li><strong>Owner:</strong> Full access to all features and settings</li>
                 <li><strong>Admin:</strong> Manage products, listings, and team members</li>
-                <li><strong>Member:</strong> View and edit products and listings</li>
+                <li><strong>Creator:</strong> View and edit products and listings</li>
                 <li><strong>Viewer:</strong> Read-only access to products and orders</li>
+                <li><strong>Supplier:</strong> Limited access to assigned orders; can update tracking only</li>
               </ul>
             </DocSection>
 

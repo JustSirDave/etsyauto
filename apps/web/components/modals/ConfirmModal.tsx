@@ -30,19 +30,19 @@ export function ConfirmModal({
 
   const variantStyles = {
     danger: {
-      icon: 'text-[var(--danger)]',
-      iconBg: 'bg-[var(--danger-bg)]',
-      button: 'bg-[var(--danger)] hover:opacity-90'
+      icon: 'text-red-600',
+      iconBg: 'bg-red-50',
+      button: 'bg-red-600 hover:bg-red-700'
     },
     warning: {
-      icon: 'text-[var(--warning)]',
-      iconBg: 'bg-[var(--warning-bg)]',
-      button: 'bg-[var(--warning)] hover:opacity-90'
+      icon: 'text-red-600',
+      iconBg: 'bg-red-50',
+      button: 'bg-red-600 hover:bg-red-700'
     },
     info: {
-      icon: 'text-[var(--primary)]',
-      iconBg: 'bg-[var(--primary-bg)]',
-      button: 'gradient-primary hover:opacity-90'
+      icon: 'text-red-600',
+      iconBg: 'bg-red-50',
+      button: 'bg-red-600 hover:bg-red-700'
     }
   };
 

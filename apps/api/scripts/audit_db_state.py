@@ -3,11 +3,15 @@
 Database State Audit Script
 Compares actual database state with Alembic migration expectations
 """
+import logging
 import os
 import sys
 from sqlalchemy import create_engine, inspect, text
 from alembic.config import Config
 from alembic.script import ScriptDirectory
+
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger(__name__)
 
 def audit_database_state():
     """Comprehensive audit of database state vs migrations"""

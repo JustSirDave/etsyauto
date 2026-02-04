@@ -4,19 +4,37 @@ Manage Etsy orders and synchronization
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import or_, nullslast
+from sqlalchemy import or_, and_, nullslast
 from sqlalchemy.orm import Session
 from typing import Optional
+from pydantic import BaseModel
+from datetime import datetime, timezone
+import uuid
 
 from app.api.dependencies import get_user_context, UserContext, require_permission, require_any_permission
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
-from app.models.listings import Order
-from app.models.tenancy import Shop
-from app.services.order_utils import build_shipping_address, derive_payment_status
+from app.models.listings import Order, SupplierOrderAssignment, AuditLog
+from app.models.tenancy import Shop, Membership, User
+from app.services.order_utils import build_shipping_address, derive_payment_status, derive_lifecycle_status
+from app.services.etsy_client import EtsyClient
+from app.services.rate_limiter import get_rate_limiter
+from app.core.redis import get_redis_client
 
 router = APIRouter()
+
+
+class AssignSupplierRequest(BaseModel):
+    supplier_user_id: int
+
+
+class FulfillmentRequest(BaseModel):
+    tracking_code: str
+    carrier_name: Optional[str] = None
+    ship_date: Optional[str] = None  # ISO-8601 date/time
+    note: Optional[str] = None
+    send_bcc: bool = False
 
 
 @router.get("/stats", tags=["Orders"])
@@ -37,22 +55,71 @@ async def get_order_stats(
     if shop_id:
         ensure_shop_access(shop_id, context, db)
         base_query = base_query.filter(Order.shop_id == shop_id)
+    if context.role.lower() == "supplier":
+        base_query = base_query.join(
+            SupplierOrderAssignment,
+            SupplierOrderAssignment.order_id == Order.id,
+        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
 
     # Get total order count
     total_orders = base_query.count()
 
-    # Count by lifecycle status (derived payment status is not persisted)
-    pending_payment = base_query.filter(Order.status.in_(["pending", "processing"])).count()
-    completed = base_query.filter(Order.status.in_(["shipped", "delivered"])).count()
-    refunded = base_query.filter(Order.status == "refunded").count()
-    failed = base_query.filter(Order.status == "cancelled").count()
+    processing_filter = or_(
+        Order.lifecycle_status == "processing",
+        and_(
+            Order.lifecycle_status.is_(None),
+            or_(
+                Order.etsy_status.is_(None),
+                ~Order.etsy_status.in_(["completed", "canceled", "cancelled", "refunded", "fully refunded"]),
+            ),
+            or_(Order.fulfillment_status.is_(None), Order.fulfillment_status == "unshipped"),
+        ),
+    )
+    in_transit_filter = or_(
+        Order.lifecycle_status == "in_transit",
+        and_(Order.lifecycle_status.is_(None), Order.fulfillment_status == "shipped"),
+    )
+    completed_filter = or_(
+        Order.lifecycle_status == "completed",
+        and_(
+            Order.lifecycle_status.is_(None),
+            or_(Order.fulfillment_status == "delivered", Order.etsy_status == "completed"),
+        ),
+    )
+    cancelled_filter = or_(
+        Order.lifecycle_status == "cancelled",
+        and_(Order.lifecycle_status.is_(None), Order.etsy_status.in_(["canceled", "cancelled"])),
+    )
+    refunded_filter = or_(
+        Order.lifecycle_status == "refunded",
+        and_(Order.lifecycle_status.is_(None), Order.etsy_status.in_(["refunded", "fully refunded"])),
+    )
+
+    paid_filter = or_(
+        Order.payment_status == "paid",
+        and_(Order.payment_status.is_(None), Order.etsy_status.in_(["paid", "completed"])),
+    )
+    unpaid_filter = or_(
+        Order.payment_status == "unpaid",
+        and_(
+            Order.payment_status.is_(None),
+            or_(Order.etsy_status.is_(None), ~Order.etsy_status.in_(["paid", "completed"])),
+        ),
+    )
 
     return {
-        "pending_payment": pending_payment,
-        "completed": completed,
-        "refunded": refunded,
-        "failed": failed,
-        "total": total_orders
+        "order_status": {
+            "processing": base_query.filter(processing_filter).count(),
+            "in_transit": base_query.filter(in_transit_filter).count(),
+            "completed": base_query.filter(completed_filter).count(),
+            "cancelled": base_query.filter(cancelled_filter).count(),
+            "refunded": base_query.filter(refunded_filter).count(),
+        },
+        "payment_status": {
+            "paid": base_query.filter(paid_filter).count(),
+            "unpaid": base_query.filter(unpaid_filter).count(),
+        },
+        "total": total_orders,
     }
 
 
@@ -86,22 +153,77 @@ async def list_orders(
         ensure_shop_access(shop_id, context, db)
         query = query.filter(Order.shop_id == shop_id)
 
+    if context.role.lower() == "supplier":
+        query = query.join(
+            SupplierOrderAssignment,
+            SupplierOrderAssignment.order_id == Order.id,
+        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
+
     # Apply filters
     if status:
-        query = query.filter(Order.status == status)
+        normalized = status.lower()
+        if normalized == "completed":
+            query = query.filter(
+                or_(
+                    Order.lifecycle_status == "completed",
+                    and_(Order.lifecycle_status.is_(None), Order.etsy_status == "completed"),
+                    and_(Order.lifecycle_status.is_(None), Order.fulfillment_status == "delivered"),
+                )
+            )
+        elif normalized == "in_transit":
+            query = query.filter(
+                or_(
+                    Order.lifecycle_status == "in_transit",
+                    and_(Order.lifecycle_status.is_(None), Order.fulfillment_status == "shipped"),
+                )
+            )
+        elif normalized == "processing":
+            query = query.filter(
+                or_(
+                    Order.lifecycle_status == "processing",
+                    and_(
+                        Order.lifecycle_status.is_(None),
+                        or_(
+                            Order.etsy_status.is_(None),
+                            ~Order.etsy_status.in_(["completed", "canceled", "cancelled", "refunded", "fully refunded"]),
+                        ),
+                        or_(Order.fulfillment_status.is_(None), Order.fulfillment_status == "unshipped"),
+                    ),
+                )
+            )
+        elif normalized == "refunded":
+            query = query.filter(
+                or_(
+                    Order.lifecycle_status == "refunded",
+                    Order.etsy_status.in_(["refunded", "fully refunded"]),
+                )
+            )
+        elif normalized == "cancelled":
+            query = query.filter(
+                or_(
+                    Order.lifecycle_status == "cancelled",
+                    Order.etsy_status.in_(["canceled", "cancelled"]),
+                )
+            )
+        else:
+            query = query.filter(Order.lifecycle_status == normalized)
     if payment_status:
         normalized = payment_status.lower()
         if normalized == "paid":
-            query = query.filter(Order.etsy_status.in_(["paid", "completed"]))
-        elif normalized == "refunded":
-            query = query.filter(or_(Order.status == "refunded", Order.etsy_status == "refunded"))
-        elif normalized == "failed":
-            query = query.filter(Order.status == "cancelled")
-        elif normalized == "pending":
             query = query.filter(
                 or_(
-                    Order.status.in_(["pending", "processing"]),
-                    Order.etsy_status.in_(["open", "pending", "payment processing"]),
+                    Order.payment_status == "paid",
+                    and_(Order.payment_status.is_(None), Order.etsy_status.in_(["paid", "completed"])),
+                )
+            )
+        elif normalized == "unpaid":
+            query = query.filter(
+                or_(
+                    Order.payment_status == "unpaid",
+                    and_(
+                        Order.payment_status.is_(None),
+                        or_(Order.etsy_status.is_(None), ~Order.etsy_status.in_(["paid", "completed"])),
+                    ),
                 )
             )
         else:
@@ -139,6 +261,7 @@ async def list_orders(
             item_image = first_item.get("image")
             item_title = first_item.get("title") or first_item.get("product_name")
 
+        is_supplier = context.role.lower() == "supplier"
         formatted_orders.append({
             "id": order.id,
             "order_id": order.etsy_receipt_id or f"#{order.id}",
@@ -146,10 +269,12 @@ async def list_orders(
             "shop_id": order.shop_id,
             "buyer_name": order.buyer_name,
             "buyer_email": order.buyer_email,
-            "total_price": float(order.total_price or 0) / 100,
+            "total_price": None if is_supplier else float(order.total_price or 0) / 100,
             "currency": order.currency or "USD",
-            "status": order.status or "pending",
-            "payment_status": derive_payment_status(order),
+            "status": derive_lifecycle_status(order),
+            "lifecycle_status": derive_lifecycle_status(order),
+            "payment_status": order.payment_status or derive_payment_status(order),
+            "fulfillment_status": order.fulfillment_status or "unshipped",
             "item_image": item_image,
             "item_title": item_title,
             "created_at": (
@@ -198,18 +323,40 @@ async def get_order(
 
     ensure_tenant_access(order.tenant_id, context)
 
+    is_supplier = context.role.lower() == "supplier"
+    if is_supplier:
+        assignment = db.query(SupplierOrderAssignment).filter(
+            SupplierOrderAssignment.order_id == order.id,
+            SupplierOrderAssignment.supplier_user_id == context.user_id,
+        ).first()
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Order not assigned to supplier")
+
+    items = order.line_items or []
+    if is_supplier:
+        sanitized_items = []
+        for item in items:
+            if isinstance(item, dict):
+                redacted = {k: v for k, v in item.items() if k not in ("price", "currency", "product_data")}
+                sanitized_items.append(redacted)
+            else:
+                sanitized_items.append(item)
+        items = sanitized_items
+
     return {
         "id": order.id,
         "etsy_receipt_id": order.etsy_receipt_id,
         "shop_id": order.shop_id,
         "buyer_name": order.buyer_name,
         "buyer_email": order.buyer_email,
-        "total_price": float(order.total_price or 0) / 100,
+        "total_price": None if is_supplier else float(order.total_price or 0) / 100,
         "currency": order.currency or "USD",
-        "status": order.status or "pending",
-        "payment_status": derive_payment_status(order),
+        "status": derive_lifecycle_status(order),
+        "lifecycle_status": derive_lifecycle_status(order),
+        "payment_status": order.payment_status or derive_payment_status(order),
+        "fulfillment_status": order.fulfillment_status or "unshipped",
         "shipping_address": build_shipping_address(order),
-        "items": order.line_items or [],
+        "items": items,
         "created_at": (
             (order.etsy_created_at or order.created_at).isoformat()
             if (order.etsy_created_at or order.created_at)
@@ -276,3 +423,200 @@ async def sync_orders(
         "force_full_sync": force_full_sync,
         "shop_id": shop_id,
     }
+
+
+@router.post("/mark-viewed", tags=["Orders"])
+async def mark_orders_viewed(
+    context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
+    db: Session = Depends(get_db),
+):
+    """
+    Record the user's latest order view timestamp for unread counts.
+    """
+    membership = db.query(Membership).filter(
+        Membership.user_id == context.user_id,
+        Membership.tenant_id == context.tenant_id,
+        Membership.invitation_status == "accepted",
+    ).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="Membership not found")
+
+    membership.last_orders_viewed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"message": "Orders marked as viewed"}
+
+
+@router.post("/{order_id}/assign-supplier", tags=["Orders"])
+async def assign_supplier(
+    order_id: int,
+    request: AssignSupplierRequest,
+    context: UserContext = Depends(require_permission(Permission.ASSIGN_ORDER)),
+    db: Session = Depends(get_db),
+):
+    """
+    Assign a supplier to a specific order.
+    Requires: ASSIGN_ORDER permission (Owner, Admin)
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.tenant_id == context.tenant_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    ensure_shop_access(order.shop_id, context, db)
+
+    supplier_membership = db.query(Membership).filter(
+        Membership.user_id == request.supplier_user_id,
+        Membership.tenant_id == context.tenant_id,
+        Membership.role == "supplier",
+        Membership.invitation_status == "accepted",
+    ).first()
+    if not supplier_membership:
+        raise HTTPException(status_code=400, detail="Supplier membership not found")
+
+    supplier_user = db.query(User).filter(User.id == request.supplier_user_id).first()
+    if not supplier_user:
+        raise HTTPException(status_code=404, detail="Supplier user not found")
+
+    assignment = db.query(SupplierOrderAssignment).filter(
+        SupplierOrderAssignment.order_id == order.id
+    ).first()
+
+    if assignment:
+        assignment.supplier_user_id = request.supplier_user_id
+        assignment.assigned_by_user_id = context.user_id
+        assignment.assigned_at = datetime.now(timezone.utc)
+    else:
+        assignment = SupplierOrderAssignment(
+            tenant_id=order.tenant_id,
+            shop_id=order.shop_id,
+            order_id=order.id,
+            supplier_user_id=request.supplier_user_id,
+            assigned_by_user_id=context.user_id,
+            assigned_at=datetime.now(timezone.utc),
+        )
+        db.add(assignment)
+
+    db.commit()
+
+    return {
+        "message": "Supplier assigned",
+        "order_id": order.id,
+        "supplier_user_id": request.supplier_user_id,
+        "supplier_email": supplier_user.email,
+    }
+
+
+@router.post("/{order_id}/fulfill", tags=["Orders"])
+async def fulfill_order(
+    order_id: int,
+    request: FulfillmentRequest,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_FULFILLMENT)),
+    db: Session = Depends(get_db),
+):
+    """
+    Submit fulfillment tracking details for an order and sync to Etsy.
+    Requires: UPDATE_FULFILLMENT permission (Owner/Admin/Supplier)
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.tenant_id == context.tenant_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    ensure_shop_access(order.shop_id, context, db)
+
+    if context.role.lower() == "supplier":
+        assignment = db.query(SupplierOrderAssignment).filter(
+            SupplierOrderAssignment.order_id == order.id,
+            SupplierOrderAssignment.supplier_user_id == context.user_id,
+        ).first()
+        if not assignment:
+            raise HTTPException(status_code=403, detail="Order not assigned to supplier")
+
+    existing_shipments = order.shipments or []
+    for shipment in existing_shipments:
+        if (
+            shipment.get("tracking_code") == request.tracking_code
+            and shipment.get("carrier_name") == request.carrier_name
+        ):
+            return {"message": "Tracking already submitted", "status": "already_synced"}
+
+    ship_date_ts = None
+    if request.ship_date:
+        try:
+            normalized = request.ship_date.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            ship_date_ts = int(parsed.timestamp())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ship_date format")
+
+    shop = db.query(Shop).filter(Shop.id == order.shop_id).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+
+    redis_client = get_redis_client()
+    etsy_client = EtsyClient(db, get_rate_limiter(redis_client))
+
+    etsy_response = await etsy_client.create_receipt_shipment(
+        shop_id=order.shop_id,
+        etsy_shop_id=shop.etsy_shop_id,
+        receipt_id=str(order.etsy_receipt_id),
+        tracking_code=request.tracking_code,
+        carrier_name=request.carrier_name,
+        ship_date=ship_date_ts,
+        note=request.note,
+        send_bcc=request.send_bcc,
+    )
+
+    shipment_entry = {
+        "tracking_code": request.tracking_code,
+        "carrier_name": request.carrier_name,
+        "shipping_date": request.ship_date,
+        "tracking_url": etsy_response.get("tracking_url") if isinstance(etsy_response, dict) else None,
+        "notification_date": datetime.now(timezone.utc).isoformat(),
+    }
+    existing_shipments.append(shipment_entry)
+
+    order.shipments = existing_shipments
+    order.fulfillment_status = "shipped"
+    if order.lifecycle_status not in ("completed", "cancelled", "refunded"):
+        order.lifecycle_status = "in_transit"
+    order.status = order.status if order.status in ("cancelled", "refunded") else "shipped"
+    order.synced_at = datetime.now(timezone.utc)
+
+    audit = AuditLog(
+        request_id=str(uuid.uuid4()),
+        actor_user_id=context.user_id,
+        actor_email=context.email,
+        actor_ip=None,
+        tenant_id=order.tenant_id,
+        shop_id=order.shop_id,
+        action="orders.fulfillment.update",
+        target_type="order",
+        target_id=str(order.etsy_receipt_id or order.id),
+        http_method="POST",
+        http_path=f"/api/orders/{order.id}/fulfill",
+        http_status=200,
+        status="success",
+        error_message=None,
+        request_metadata=AuditLog.sanitize_metadata({
+            "tracking_code": request.tracking_code,
+            "carrier_name": request.carrier_name,
+            "ship_date": request.ship_date,
+        }),
+        response_metadata=None,
+        attempt=1,
+        latency_ms=None,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(audit)
+
+    db.commit()
+
+    return {"message": "Fulfillment synced", "status": "ok"}
