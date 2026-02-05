@@ -11,11 +11,52 @@ from jose import jwt
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.core.rbac import Permission, Role, has_permission, can_access_shop
-from app.models.tenancy import Membership, Shop
+from app.models.tenancy import Membership, Shop, Tenant
 from app.core.config import settings
 
 # HTTP Bearer token security
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+
+def _get_auth_bypass_data(db: Session):
+    from app.models.users import User
+    # Prefer a real user + membership if available
+    user = db.query(User).filter(User.deleted_at.is_(None)).order_by(User.id.asc()).first()
+    membership = None
+    tenant = None
+
+    if user:
+        membership = db.query(Membership).filter(Membership.user_id == user.id).order_by(Membership.id.asc()).first()
+        if membership:
+            tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+    else:
+        membership = db.query(Membership).filter(Membership.invitation_status == 'accepted').order_by(Membership.id.asc()).first()
+        if membership:
+            user = db.query(User).filter(User.id == membership.user_id, User.deleted_at.is_(None)).first()
+            tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+
+    return user, membership, tenant
+
+
+def build_auth_bypass_payload(db: Session) -> dict:
+    user, membership, tenant = _get_auth_bypass_data(db)
+
+    user_id = user.id if user else 1
+    tenant_id = membership.tenant_id if membership else (tenant.id if tenant else 1)
+    role = membership.role if membership else 'owner'
+    email = user.email if user and user.email else 'admin@example.com'
+    name = user.name if user and user.name else 'Admin'
+
+    return {
+        "sub": str(user_id),
+        "id": user_id,
+        "user_id": user_id,
+        "tenant_id": tenant_id,
+        "role": role,
+        "email": email,
+        "name": name,
+        "shop_ids": []
+    }
 
 
 def get_current_user(
@@ -30,6 +71,16 @@ def get_current_user(
         def protected_route(current_user = Depends(get_current_user)):
             return {"user_id": current_user["sub"]}
     """
+    if settings.AUTH_DISABLED:
+        return build_auth_bypass_payload(db)
+
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     token = credentials.credentials
     
     try:
@@ -133,45 +184,21 @@ def get_user_context(
     """
     # AUTH BYPASS: If AUTH_DISABLED is True, return default context
     if settings.AUTH_DISABLED:
-        # Get first active user and membership from database
-        from app.models.users import User
-        first_user = db.query(User).filter(User.deleted_at.is_(None)).first()
-        first_membership = db.query(Membership).filter(
-            Membership.invitation_status == 'accepted'
-        ).first()
-        
-        if first_user and first_membership:
-            context = UserContext(
-                user_id=first_user.id,
-                tenant_id=first_membership.tenant_id,
-                role=first_membership.role,
-                email=first_user.email,
-                name=first_user.name,
-                allowed_shop_ids=[]  # All shops
-            )
-            # Populate request.state
-            request.state.user_id = first_user.id
-            request.state.tenant_id = first_membership.tenant_id
-            request.state.role = first_membership.role
-            request.state.allowed_shop_ids = []
-            request.state.user_context = context
-            return context
-        else:
-            # No users exist - return a dummy context
-            context = UserContext(
-                user_id=1,
-                tenant_id=1,
-                role='owner',
-                email='admin@example.com',
-                name='Admin',
-                allowed_shop_ids=[]
-            )
-            request.state.user_id = 1
-            request.state.tenant_id = 1
-            request.state.role = 'owner'
-            request.state.allowed_shop_ids = []
-            request.state.user_context = context
-            return context
+        payload = build_auth_bypass_payload(db)
+        context = UserContext(
+            user_id=int(payload["user_id"]),
+            tenant_id=int(payload["tenant_id"]),
+            role=payload["role"],
+            email=payload.get("email", ""),
+            name=payload.get("name"),
+            allowed_shop_ids=[]
+        )
+        request.state.user_id = context.user_id
+        request.state.tenant_id = context.tenant_id
+        request.state.role = context.role
+        request.state.allowed_shop_ids = []
+        request.state.user_context = context
+        return context
     
     user_id = int(current_user.get("sub") or current_user.get("user_id") or current_user.get("id"))
     tenant_id = int(current_user.get("tenant_id"))

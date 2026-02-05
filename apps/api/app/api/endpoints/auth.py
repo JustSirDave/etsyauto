@@ -13,7 +13,7 @@ from PIL import Image
 import io
 import logging
 
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, build_auth_bypass_payload
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token
 from app.core.email import generate_token, send_verification_email, send_password_reset_email, send_password_changed_notification
@@ -24,6 +24,42 @@ from app.models.oauth import OAuthProvider
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _auth_bypass_token_response(db: Session) -> TokenResponse:
+    payload = build_auth_bypass_payload(db)
+    token = create_access_token(
+        user_id=int(payload["user_id"]),
+        tenant_id=int(payload["tenant_id"]),
+        role=payload["role"],
+        email=payload.get("email"),
+        name=payload.get("name"),
+        shop_ids=payload.get("shop_ids", []),
+        remember_me=False
+    )
+
+    user_id = int(payload["user_id"])
+    tenant_id = int(payload["tenant_id"])
+    user = db.query(User).filter(User.id == user_id).first()
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.JWT_TTL_SECONDS,
+        user={
+            "id": user.id if user else user_id,
+            "email": user.email if user else payload.get("email", "admin@example.com"),
+            "name": user.name if user else payload.get("name", "Admin"),
+            "email_verified": True
+        },
+        tenant={
+            "id": tenant.id if tenant else tenant_id,
+            "name": tenant.name if tenant else "Default Tenant",
+            "role": payload["role"],
+            "description": tenant.description if tenant else None,
+            "onboarding_completed": tenant.onboarding_completed if tenant else True
+        }
+    )
 
 
 # List of disposable/temporary email domains to block
@@ -147,6 +183,8 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
 
     Returns JWT token for immediate login
     """
+    if settings.AUTH_DISABLED:
+        return _auth_bypass_token_response(db)
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == request.email).first()
     if existing_user:
@@ -247,6 +285,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     Returns JWT token for API access
     """
+    if settings.AUTH_DISABLED:
+        return _auth_bypass_token_response(db)
     # Find user
     user = db.query(User).filter(User.email == request.email).first()
     if not user:
@@ -412,6 +452,11 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
     Returns:
         Success message
     """
+    if settings.AUTH_DISABLED:
+        return {
+            "message": "Email verification bypassed",
+            "email": None
+        }
     # Find user with this verification token
     user = db.query(User).filter(User.verification_token == token).first()
 
@@ -451,6 +496,8 @@ async def resend_verification_email(email: EmailStr, db: Session = Depends(get_d
     Returns:
         Success message
     """
+    if settings.AUTH_DISABLED:
+        return {"message": "Verification bypassed"}
     user = db.query(User).filter(User.email == email).first()
 
     if not user:
@@ -507,6 +554,8 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
     Returns:
         Success message (always, for security)
     """
+    if settings.AUTH_DISABLED:
+        return {"message": "Password reset bypassed"}
     user = db.query(User).filter(User.email == request.email).first()
 
     if user:
@@ -538,6 +587,8 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     Returns:
         Success message
     """
+    if settings.AUTH_DISABLED:
+        return {"message": "Password reset bypassed", "email": None}
     # Find user with this reset token
     user = db.query(User).filter(User.reset_token == request.token).first()
 
@@ -785,6 +836,8 @@ async def google_oauth(
         401: Authentication failed
         500: Server error during authentication
     """
+    if settings.AUTH_DISABLED:
+        return _auth_bypass_token_response(db)
     from app.services.google_oauth import GoogleOAuthService
     from app.core.auth_rate_limiter import get_auth_rate_limiter
     
