@@ -1,7 +1,7 @@
-"""Reconcile production schema - add missing columns safely
+"""reconcile production schema
 
-Revision ID: 20260205_reconcile
-Revises: c87d20a75a7b
+Revision ID: a3eb3862bf17
+Revises: f3ed23b0e16c
 Create Date: 2026-02-05
 
 """
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision = '20260205_reconcile'
-down_revision = '20260205_merge'
+revision = 'a3eb3862bf17'
+down_revision = 'f3ed23b0e16c'
 branch_labels = None
 depends_on = None
 
@@ -26,15 +26,6 @@ def upgrade():
     add_column_if_not_exists('audit_logs', sa.Column('actor_user_id', sa.BigInteger()))
     add_column_if_not_exists('audit_logs', sa.Column('actor_email', sa.String(255)))
     add_column_if_not_exists('audit_logs', sa.Column('actor_ip', sa.String(50)))
-    add_column_if_not_exists('audit_logs', sa.Column('http_method', sa.String(10)))
-    add_column_if_not_exists('audit_logs', sa.Column('http_path', sa.String(500)))
-    add_column_if_not_exists('audit_logs', sa.Column('http_status', sa.Integer()))
-    add_column_if_not_exists('audit_logs', sa.Column('status', sa.String(20)))
-    add_column_if_not_exists('audit_logs', sa.Column('error_message', sa.Text()))
-    add_column_if_not_exists('audit_logs', sa.Column('request_metadata', postgresql.JSONB()))
-    add_column_if_not_exists('audit_logs', sa.Column('response_metadata', postgresql.JSONB()))
-    add_column_if_not_exists('audit_logs', sa.Column('attempt', sa.Integer(), server_default='1'))
-    add_column_if_not_exists('audit_logs', sa.Column('latency_ms', sa.Integer()))
     
     # Add missing users columns
     add_column_if_not_exists('users', sa.Column('oauth_provider', sa.String(50)))

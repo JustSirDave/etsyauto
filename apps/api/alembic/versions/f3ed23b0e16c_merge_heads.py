@@ -1,6 +1,6 @@
-"""merge migration heads
+"""merge heads
 
-Revision ID: 20260205_merge
+Revision ID: f3ed23b0e16c
 Revises: update_products_source_check, 20260202_order_status_enums
 Create Date: 2026-02-05
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '20260205_merge'
+revision = 'f3ed23b0e16c'
 down_revision = ('update_products_source_check', '20260202_order_status_enums')
 branch_labels = None
 depends_on = None
