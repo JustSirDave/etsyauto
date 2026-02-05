@@ -26,42 +26,6 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-def _auth_bypass_token_response(db: Session) -> TokenResponse:
-    payload = build_auth_bypass_payload(db)
-    token = create_access_token(
-        user_id=int(payload["user_id"]),
-        tenant_id=int(payload["tenant_id"]),
-        role=payload["role"],
-        email=payload.get("email"),
-        name=payload.get("name"),
-        shop_ids=payload.get("shop_ids", []),
-        remember_me=False
-    )
-
-    user_id = int(payload["user_id"])
-    tenant_id = int(payload["tenant_id"])
-    user = db.query(User).filter(User.id == user_id).first()
-    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-
-    return TokenResponse(
-        access_token=token,
-        expires_in=settings.JWT_TTL_SECONDS,
-        user={
-            "id": user.id if user else user_id,
-            "email": user.email if user else payload.get("email", "admin@example.com"),
-            "name": user.name if user else payload.get("name", "Admin"),
-            "email_verified": True
-        },
-        tenant={
-            "id": tenant.id if tenant else tenant_id,
-            "name": tenant.name if tenant else "Default Tenant",
-            "role": payload["role"],
-            "description": tenant.description if tenant else None,
-            "onboarding_completed": tenant.onboarding_completed if tenant else True
-        }
-    )
-
-
 # List of disposable/temporary email domains to block
 DISPOSABLE_EMAIL_DOMAINS: Set[str] = {
     'tempmail.com', 'throwaway.email', '10minutemail.com', 'guerrillamail.com',
@@ -168,6 +132,42 @@ class TokenResponse(BaseModel):
     expires_in: int
     user: dict
     tenant: dict
+
+
+def _auth_bypass_token_response(db: Session) -> TokenResponse:
+    payload = build_auth_bypass_payload(db)
+    token = create_access_token(
+        user_id=int(payload["user_id"]),
+        tenant_id=int(payload["tenant_id"]),
+        role=payload["role"],
+        email=payload.get("email"),
+        name=payload.get("name"),
+        shop_ids=payload.get("shop_ids", []),
+        remember_me=False
+    )
+
+    user_id = int(payload["user_id"])
+    tenant_id = int(payload["tenant_id"])
+    user = db.query(User).filter(User.id == user_id).first()
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.JWT_TTL_SECONDS,
+        user={
+            "id": user.id if user else user_id,
+            "email": user.email if user else payload.get("email", "admin@example.com"),
+            "name": user.name if user else payload.get("name", "Admin"),
+            "email_verified": True
+        },
+        tenant={
+            "id": tenant.id if tenant else tenant_id,
+            "name": tenant.name if tenant else "Default Tenant",
+            "role": payload["role"],
+            "description": tenant.description if tenant else None,
+            "onboarding_completed": tenant.onboarding_completed if tenant else True
+        }
+    )
 
 
 @router.post("/register", response_model=TokenResponse, tags=["Auth"])
