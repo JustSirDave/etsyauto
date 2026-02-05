@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import AuthLayout from '@/components/auth/AuthLayout';
@@ -16,6 +16,16 @@ function LoginContent() {
   const { login, error, clearError, isLoading } = useAuth();
   const { showToast } = useToast();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  
+  // Check if auth is disabled and redirect to dashboard
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
+  
+  useEffect(() => {
+    if (authDisabled) {
+      router.push('/');
+    }
+  }, [authDisabled, router]);
   
   const [formData, setFormData] = useState({
     email: '',

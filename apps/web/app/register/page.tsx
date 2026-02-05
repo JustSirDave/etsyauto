@@ -4,8 +4,9 @@
  * Register Page - Vuexy Style
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import AuthLayout from '@/components/auth/AuthLayout';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
@@ -13,6 +14,7 @@ import { Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register, error, clearError, isLoading } = useAuth();
+  const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -21,6 +23,15 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  
+  // Check if auth is disabled and redirect to dashboard
+  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
+  
+  useEffect(() => {
+    if (authDisabled) {
+      router.push('/');
+    }
+  }, [authDisabled, router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({

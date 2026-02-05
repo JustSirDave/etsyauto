@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.security import decode_token
 from app.core.rbac import Permission, Role, has_permission, can_access_shop
 from app.models.tenancy import Membership, Shop
+from app.core.config import settings
 
 # HTTP Bearer token security
 security = HTTPBearer()
@@ -130,6 +131,48 @@ def get_user_context(
         def route(context: UserContext = Depends(get_user_context)):
             return {"tenant_id": context.tenant_id}
     """
+    # AUTH BYPASS: If AUTH_DISABLED is True, return default context
+    if settings.AUTH_DISABLED:
+        # Get first active user and membership from database
+        from app.models.users import User
+        first_user = db.query(User).filter(User.deleted_at.is_(None)).first()
+        first_membership = db.query(Membership).filter(
+            Membership.invitation_status == 'accepted'
+        ).first()
+        
+        if first_user and first_membership:
+            context = UserContext(
+                user_id=first_user.id,
+                tenant_id=first_membership.tenant_id,
+                role=first_membership.role,
+                email=first_user.email,
+                name=first_user.name,
+                allowed_shop_ids=[]  # All shops
+            )
+            # Populate request.state
+            request.state.user_id = first_user.id
+            request.state.tenant_id = first_membership.tenant_id
+            request.state.role = first_membership.role
+            request.state.allowed_shop_ids = []
+            request.state.user_context = context
+            return context
+        else:
+            # No users exist - return a dummy context
+            context = UserContext(
+                user_id=1,
+                tenant_id=1,
+                role='owner',
+                email='admin@example.com',
+                name='Admin',
+                allowed_shop_ids=[]
+            )
+            request.state.user_id = 1
+            request.state.tenant_id = 1
+            request.state.role = 'owner'
+            request.state.allowed_shop_ids = []
+            request.state.user_context = context
+            return context
+    
     user_id = int(current_user.get("sub") or current_user.get("user_id") or current_user.get("id"))
     tenant_id = int(current_user.get("tenant_id"))
     role = current_user.get("role")

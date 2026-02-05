@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "Etsy Automation Platform"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+    
+    # Auth bypass (for development/testing only - DO NOT use in production)
+    AUTH_DISABLED: bool = False
 
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/etsy_platform"
