@@ -10,7 +10,7 @@ from typing import Dict, Any, List, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import Order, AuditLog, Product, SupplierOrderAssignment, SupplierProductAssignment
+from app.models.listings import Order, AuditLog
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
 from app.services.rate_limiter import get_rate_limiter
@@ -241,14 +241,12 @@ async def _sync_shop_orders(
                     
                     result["orders_updated"] += 1
                     logger.debug(f"Updated order {receipt_id}")
-                    _assign_supplier_from_products(db, existing_order, order_data)
 
                 else:
                     # Create new order with all extracted data
                     order = Order(**order_data)
                     db.add(order)
                     db.flush()
-                    _assign_supplier_from_products(db, order, order_data)
                     result["orders_created"] += 1
                     logger.debug(f"Created new order {receipt_id}")
 
@@ -383,55 +381,6 @@ def _log_order_mismatch(db: SessionLocal, order: Order, order_data: Dict[str, An
         created_at=datetime.now(timezone.utc),
     )
     db.add(audit)
-
-
-def _assign_supplier_from_products(
-    db: SessionLocal,
-    order: Order,
-    order_data: Dict[str, Any],
-) -> None:
-    """
-    Auto-assign supplier to an order based on product assignments.
-    """
-    if not order_data.get("line_items"):
-        return
-
-    listing_ids = []
-    for item in order_data.get("line_items", []):
-        if isinstance(item, dict) and item.get("listing_id"):
-            listing_ids.append(str(item["listing_id"]))
-
-    if not listing_ids:
-        return
-
-    products = db.query(Product).filter(
-        Product.shop_id == order.shop_id,
-        Product.etsy_listing_id.in_(listing_ids),
-    ).all()
-
-    for product in products:
-        assignment = db.query(SupplierProductAssignment).filter(
-            SupplierProductAssignment.product_id == product.id
-        ).first()
-        if not assignment:
-            continue
-
-        existing = db.query(SupplierOrderAssignment).filter(
-            SupplierOrderAssignment.order_id == order.id
-        ).first()
-        if existing:
-            return
-
-        supplier_order = SupplierOrderAssignment(
-            tenant_id=order.tenant_id,
-            shop_id=order.shop_id,
-            order_id=order.id,
-            supplier_user_id=assignment.supplier_user_id,
-            assigned_by_user_id=assignment.assigned_by_user_id,
-            assigned_at=datetime.now(timezone.utc),
-        )
-        db.add(supplier_order)
-        return
 
 
 async def _extract_order_data(
@@ -687,7 +636,6 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
             for key, value in order_data.items():
                 if hasattr(existing_order, key):
                     setattr(existing_order, key, value)
-            _assign_supplier_from_products(db, existing_order, order_data)
             
             db.commit()
 
@@ -702,7 +650,6 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
             order = Order(**order_data)
             db.add(order)
             db.flush()
-            _assign_supplier_from_products(db, order, order_data)
             db.commit()
 
             return {

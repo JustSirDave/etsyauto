@@ -53,10 +53,6 @@ class ProductRowSchema(BaseModel):
     price: Optional[float] = Field(None, ge=0.01, le=999999.99, description="Price in dollars")
     quantity: Optional[int] = Field(None, ge=0, le=999999, description="Available quantity")
     
-    # Supplier information
-    supplier_name: Optional[str] = Field(None, max_length=255)
-    supplier_product_id: Optional[str] = Field(None, max_length=255)
-    
     # Row metadata (for error reporting)
     row_number: Optional[int] = Field(None, description="Row number in source file")
     raw_data: Optional[Dict[str, Any]] = Field(None, description="Original row data")

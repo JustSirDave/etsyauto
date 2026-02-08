@@ -14,7 +14,7 @@ class TestAuthAPI:
         response = client.post("/api/auth/login", json={
             "email": "test@example.com",
             "password": "password123"
-        })
+        }, headers={"Idempotency-Key": "test-login-1"})
         
         # Should return 200 or 401
         assert response.status_code in [200, 401]
@@ -30,8 +30,9 @@ class TestAuthAPI:
         response = client.post("/api/auth/register", json={
             "email": "new@example.com",
             "password": "password123",
-            "tenant_name": "New Tenant"
-        })
+            "tenant_name": "New Tenant",
+            "name": "New User"
+        }, headers={"Idempotency-Key": "test-register-1"})
         
         assert response.status_code in [200, 201, 400, 409]
         
@@ -66,7 +67,10 @@ class TestProductsAPI:
         """Test POST /api/products contract"""
         response = client.post(
             "/api/products",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Idempotency-Key": "test-product-1",
+            },
             json={
                 "sku": "TEST-001",
                 "title_raw": "Test Product",

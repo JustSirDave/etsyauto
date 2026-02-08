@@ -7,7 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { shopsApi, teamApi, type Shop, type ApiError, type TeamMember } from '@/lib/api';
+import { shopsApi, teamApi, suppliersApi, type Shop, type ApiError, type TeamMember, type SupplierProfile } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { ConfirmModal } from '@/components/modals/ConfirmModal';
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabType = 'connections' | 'shops' | 'team' | 'notifications';
+type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile';
 
 function SettingsContent() {
   const { user } = useAuth();
@@ -39,6 +39,9 @@ function SettingsContent() {
   const [savingShopAccess, setSavingShopAccess] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
+  const [supplierProfile, setSupplierProfile] = useState<SupplierProfile | null>(null);
+  const [loadingSupplierProfile, setLoadingSupplierProfile] = useState(false);
+  const [savingSupplierProfile, setSavingSupplierProfile] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'creator' });
   const [inviting, setInviting] = useState(false);
@@ -57,6 +60,7 @@ function SettingsContent() {
 
   useEffect(() => { loadShops(); }, []);
   useEffect(() => { if (activeTab === 'team') loadTeamMembers(); }, [activeTab]);
+  useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
   
   // Update active tab when URL parameter changes
   useEffect(() => {
@@ -165,6 +169,68 @@ function SettingsContent() {
     catch (err) { setError((err as ApiError).detail || 'Failed'); } finally { setLoadingTeam(false); }
   };
 
+  const loadSupplierProfile = async () => {
+    try {
+      setLoadingSupplierProfile(true);
+      setError(null);
+      const profile = await suppliersApi.getMyProfile();
+      setSupplierProfile(profile);
+    } catch (err) {
+      setError((err as ApiError).detail || 'Failed to load supplier profile');
+    } finally {
+      setLoadingSupplierProfile(false);
+    }
+  };
+
+  const handleSupplierProfileChange = (field: keyof SupplierProfile, value: string) => {
+    setSupplierProfile((prev) => ({
+      ...(prev || {
+        id: 0,
+        tenant_id: 0,
+        user_id: 0,
+      }),
+      [field]: value,
+    }));
+  };
+
+  const saveSupplierProfile = async () => {
+    try {
+      setSavingSupplierProfile(true);
+      setError(null);
+      const payload: Partial<SupplierProfile> = {
+        shop_id: supplierProfile?.shop_id ?? null,
+        company_name: supplierProfile?.company_name || null,
+        contact_name: supplierProfile?.contact_name || null,
+        email: supplierProfile?.email || null,
+        phone: supplierProfile?.phone || null,
+        address_line1: supplierProfile?.address_line1 || null,
+        address_line2: supplierProfile?.address_line2 || null,
+        city: supplierProfile?.city || null,
+        state: supplierProfile?.state || null,
+        postal_code: supplierProfile?.postal_code || null,
+        country: supplierProfile?.country || null,
+        notes: supplierProfile?.notes || null,
+      };
+      const updated = await suppliersApi.updateMyProfile(payload);
+      setSupplierProfile(updated);
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Profile Saved',
+        message: 'Your supplier profile has been updated.',
+      });
+    } catch (err) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Save Failed',
+        message: (err as ApiError).detail || 'Failed to save supplier profile.',
+      });
+    } finally {
+      setSavingSupplierProfile(false);
+    }
+  };
+
   const handleInviteMember = async () => {
     if (!inviteForm.email || !inviteForm.name) {
       setNotification({
@@ -261,6 +327,9 @@ function SettingsContent() {
     { id: 'team' as TabType, label: 'Team', icon: Users },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell }
   ];
+  if (user?.role === 'supplier') {
+    tabs.splice(3, 0, { id: 'supplier_profile' as TabType, label: 'Supplier Profile', icon: Truck });
+  }
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
@@ -303,12 +372,121 @@ function SettingsContent() {
               <div><p className="text-sm text-[var(--text-muted)]">Your Role</p><p className="text-[var(--text-primary)] font-medium capitalize">{user?.role}</p></div>
             </div>
           </DashboardCard>
+        </div>
+      )}
 
-          <DashboardCard className="opacity-60">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3"><Store className="w-5 h-5 text-[var(--success)]" /><h2 className="text-lg font-semibold text-[var(--text-primary)]">Printful</h2></div>
-              <span className="px-3 py-1.5 bg-[var(--background)] text-[var(--text-muted)] rounded-full text-xs">Coming Soon</span>
+      {activeTab === 'supplier_profile' && (
+        <div className="space-y-6">
+          <DashboardCard>
+            <div className="flex items-center gap-3 mb-4">
+              <Truck className="w-5 h-5 text-[var(--primary)]" />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Supplier Profile</h2>
             </div>
+            {loadingSupplierProfile ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Company Name</p>
+                  <input
+                    value={supplierProfile?.company_name || ''}
+                    onChange={(e) => handleSupplierProfileChange('company_name', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Contact Name</p>
+                  <input
+                    value={supplierProfile?.contact_name || ''}
+                    onChange={(e) => handleSupplierProfileChange('contact_name', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Email</p>
+                  <input
+                    value={supplierProfile?.email || ''}
+                    onChange={(e) => handleSupplierProfileChange('email', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Phone</p>
+                  <input
+                    value={supplierProfile?.phone || ''}
+                    onChange={(e) => handleSupplierProfileChange('phone', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Address Line 1</p>
+                  <input
+                    value={supplierProfile?.address_line1 || ''}
+                    onChange={(e) => handleSupplierProfileChange('address_line1', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Address Line 2</p>
+                  <input
+                    value={supplierProfile?.address_line2 || ''}
+                    onChange={(e) => handleSupplierProfileChange('address_line2', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">City</p>
+                  <input
+                    value={supplierProfile?.city || ''}
+                    onChange={(e) => handleSupplierProfileChange('city', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">State</p>
+                  <input
+                    value={supplierProfile?.state || ''}
+                    onChange={(e) => handleSupplierProfileChange('state', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Postal Code</p>
+                  <input
+                    value={supplierProfile?.postal_code || ''}
+                    onChange={(e) => handleSupplierProfileChange('postal_code', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Country</p>
+                  <input
+                    value={supplierProfile?.country || ''}
+                    onChange={(e) => handleSupplierProfileChange('country', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <p className="text-sm text-[var(--text-muted)] mb-1">Notes</p>
+                  <textarea
+                    value={supplierProfile?.notes || ''}
+                    onChange={(e) => handleSupplierProfileChange('notes', e.target.value)}
+                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] min-h-[120px]"
+                  />
+                </div>
+                <div className="md:col-span-2 flex justify-end">
+                  <button
+                    onClick={saveSupplierProfile}
+                    disabled={savingSupplierProfile}
+                    className="px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                  >
+                    {savingSupplierProfile ? 'Saving…' : 'Save Profile'}
+                  </button>
+                </div>
+              </div>
+            )}
           </DashboardCard>
         </div>
       )}

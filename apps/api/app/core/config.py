@@ -17,8 +17,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     
-    # Auth bypass (for development/testing only - DO NOT use in production)
-    AUTH_DISABLED: bool = False
 
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/etsy_platform"
@@ -83,7 +81,12 @@ class Settings(BaseSettings):
                     logger.warning("JWT keys not found in files or environment. Authentication will not work.")
 
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:3001"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+    ]
 
     # Etsy API
     ETSY_CLIENT_ID: str = ""
@@ -101,12 +104,7 @@ class Settings(BaseSettings):
     AI_MAX_TOKENS: int = 1000
     AI_TEMPERATURE: float = 0.7
 
-    # Printful API
-    PRINTFUL_API_KEY: str = ""
-    PRINTFUL_API_BASE_URL: str = "https://api.printful.com"
-
     # Feature Flags
-    ENABLE_PRINTFUL_SYNC: bool = False
     ENABLE_SCHEDULED_PUBLISHING: bool = True
     ENABLE_AI_GENERATION: bool = True
 

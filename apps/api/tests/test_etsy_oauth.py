@@ -145,7 +145,10 @@ class TestEtsyOAuth:
                     "code": "test_code",
                     "state": state_value
                 },
-                headers={"Authorization": f"Bearer {token}"}
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Idempotency-Key": "oauth-callback-1",
+                }
             )
         
         assert response.status_code == 200
@@ -186,7 +189,10 @@ class TestEtsyOAuth:
                     "code": "test_code",
                     "state": "invalid_state"
                 },
-                headers={"Authorization": f"Bearer {token}"}
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Idempotency-Key": "oauth-callback-2",
+                }
             )
         
         assert response.status_code == 400
@@ -232,7 +238,10 @@ class TestEtsyOAuth:
             response = client.post(
                 "/api/shops/etsy/callback",
                 json={"code": "test_code", "state": "test_state"},
-                headers={"Authorization": f"Bearer {token}"}
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Idempotency-Key": "oauth-callback-3",
+                }
             )
         
         assert response.status_code == 200
@@ -277,7 +286,10 @@ class TestEtsyOAuth:
             
             response = client.post(
                 f"/api/shops/{shop.id}/refresh-token",
-                headers={"Authorization": f"Bearer {token}"}
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Idempotency-Key": "oauth-refresh-1",
+                }
             )
         
         assert response.status_code == 200
@@ -328,7 +340,10 @@ class TestEtsyOAuth:
             for i in range(6):
                 response = client.post(
                     f"/api/shops/{shop.id}/refresh-token",
-                    headers={"Authorization": f"Bearer {token}"}
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Idempotency-Key": f"oauth-refresh-{i}",
+                    }
                 )
                 
                 if i < 5:
@@ -363,7 +378,10 @@ class TestEtsyOAuth:
         
         response = client.delete(
             f"/api/shops/{shop.id}",
-            headers={"Authorization": f"Bearer {token}"}
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Idempotency-Key": "oauth-disconnect-1",
+            }
         )
         
         assert response.status_code == 200

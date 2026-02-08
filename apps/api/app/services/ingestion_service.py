@@ -61,8 +61,6 @@ class IngestionService:
                     'tags': normalized_row.get('tags'),
                     'images': normalized_row.get('images') or normalized_row.get('image_urls'),
                     'variants': normalized_row.get('variants'),
-                    'supplier_name': normalized_row.get('supplier') or normalized_row.get('supplier_name'),
-                    'supplier_product_id': normalized_row.get('supplier_product_id') or normalized_row.get('supplier_id'),
                     'row_number': row_num,
                     'raw_data': row  # Keep original row for error reporting
                 }
@@ -228,8 +226,6 @@ class IngestionService:
                 'variants': variants,
                 'price': price / 100.0 if price else None,  # Convert cents to dollars for validation
                 'quantity': quantity,
-                'supplier_name': row.get('supplier_name'),
-                'supplier_product_id': row.get('supplier_product_id'),
                 'row_number': row_number,
                 'raw_data': row.get('raw_data', row)
             }
@@ -318,8 +314,6 @@ class IngestionService:
                     variants=validated.variants or [],
                     price=validated.price,  # Already in cents
                     quantity=validated.quantity,
-                    supplier_name=validated.supplier_name,
-                    supplier_product_id=validated.supplier_product_id,
                     source=source,
                     ingest_batch_id=batch_id
                 )

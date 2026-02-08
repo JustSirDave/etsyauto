@@ -56,6 +56,12 @@ async def connect_etsy_shop(
     Returns URL to redirect user to Etsy for authorization
     """
     tenant_id = context.tenant_id
+
+    if not settings.ETSY_CLIENT_ID or not settings.ETSY_REDIRECT_URI:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Etsy OAuth is not configured. Set ETSY_CLIENT_ID and ETSY_REDIRECT_URI."
+        )
     
     # Rate limit: max 10 OAuth start attempts per tenant per hour
     rl_key = rate_limit_key(tenant_id, 0, 'oauth_start')

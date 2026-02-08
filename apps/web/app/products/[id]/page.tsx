@@ -229,12 +229,6 @@ function ProductDetailContent() {
                     <p className="text-sm text-[var(--text-primary)] font-mono">{product.batch_id}</p>
                   </div>
                 )}
-                {product.supplier_name && (
-                  <div>
-                    <p className="text-xs text-[var(--text-muted)] mb-1">Supplier</p>
-                    <p className="text-sm text-[var(--text-primary)]">{product.supplier_name}</p>
-                  </div>
-                )}
                 {product.price !== null && (
                   <div>
                     <p className="text-xs text-[var(--text-muted)] mb-1">Price</p>

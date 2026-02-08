@@ -86,7 +86,10 @@ class TestCSVInjection:
         
         response = client.post(
             "/api/ingestion/upload",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Idempotency-Key": "csv-injection-1",
+            },
             files=files
         )
         
@@ -107,7 +110,10 @@ class TestCSVInjection:
         
         response = client.post(
             "/api/ingestion/upload",
-            headers={"Authorization": f"Bearer {access_token}"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Idempotency-Key": "csv-injection-2",
+            },
             files=files
         )
         
@@ -122,7 +128,10 @@ class TestRBACEnforcement:
         """Test that viewer role cannot write"""
         response = client.post(
             "/api/products",
-            headers={"Authorization": f"Bearer {viewer_access_token}"},
+            headers={
+                "Authorization": f"Bearer {viewer_access_token}",
+                "Idempotency-Key": "rbac-viewer-1",
+            },
             json={
                 "sku": "TEST-001",
                 "title_raw": "Test",
@@ -138,7 +147,10 @@ class TestRBACEnforcement:
         """Test that creator role can create"""
         response = client.post(
             "/api/products",
-            headers={"Authorization": f"Bearer {creator_access_token}"},
+            headers={
+                "Authorization": f"Bearer {creator_access_token}",
+                "Idempotency-Key": "rbac-creator-1",
+            },
             json={
                 "sku": "TEST-002",
                 "title_raw": "Test",

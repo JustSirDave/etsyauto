@@ -18,7 +18,7 @@ Empower Etsy sellers to scale their creativity, not their workload — automatin
 | --- | --- | --- | --- |
 | Solo Sellers | Single Etsy account, handmade products, limited time | Manual upload fatigue, repetitive SEO edits, fear of policy strikes | Bulk listing generation & one-click scheduling |
 | Small Teams | 2–5 members, multiple listings daily | Coordination overhead, token refresh issues, inconsistent copy | Team dashboard, RBAC, AI-assisted copy compliance |
-| Print-on-Demand Sellers | Integrated with Printful or Gelato | Order sync delays, stock mismatches | Order reconciliation & automatic sync |
+| External Fulfillment Sellers | Work with third-party suppliers | Manual tracking overhead, stock mismatches | Supplier profiles & manual tracking updates |
 
 ## 💡 Problem Statement
 
@@ -51,7 +51,7 @@ Core principles:
 | AI Generation | Titles/Descriptions/Tags | Model-agnostic text generation with policy filters. |
 | Listing Publish Engine | Rate-limited jobs | Token-bucket enforcement per shop, idempotent publish/update. |
 | Schedules | Quotas & cron | Auto-publish N listings daily/weekly per shop. |
-| Order Sync (Printful) | Happy-path sync | Pull orders from Etsy, forward to Printful, update tracking. |
+| Order Sync & Tracking | Etsy-backed sync | Pull orders from Etsy and record manual tracking updates. |
 | Usage & Cost Tracking | Token & API metering | Daily AI token and $ rollups per tenant. |
 | Audit & Compliance | Full traceability | Every change logged with request ID and idempotency key. |
 | Notifications | Event-driven | Notify users on order sync, publish results, and schedule issues. |
@@ -61,7 +61,7 @@ Core principles:
 
 - Trend detection and pricing optimization  
 - Cross-marketplace expansion (eBay, Shopify)  
-- Multi-supplier routing (beyond Printful)  
+- Multi-supplier routing and automation  
 - Deep analytics and revenue insights
 
 ## ⚙️ Constraints
@@ -88,7 +88,7 @@ Core principles:
 3. **Generate AI copy** → policy flags shown → user approves.
 4. **Publish or schedule** → rate-limited job → verify.
 5. **Sync updates** → Etsy listings pulled into catalog.
-6. **Orders (POD)** → sync → Printful submit → tracking update.
+6. **Orders** → sync → supplier tracking update.
 7. **Review** → notifications + audit log.
 
 ## ✅ Acceptance Criteria (MVP)
@@ -118,7 +118,7 @@ Core principles:
 ## 📌 Assumptions & Dependencies
 
 - Etsy API access approved and stable for commercial use.
-- Printful (or equivalent) API availability for order sync.
+- Supplier tracking input available for fulfillment.
 - OAuth apps and production credentials provisioned.
 
 ## 📣 Go‑To‑Market (Beta)
@@ -127,15 +127,36 @@ Core principles:
 - Onboarding checklist + support channel.
 - Weekly feedback loop to adjust UX and policy filters.
 
+## 📊 Scope Progress (Current Build)
+
+| Area | Status | Notes |
+| --- | --- | --- |
+| Multi-tenant + RBAC | ✅ Done | Owner/Admin/Creator/Viewer roles, tenant boundaries enforced. |
+| Shop management | ✅ Done | Connect, name, rename, multi‑shop list, shop selection. |
+| Per-shop access | ✅ Done | Creator/Viewer scoped access by shop. |
+| Product ingestion | 🟡 In progress | Core import path exists; UX polishing pending. |
+| Product sync (Etsy ↔ platform) | ✅ Done | Pull listings and publish to Etsy. |
+| Listing publish engine | ✅ Done | Idempotent jobs with rate limiting. |
+| Schedules | ✅ Done | Cron + daily quota support. |
+| Order status tracking | ✅ Done | Separate payment vs lifecycle states, Etsy‑backed mapping. |
+| Order sync & tracking | 🟡 In progress | Manual tracking flow being finalized. |
+| Usage & cost tracking | 🟡 In progress | Data model ready, UI rollups pending. |
+| Audit & compliance | ✅ Done | Audit logging + tracing in place. |
+| Notifications | ✅ Done | Events wired; UI center polishing pending. |
+| Localization | ✅ Done | i18n + RTL with expanded coverage. |
+
 ## ✅ What’s Done (Current Build)
 
 - **Etsy OAuth + multi-shop support** with shop naming/renaming and multi-shop list view.
 - **Per-shop access control** for Creator/Viewer roles.
 - **Product sync (Etsy → platform)** with listing states pulled and upserted.
 - **Publish flow (platform → Etsy)** wired via listing jobs and task pipeline.
+- **Schedules** with daily quotas and cron support.
+- **Order status tracking** with separate payment vs lifecycle states and Etsy-backed mapping.
 - **Notifications** for order sync, listing publish outcomes, and schedule errors.
 - **Improved login error handling** (backend-driven messages, sanitized in UI).
 - **Translation system** with RTL support and expanded coverage across UI.
+- **Production hardening** (logging cleanup, docs consolidation, deployment guidance).
 
 ## 🧭 Planned / Next
 
@@ -143,7 +164,7 @@ Short-term (pre‑beta):
 - **Policy compliance UX** (visible flags + guided fixes) for AI-generated copy.
 - **CSV/JSON ingestion UX** (validation, schema mapping, error report).
 - **Usage & cost rollups** (daily per-tenant metrics in UI).
-- **Order sync happy path** (Printful or equivalent) with tracking updates.
+- **Order sync + manual tracking** workflow.
 - **Audit log viewer** (filterable timeline per tenant/shop).
 - **Notification center UX** (read/unread, filters, severity).
 - **Localization coverage audit** (ensure 100% translated strings).
@@ -151,6 +172,11 @@ Short-term (pre‑beta):
 Post‑beta (deferred):
 - Trend detection and pricing optimization.  
 - Cross‑marketplace expansion (eBay, Shopify).  
-- Multi‑supplier routing (beyond Printful).  
+- Multi‑supplier routing and automation.  
 - Deep analytics and revenue insights.
+
+## 🛠️ Engineering Notes (Non‑Product Scope)
+
+- **Auth bypass feature flag** for dev/testing (reversible via env vars).
+- **Migration alignment checks** (Alembic heads/current verified; documented recovery path).
 

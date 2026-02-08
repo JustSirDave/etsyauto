@@ -11,6 +11,7 @@ This directory contains operational runbooks for handling common incidents in th
 | [OAuth Token Failure](./OAUTH_FAILURE.md) | Critical | 15-30 min | Dec 2025 |
 | [429 Rate Limit Storm](./RATE_LIMIT_429_STORM.md) | Critical/Warning | 10-45 min | Dec 2025 |
 | [Queue Saturation](./QUEUE_SATURATION.md) | Critical | 15-60 min | Dec 2025 |
+| [Redis Restart](./REDIS_RESTART.md) | Warning/Critical | 5-20 min | Feb 2026 |
 
 ## 🔗 Quick Links
 

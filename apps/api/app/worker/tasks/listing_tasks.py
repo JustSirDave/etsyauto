@@ -425,6 +425,50 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             db.commit()
             raise
         
+        # ==== VERIFY: Confirm listing is active ====
+        job.status = "verifying"
+        db.commit()
+
+        verify_start = time.time()
+        audit_verify = AuditLog(
+            tenant_id=job.tenant_id,
+            shop_id=shop.id,
+            actor_type='worker',
+            actor_id=f'celery:{self.request.id}',
+            action='etsy.verify_listing',
+            target_type='listing',
+            target_id=listing_id,
+            request_id=request_id,
+            idempotency_key=job.idempotency_key,
+        )
+
+        try:
+            listing_details = asyncio.run(etsy_client.get_listing(
+                shop_id=shop.id,
+                listing_id=listing_id
+            ))
+            listing_state = (listing_details.get("state") or listing_details.get("status") or "").lower()
+            is_active = listing_state == "active" or listing_details.get("is_active") is True
+
+            if not is_active:
+                raise EtsyAPIError(
+                    f"Listing verification failed: state={listing_state or 'unknown'}",
+                    status_code=409
+                )
+
+            audit_verify.status_code = 200
+            audit_verify.latency_ms = int((time.time() - verify_start) * 1000)
+            audit_verify.diff = {"state": listing_state or "active"}
+            db.add(audit_verify)
+            db.commit()
+        except EtsyAPIError as e:
+            audit_verify.status_code = e.status_code or 500
+            audit_verify.latency_ms = int((time.time() - verify_start) * 1000)
+            audit_verify.diff = {"error": str(e)}
+            db.add(audit_verify)
+            db.commit()
+            raise
+
         # ==== SUCCESS: Update Job ====
         job.status = "completed"
         job.etsy_listing_id = listing_id

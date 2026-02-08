@@ -312,9 +312,6 @@ ETSY_CLIENT_SECRET=your_etsy_app_secret
 
 # OpenAI (Phase 2)
 OPENAI_API_KEY=sk-...
-
-# Printful (Phase 3)
-PRINTFUL_API_KEY=your_printful_key
 ```
 
 ### 2. Read Documentation

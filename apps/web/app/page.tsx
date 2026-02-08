@@ -371,14 +371,6 @@ function DashboardContent() {
                   notConnectedLabel={t('dashboard.notConnected')}
                   connectLabel={t('dashboard.connect')}
                 />
-                <ConnectionItem
-                  name={t('dashboard.printful')}
-                  status="disconnected"
-                  onConnect={() => showToast(t('dashboard.printfulSoon'), 'info')}
-                  connectedLabel={t('dashboard.connected')}
-                  notConnectedLabel={t('dashboard.notConnected')}
-                  connectLabel={t('dashboard.connect')}
-                />
               </div>
             )}
           </div>

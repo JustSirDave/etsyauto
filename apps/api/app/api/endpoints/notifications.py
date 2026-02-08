@@ -2,7 +2,7 @@
 Notifications API Endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -13,6 +13,14 @@ from app.core.database import get_db
 from app.models.notifications import Notification, NotificationType
 
 router = APIRouter()
+
+
+@router.options("/unread-count", include_in_schema=False)
+async def options_unread_count():
+    """
+    Handle CORS preflight for unread-count.
+    """
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # Request/Response Models

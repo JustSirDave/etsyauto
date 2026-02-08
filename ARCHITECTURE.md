@@ -31,7 +31,7 @@
 │  • /api/products     - CSV/JSON import, storage                 │
 │  • /api/ai           - OpenAI/Anthropic integration             │
 │  • /api/listings     - Job queue management                     │
-│  • /api/orders       - Etsy + Printful sync                     │
+│  • /api/orders       - Etsy + manual tracking                   │
 │  • /api/schedules    - Cron job management                      │
 │  • /api/usage        - Cost tracking                            │
 │  • /api/audit        - Audit logs                               │
@@ -60,7 +60,7 @@
 
 External Services:
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  Etsy API    │  │ Printful API │  │  OpenAI API  │  │ Prometheus/  │
+│  Etsy API    │  │ Tracking UI │  │  OpenAI API  │  │ Prometheus/  │
 │              │  │              │  │              │  │   Grafana    │
 │ • OAuth 2.0  │  │ • Orders     │  │ • GPT-4o-mini│  │              │
 │ • Listings   │  │ • Tracking   │  │ • Embeddings │  │ • Metrics    │
@@ -126,7 +126,7 @@ Celery Beat → Every 5 min → Check active schedules
 ### 6. Order Sync Flow
 ```
 Celery Worker → Fetch Etsy orders → Match products
-                                  → Create Printful order
+                                  → Record manual tracking
                                   → Poll tracking
                                   → Update Etsy with tracking
                                   → Update order status

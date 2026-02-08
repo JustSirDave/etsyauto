@@ -14,7 +14,7 @@ export function ConnectionStatus({ title, status, shopName }: ConnectionStatusPr
   const isConnected = status === 'connected'
 
   const handleConnect = () => {
-    // Navigate to settings page where users can connect their supplier API
+    // Navigate to settings page for connections
     router.push('/settings')
   }
 

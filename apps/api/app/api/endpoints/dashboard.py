@@ -11,7 +11,7 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access
-from app.models.listings import Product, ListingJob, Order, SupplierOrderAssignment
+from app.models.listings import Product, ListingJob, Order
 from app.models.tenancy import Membership
 from app.services.order_utils import derive_payment_status, derive_lifecycle_status
 
@@ -67,10 +67,7 @@ async def get_dashboard_stats(
     if shop_id:
         orders_query = orders_query.filter(Order.shop_id == shop_id)
     if context.role.lower() == "supplier":
-        orders_query = orders_query.join(
-            SupplierOrderAssignment,
-            SupplierOrderAssignment.order_id == Order.id,
-        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
+        orders_query = orders_query.filter(Order.supplier_user_id == context.user_id)
     total_orders = orders_query.count()
 
     # Count unique customers (from orders, filtered by tenant)
@@ -83,10 +80,7 @@ async def get_dashboard_stats(
     if shop_id:
         customers_query = customers_query.filter(Order.shop_id == shop_id)
     if context.role.lower() == "supplier":
-        customers_query = customers_query.join(
-            SupplierOrderAssignment,
-            SupplierOrderAssignment.order_id == Order.id,
-        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
+        customers_query = customers_query.filter(Order.supplier_user_id == context.user_id)
     total_customers = customers_query.scalar() or 0
 
     # Get percentage changes (mock for now, would need historical data)
@@ -156,10 +150,7 @@ async def get_recent_orders(
         ensure_shop_access(shop_id, context, db)
         orders_query = orders_query.filter(Order.shop_id == shop_id)
     if context.role.lower() == "supplier":
-        orders_query = orders_query.join(
-            SupplierOrderAssignment,
-            SupplierOrderAssignment.order_id == Order.id,
-        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
+        orders_query = orders_query.filter(Order.supplier_user_id == context.user_id)
     
     # Order by Etsy date first (most accurate), fall back to local created_at
     from sqlalchemy import nullslast

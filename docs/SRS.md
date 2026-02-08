@@ -13,7 +13,7 @@
 - AI copy generation (titles/descriptions/tags) with policy guardrails.
 - Safe, rate-limited draft/publish/update to Etsy (idempotent).
 - Schedules: enqueue N listings per shop/day.
-- Printful order sync (happy path).
+- Order sync + manual tracking (happy path).
 - Usage/cost metering and audit logs.
 - Notifications for key events (orders, publish, schedules).
 - Localization (i18n + RTL) for UI.
@@ -40,7 +40,7 @@
 5. User runs AI copy generation → policy checker stores `policy_flags` + costs.
 6. Product sync pulls Etsy listings into the platform catalog.
 7. User or Scheduler enqueues `listing_jobs`; Celery workers perform draft → publish → verify using per-shop token bucket in Redis.
-8. Order sync cron pulls Etsy orders, maps to Printful, submits, polls tracking.
+8. Order sync cron pulls Etsy orders; suppliers record manual tracking.
 9. Notifications are created on key outcomes and visible in UI.
 10. Everything is audited; SLOs visible in Grafana.
 
@@ -57,7 +57,7 @@
 - Generate AI copy with policy flags and cost tracking.
 - Publish listings with idempotency and rate limiting.
 - Schedule batch publishing with per-shop quotas.
-- Sync orders and submit to Printful (happy path).
+- Sync orders and record manual tracking (happy path).
 - Send user notifications for key events.
 - Enforce RBAC + per-shop access control.
 
@@ -152,7 +152,7 @@ CREATE TABLE shops(
 CREATE TABLE oauth_tokens(
   id BIGSERIAL PRIMARY KEY,
   shop_id BIGINT REFERENCES shops(id),
-  provider TEXT CHECK (provider IN ('etsy','printful')) NOT NULL,
+  provider TEXT CHECK (provider IN ('etsy')) NOT NULL,
   access_token BYTEA NOT NULL, -- encrypted
   refresh_token BYTEA, -- encrypted
   expires_at TIMESTAMPTZ NOT NULL,
@@ -218,8 +218,8 @@ CREATE TABLE orders(
   tenant_id BIGINT REFERENCES tenants(id),
   shop_id BIGINT REFERENCES shops(id),
   etsy_receipt_id TEXT UNIQUE,
-  status TEXT CHECK (status IN ('new','submitted_to_printful','fulfilled','failed')) DEFAULT 'new',
-  printful_order_id TEXT, tracking JSONB,
+  status TEXT CHECK (status IN ('pending','processing','shipped','delivered','cancelled','refunded')) DEFAULT 'pending',
+  fulfillment_status TEXT, payment_status TEXT, shipments JSONB, supplier_user_id BIGINT,
   created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -272,9 +272,9 @@ CREATE TABLE webhook_events(
 - Publish flow uses: `createDraftListing`, `updateListing`, `uploadListingImages`, `publishListing` (endpoint names illustrative).
 - Respect rate limits with per-shop token bucket.
 
-**Printful**
-- API key per tenant or per shop (prefer per tenant in v1).
-- Create order from Etsy receipt; poll order status; post tracking back to Etsy.
+**Suppliers**
+- Suppliers maintain profiles and record tracking manually.
+- Tracking updates can optionally be synced to Etsy by admins.
 
 ## 6) Rate Limiting & Idempotency
 
@@ -373,8 +373,7 @@ def take_token(shop_id: int, capacity: int, refill_per_sec: float) -> bool:
 
 **Orders (Happy Path)**
 - `POST /api/orders/sync` → pulls latest Etsy receipts (time-windowed).
-- `POST /api/orders/{id}/submit-printful` → `{ printful_order_id }`
-- `POST /api/orders/{id}/sync-tracking` → updates Etsy with tracking.
+- `POST /api/orders/{id}/tracking` → records manual tracking details.
 
 **Webhooks (future-safe)**
 - `POST /api/webhooks/{provider}` → 200 on duplicate; enqueue.
@@ -429,8 +428,7 @@ def sync_orders():
         receipts = etsy.fetch_new_receipts(shop)
         for r in receipts:
             oid = repo.ensure_order(shop.id, r)
-            if is_printfulable(r):
-                submit_to_printful.delay(order_id=oid)
+            # suppliers record tracking manually when ready
 ```
 
 ## 9) Phased Execution (CareerBuddy Style)
@@ -448,7 +446,7 @@ Exit: Connect + refresh works; audit shows events; RBAC enforced.
 Exit: 95% first-pass compliance on seed set; ±5% cost accuracy.
 
 **Phase 3 — Orchestration & Beta (Weeks 10–14)**
-- Listing jobs, Redis token bucket, schedules, Printful happy path, observability (Prom/Grafana/Sentry), usage rollups, invite gating.  
+- Listing jobs, Redis token bucket, schedules, manual tracking workflow, observability (Prom/Grafana/Sentry), usage rollups, invite gating.  
 Exit: 1k listings across 10 shops, <1% task failures; p95 publish ≤ 10 min; beta live.
 
 Timeline buffer (Weeks 15–16) for polish & beta feedback.
@@ -458,7 +456,7 @@ Timeline buffer (Weeks 15–16) for polish & beta feedback.
 **Golden Signals**
 - API: RPS, p50/p95 latency, 4xx/5xx, JWT mint errors.
 - Workers: queue depth, task success%, retries, time-in-state.
-- External: Etsy/Printful 429/5xx rates, token refresh failures.
+- External: Etsy 429/5xx rates, token refresh failures.
 - Business: listings/day, AI pass rate, cost/day per tenant.
 
 **SLOs (Beta)**
@@ -506,7 +504,7 @@ Timeline buffer (Weeks 15–16) for polish & beta feedback.
 - CSV parser, AI adapter mocks, policy rules, token bucket math, OAuth refresh logic.
 
 **Contract**
-- Etsy/Printful stubs via respx/Pact; record/replay golden paths; validate error shapes.
+- Etsy stubs via respx/Pact; record/replay golden paths; validate error shapes.
 
 **E2E (Playwright)**
 - Login → connect shop → import → generate → enqueue → publish → verify.
@@ -640,7 +638,7 @@ def policy_check(texts: dict) -> dict:
 - AI generation UI with policy flag visibility + guided fixes.
 - Usage/cost rollups in UI (per-tenant daily).
 - Audit log viewer and export.
-- Order sync happy path (Printful) productionized.
+- Order sync + manual tracking productionized.
 - Monitoring dashboards (Prom/Grafana) + alerting wired.
 - E2E Playwright tests for full publish flow.
 - Notification center UX with filters + bulk mark read.
@@ -650,12 +648,12 @@ def policy_check(texts: dict) -> dict:
 
 - Etsy API access approved for commercial use.
 - OAuth apps configured with correct redirect URIs.
-- Printful (or equivalent) API available for order sync.
+- Supplier tracking workflow available for order sync.
 - Redis and Postgres capacity sized for beta load.
 
 ## 19) Open Questions
 
 - Final Etsy API scopes for beta approval.
-- Printful vs. alternative POD provider for launch.
+- Decide if/when to add supplier automation provider.
 - Data retention windows for order data in production.
 

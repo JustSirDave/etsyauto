@@ -29,9 +29,6 @@ class Product(Base):
     images = Column(JSONB)
     variants = Column(JSONB)
     
-    # Supplier info
-    supplier_name = Column(String(255))
-    supplier_product_id = Column(String(255))
     price = Column(Integer)
     compare_at_price = Column(Integer)
     quantity = Column(Integer, nullable=True)  # Available quantity
@@ -127,7 +124,7 @@ class ListingJob(Base):
     # Status tracking
     status = Column(
         String(20), 
-        CheckConstraint("status IN ('pending','scheduled','processing','completed','failed','cancelled','policy_blocked')"),
+        CheckConstraint("status IN ('pending','scheduled','processing','verifying','completed','failed','cancelled','policy_blocked')"),
         default='pending'
     )
     
@@ -266,9 +263,9 @@ class Order(Base):
     # Shipping/tracking (supports multiple shipments)
     shipments = Column(JSONB, nullable=True)  # Array of shipment objects
     
-    # Supplier fulfillment (for future use)
-    supplier_order_id = Column(String(255), nullable=True)
-    supplier_status = Column(String(50), nullable=True)
+    # Supplier assignment (manual tracking)
+    supplier_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    supplier_assigned_at = Column(DateTime(timezone=True), nullable=True)
     
     # Message to seller
     message_from_buyer = Column(Text, nullable=True)
@@ -292,41 +289,9 @@ class Order(Base):
         Index('idx_orders_payment_status', 'payment_status'),
         Index('idx_orders_fulfillment_status', 'fulfillment_status'),
         Index('idx_orders_synced_at', 'synced_at'),
+        Index('idx_orders_supplier_user', 'supplier_user_id'),
     )
 
-
-class SupplierOrderAssignment(Base):
-    """Assign a supplier to fulfill a specific order."""
-    __tablename__ = "supplier_order_assignments"
-
-    id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False, index=True)
-    order_id = Column(BigInteger, ForeignKey('orders.id'), nullable=False, unique=True, index=True)
-    supplier_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=False, index=True)
-    assigned_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
-    assigned_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-
-    __table_args__ = (
-        Index('idx_supplier_order_shop_user', 'shop_id', 'supplier_user_id'),
-    )
-
-
-class SupplierProductAssignment(Base):
-    """Assign a supplier to fulfill a specific product."""
-    __tablename__ = "supplier_product_assignments"
-
-    id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False, index=True)
-    product_id = Column(BigInteger, ForeignKey('products.id'), nullable=False, unique=True, index=True)
-    supplier_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=False, index=True)
-    assigned_by_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
-    assigned_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-
-    __table_args__ = (
-        Index('idx_supplier_product_shop_user', 'shop_id', 'supplier_user_id'),
-    )
 
 
 class UsageCost(Base):

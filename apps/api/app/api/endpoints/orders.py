@@ -15,7 +15,7 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
-from app.models.listings import Order, SupplierOrderAssignment, AuditLog
+from app.models.listings import Order, AuditLog
 from app.models.tenancy import Shop, Membership, User
 from app.services.order_utils import build_shipping_address, derive_payment_status, derive_lifecycle_status
 from app.services.etsy_client import EtsyClient
@@ -37,6 +37,13 @@ class FulfillmentRequest(BaseModel):
     send_bcc: bool = False
 
 
+class ManualTrackingRequest(BaseModel):
+    tracking_code: str
+    carrier_name: Optional[str] = None
+    ship_date: Optional[str] = None  # ISO-8601 date/time
+    note: Optional[str] = None
+
+
 @router.get("/stats", tags=["Orders"])
 async def get_order_stats(
     shop_id: Optional[int] = None,
@@ -56,10 +63,7 @@ async def get_order_stats(
         ensure_shop_access(shop_id, context, db)
         base_query = base_query.filter(Order.shop_id == shop_id)
     if context.role.lower() == "supplier":
-        base_query = base_query.join(
-            SupplierOrderAssignment,
-            SupplierOrderAssignment.order_id == Order.id,
-        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
+        base_query = base_query.filter(Order.supplier_user_id == context.user_id)
 
     # Get total order count
     total_orders = base_query.count()
@@ -154,10 +158,7 @@ async def list_orders(
         query = query.filter(Order.shop_id == shop_id)
 
     if context.role.lower() == "supplier":
-        query = query.join(
-            SupplierOrderAssignment,
-            SupplierOrderAssignment.order_id == Order.id,
-        ).filter(SupplierOrderAssignment.supplier_user_id == context.user_id)
+        query = query.filter(Order.supplier_user_id == context.user_id)
 
     # Apply filters
     if status:
@@ -267,6 +268,7 @@ async def list_orders(
             "order_id": order.etsy_receipt_id or f"#{order.id}",
             "etsy_receipt_id": order.etsy_receipt_id,
             "shop_id": order.shop_id,
+            "supplier_user_id": order.supplier_user_id,
             "buyer_name": order.buyer_name,
             "buyer_email": order.buyer_email,
             "total_price": None if is_supplier else float(order.total_price or 0) / 100,
@@ -324,13 +326,8 @@ async def get_order(
     ensure_tenant_access(order.tenant_id, context)
 
     is_supplier = context.role.lower() == "supplier"
-    if is_supplier:
-        assignment = db.query(SupplierOrderAssignment).filter(
-            SupplierOrderAssignment.order_id == order.id,
-            SupplierOrderAssignment.supplier_user_id == context.user_id,
-        ).first()
-        if not assignment:
-            raise HTTPException(status_code=403, detail="Order not assigned to supplier")
+    if is_supplier and order.supplier_user_id != context.user_id:
+        raise HTTPException(status_code=403, detail="Order not assigned to supplier")
 
     items = order.line_items or []
     if is_supplier:
@@ -347,6 +344,7 @@ async def get_order(
         "id": order.id,
         "etsy_receipt_id": order.etsy_receipt_id,
         "shop_id": order.shop_id,
+        "supplier_user_id": order.supplier_user_id,
         "buyer_name": order.buyer_name,
         "buyer_email": order.buyer_email,
         "total_price": None if is_supplier else float(order.total_price or 0) / 100,
@@ -480,25 +478,8 @@ async def assign_supplier(
     if not supplier_user:
         raise HTTPException(status_code=404, detail="Supplier user not found")
 
-    assignment = db.query(SupplierOrderAssignment).filter(
-        SupplierOrderAssignment.order_id == order.id
-    ).first()
-
-    if assignment:
-        assignment.supplier_user_id = request.supplier_user_id
-        assignment.assigned_by_user_id = context.user_id
-        assignment.assigned_at = datetime.now(timezone.utc)
-    else:
-        assignment = SupplierOrderAssignment(
-            tenant_id=order.tenant_id,
-            shop_id=order.shop_id,
-            order_id=order.id,
-            supplier_user_id=request.supplier_user_id,
-            assigned_by_user_id=context.user_id,
-            assigned_at=datetime.now(timezone.utc),
-        )
-        db.add(assignment)
-
+    order.supplier_user_id = request.supplier_user_id
+    order.supplier_assigned_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -530,12 +511,7 @@ async def fulfill_order(
     ensure_shop_access(order.shop_id, context, db)
 
     if context.role.lower() == "supplier":
-        assignment = db.query(SupplierOrderAssignment).filter(
-            SupplierOrderAssignment.order_id == order.id,
-            SupplierOrderAssignment.supplier_user_id == context.user_id,
-        ).first()
-        if not assignment:
-            raise HTTPException(status_code=403, detail="Order not assigned to supplier")
+        raise HTTPException(status_code=403, detail="Suppliers must use manual tracking endpoint")
 
     existing_shipments = order.shipments or []
     for shipment in existing_shipments:
@@ -620,3 +596,96 @@ async def fulfill_order(
     db.commit()
 
     return {"message": "Fulfillment synced", "status": "ok"}
+
+
+@router.post("/{order_id}/tracking", tags=["Orders"])
+async def record_manual_tracking(
+    order_id: int,
+    request: ManualTrackingRequest,
+    context: UserContext = Depends(require_permission(Permission.UPDATE_FULFILLMENT)),
+    db: Session = Depends(get_db),
+):
+    """
+    Record manual tracking details for an order (no Etsy sync).
+    Requires: UPDATE_FULFILLMENT permission (Owner/Admin/Supplier)
+    """
+    order = db.query(Order).filter(
+        Order.id == order_id,
+        Order.tenant_id == context.tenant_id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    ensure_shop_access(order.shop_id, context, db)
+
+    if context.role.lower() == "supplier" and order.supplier_user_id != context.user_id:
+        raise HTTPException(status_code=403, detail="Order not assigned to supplier")
+
+    existing_shipments = order.shipments or []
+    for shipment in existing_shipments:
+        if (
+            shipment.get("tracking_code") == request.tracking_code
+            and shipment.get("carrier_name") == request.carrier_name
+        ):
+            return {"message": "Tracking already submitted", "status": "already_recorded"}
+
+    ship_date_ts = None
+    if request.ship_date:
+        try:
+            normalized = request.ship_date.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            ship_date_ts = int(parsed.timestamp())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid ship_date format")
+
+    shipment_entry = {
+        "tracking_code": request.tracking_code,
+        "carrier_name": request.carrier_name,
+        "shipping_date": request.ship_date,
+        "shipping_date_ts": ship_date_ts,
+        "note": request.note,
+        "source": "manual",
+        "submitted_by_user_id": context.user_id,
+        "submitted_by_role": context.role,
+        "notification_date": datetime.now(timezone.utc).isoformat(),
+    }
+    existing_shipments.append(shipment_entry)
+
+    order.shipments = existing_shipments
+    order.fulfillment_status = "shipped"
+    if order.lifecycle_status not in ("completed", "cancelled", "refunded"):
+        order.lifecycle_status = "in_transit"
+    order.status = order.status if order.status in ("cancelled", "refunded") else "shipped"
+    order.synced_at = datetime.now(timezone.utc)
+
+    audit = AuditLog(
+        request_id=str(uuid.uuid4()),
+        actor_user_id=context.user_id,
+        actor_email=context.email,
+        actor_ip=None,
+        tenant_id=order.tenant_id,
+        shop_id=order.shop_id,
+        action="orders.tracking.manual",
+        target_type="order",
+        target_id=str(order.etsy_receipt_id or order.id),
+        http_method="POST",
+        http_path=f"/api/orders/{order.id}/tracking",
+        http_status=200,
+        status="success",
+        error_message=None,
+        request_metadata=AuditLog.sanitize_metadata({
+            "tracking_code": request.tracking_code,
+            "carrier_name": request.carrier_name,
+            "ship_date": request.ship_date,
+        }),
+        response_metadata=None,
+        attempt=1,
+        latency_ms=None,
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"message": "Tracking recorded", "status": "ok"}

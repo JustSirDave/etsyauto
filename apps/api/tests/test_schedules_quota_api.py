@@ -182,7 +182,10 @@ class TestUpdateQuota:
         """Test updating quota configuration"""
         response = client.put(
             f"/api/schedules/{test_schedule.id}/quota",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-update-0",
+            },
             json={"daily_quota": 500, "weekly_quota": 2000}
         )
         
@@ -197,7 +200,10 @@ class TestUpdateQuota:
         """Test setting unlimited weekly quota"""
         response = client.put(
             f"/api/schedules/{test_schedule.id}/quota",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-update-1a",
+            },
             json={"daily_quota": 300, "weekly_quota": None}
         )
         
@@ -212,7 +218,10 @@ class TestUpdateQuota:
         """Test viewer cannot update quota"""
         response = client.put(
             f"/api/schedules/{test_schedule.id}/quota",
-            headers={"Authorization": f"Bearer {viewer_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {viewer_user['token']}",
+                "Idempotency-Key": "quota-update-1b",
+            },
             json={"daily_quota": 500}
         )
         
@@ -222,7 +231,10 @@ class TestUpdateQuota:
         """Test updating only daily quota"""
         response = client.put(
             f"/api/schedules/{test_schedule.id}/quota",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-update-1",
+            },
             json={"daily_quota": 250}
         )
         
@@ -243,7 +255,10 @@ class TestResetQuota:
         """Test resetting daily quota"""
         response = client.post(
             f"/api/schedules/{test_schedule.id}/quota/reset",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-reset-1",
+            },
             json={"reset_daily": True, "reset_weekly": False}
         )
         
@@ -261,7 +276,10 @@ class TestResetQuota:
         """Test resetting both daily and weekly quotas"""
         response = client.post(
             f"/api/schedules/{test_schedule.id}/quota/reset",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-reset-2",
+            },
             json={"reset_daily": True, "reset_weekly": True}
         )
         
@@ -275,7 +293,10 @@ class TestResetQuota:
         """Test viewer cannot reset quota"""
         response = client.post(
             f"/api/schedules/{test_schedule.id}/quota/reset",
-            headers={"Authorization": f"Bearer {viewer_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {viewer_user['token']}",
+                "Idempotency-Key": "quota-reset-3",
+            },
             json={"reset_daily": True}
         )
         
@@ -290,7 +311,10 @@ class TestResetQuota:
         
         response = client.post(
             f"/api/schedules/{test_schedule.id}/quota/reset",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-reset-4",
+            },
             json={"reset_daily": True}
         )
         
@@ -396,7 +420,10 @@ class TestQuotaApiIntegration:
         # 2. Update quota to premium level
         response = client.put(
             f"/api/schedules/{test_schedule.id}/quota",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-update-2",
+            },
             json={"daily_quota": 500, "weekly_quota": 2000}
         )
         assert response.status_code == 200
@@ -413,7 +440,10 @@ class TestQuotaApiIntegration:
         # 4. Reset quota
         response = client.post(
             f"/api/schedules/{test_schedule.id}/quota/reset",
-            headers={"Authorization": f"Bearer {admin_user['token']}"},
+            headers={
+                "Authorization": f"Bearer {admin_user['token']}",
+                "Idempotency-Key": "quota-reset-5",
+            },
             json={"reset_daily": True, "reset_weekly": True}
         )
         assert response.status_code == 200

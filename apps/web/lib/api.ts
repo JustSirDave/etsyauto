@@ -95,6 +95,13 @@ export function removeAuthToken(): void {
   }
 }
 
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  return `idem_${Math.random().toString(36).slice(2)}_${Date.now()}`;
+}
+
 /**
  * Generic API request handler
  */
@@ -108,6 +115,11 @@ async function apiRequest<T>(
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+
+  const method = (options.method || 'GET').toUpperCase();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers['Idempotency-Key']) {
+    headers['Idempotency-Key'] = generateIdempotencyKey();
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -268,7 +280,6 @@ export interface Product {
   tags_raw: string[];
   images: string[];
   price: number | null;
-  supplier_name: string | null;
   source: string;
   batch_id: string | null;
   created_at: string;
@@ -414,6 +425,7 @@ export interface Order {
   order_id: string;
   etsy_receipt_id: string | null;
   shop_id: number;
+  supplier_user_id?: number | null;
   buyer_name: string;
   buyer_email: string;
   total_price: number | null;
@@ -523,6 +535,21 @@ export const ordersApi = {
     }
   ): Promise<any> => {
     return apiRequest(`/api/orders/${orderId}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  recordTracking: async (
+    orderId: number,
+    payload: {
+      tracking_code: string;
+      carrier_name?: string;
+      ship_date?: string;
+      note?: string;
+    }
+  ): Promise<any> => {
+    return apiRequest(`/api/orders/${orderId}/tracking`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -715,6 +742,24 @@ export interface UserPermissions {
   is_owner: boolean;
 }
 
+export interface SupplierProfile {
+  id: number;
+  tenant_id: number;
+  user_id: number;
+  shop_id?: number | null;
+  company_name?: string | null;
+  contact_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  notes?: string | null;
+}
+
 export const teamApi = {
   getMembers: async (): Promise<TeamMember[]> => {
     return apiRequest<TeamMember[]>('/api/team/members');
@@ -754,6 +799,21 @@ export const teamApi = {
     permissions: UserPermissions;
   }> => {
     return apiRequest('/api/team/me/role');
+  },
+};
+
+export const suppliersApi = {
+  getMyProfile: async (): Promise<SupplierProfile | null> => {
+    return apiRequest<SupplierProfile | null>('/api/suppliers/me');
+  },
+  updateMyProfile: async (payload: Partial<SupplierProfile>) => {
+    return apiRequest<SupplierProfile>('/api/suppliers/me', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+  list: async (): Promise<SupplierProfile[]> => {
+    return apiRequest<SupplierProfile[]>('/api/suppliers');
   },
 };
 

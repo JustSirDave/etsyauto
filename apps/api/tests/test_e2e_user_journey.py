@@ -27,15 +27,16 @@ class TestCompleteUserJourney:
         register_response = client.post("/api/auth/register", json={
             "email": "e2e@test.com",
             "password": "SecurePass123!",
-            "tenant_name": "E2E Test Tenant"
-        })
+            "tenant_name": "E2E Test Tenant",
+            "name": "E2E User"
+        }, headers={"Idempotency-Key": "e2e-register-1"})
         assert register_response.status_code in [200, 201]
         
         # Step 2: Login
         login_response = client.post("/api/auth/login", json={
             "email": "e2e@test.com",
             "password": "SecurePass123!"
-        })
+        }, headers={"Idempotency-Key": "e2e-login-1"})
         assert login_response.status_code == 200
         token = login_response.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
@@ -44,7 +45,7 @@ class TestCompleteUserJourney:
         # In real test, would use Playwright to complete OAuth flow
         shop_response = client.post(
             "/api/shops",
-            headers=headers,
+            headers={**headers, "Idempotency-Key": "e2e-shop-1"},
             json={
                 "shop_name": "E2E Test Shop",
                 "etsy_shop_id": "12345678"
@@ -61,7 +62,7 @@ E2E-002,Handmade Bowl,Artisan handmade bowl,39.99,5"""
         files = {"file": ("products.csv", csv_content, "text/csv")}
         ingest_response = client.post(
             f"/api/ingestion/upload?shop_id={shop_id}",
-            headers=headers,
+            headers={**headers, "Idempotency-Key": "e2e-ingest-1"},
             files=files
         )
         assert ingest_response.status_code in [200, 202]
@@ -91,7 +92,7 @@ E2E-002,Handmade Bowl,Artisan handmade bowl,39.99,5"""
         # Step 6: Generate AI content
         ai_response = client.post(
             f"/api/products/{product_id}/generate",
-            headers=headers,
+            headers={**headers, "Idempotency-Key": "e2e-generate-1"},
             json={"fields": ["title", "description", "tags"]}
         )
         assert ai_response.status_code in [200, 202]
@@ -99,7 +100,7 @@ E2E-002,Handmade Bowl,Artisan handmade bowl,39.99,5"""
         # Step 7: Create schedule
         schedule_response = client.post(
             "/api/schedules",
-            headers=headers,
+            headers={**headers, "Idempotency-Key": "e2e-schedule-1"},
             json={
                 "name": "E2E Test Schedule",
                 "shop_id": shop_id,
@@ -113,7 +114,7 @@ E2E-002,Handmade Bowl,Artisan handmade bowl,39.99,5"""
         # Step 8: Publish listing
         publish_response = client.post(
             f"/api/listings/publish",
-            headers=headers,
+            headers={**headers, "Idempotency-Key": "e2e-publish-1"},
             json={
                 "product_id": product_id,
                 "shop_id": shop_id
@@ -124,7 +125,7 @@ E2E-002,Handmade Bowl,Artisan handmade bowl,39.99,5"""
         # Step 9: Sync orders (if shop connected)
         sync_response = client.post(
             f"/api/orders/sync?shop_id={shop_id}",
-            headers=headers
+            headers={**headers, "Idempotency-Key": "e2e-sync-1"}
         )
         assert sync_response.status_code in [200, 202]
         

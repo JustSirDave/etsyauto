@@ -136,14 +136,19 @@ function OrderDetailContent() {
     }
     try {
       setFulfilling(true);
-      await ordersApi.fulfill(order.id, {
+      const payload = {
         tracking_code: trackingCode.trim(),
         carrier_name: carrierName.trim() || undefined,
         ship_date: shipDate || undefined,
         note: note.trim() || undefined,
-        send_bcc: false,
-      });
-      showToast('Tracking submitted to Etsy', 'success');
+      };
+      if (user?.role === 'supplier') {
+        await ordersApi.recordTracking(order.id, payload);
+        showToast('Tracking recorded', 'success');
+      } else {
+        await ordersApi.fulfill(order.id, { ...payload, send_bcc: false });
+        showToast('Tracking submitted to Etsy', 'success');
+      }
       setTrackingCode('');
       setCarrierName('');
       setShipDate('');
@@ -273,9 +278,14 @@ function OrderDetailContent() {
       {(user?.role === 'supplier' || user?.role === 'owner' || user?.role === 'admin') && (
         <DashboardCard>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Fulfillment</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Tracking</h2>
             <span className="text-sm text-[var(--text-muted)]">Status: {order.fulfillment_status || 'unshipped'}</span>
           </div>
+          {user?.role === 'supplier' && (
+            <p className="text-sm text-[var(--text-muted)] mb-4">
+              Tracking is recorded manually and will not be sent to Etsy.
+            </p>
+          )}
           {(user?.role === 'owner' || user?.role === 'admin') && suppliers.length > 0 && (
             <div className="mb-4 flex flex-col md:flex-row gap-3 items-start md:items-end">
               <div className="flex-1">
@@ -336,7 +346,7 @@ function OrderDetailContent() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                placeholder="Optional note to buyer"
+                placeholder={user?.role === 'supplier' ? 'Optional internal note' : 'Optional note to buyer'}
               />
             </div>
           </div>

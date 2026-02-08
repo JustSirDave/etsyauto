@@ -21,8 +21,8 @@ from app.api.dependencies import (
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
-from app.models.tenancy import User, Membership
-from app.models.listings import Product, AIGeneration, SupplierProductAssignment
+from app.models.tenancy import User
+from app.models.listings import Product, AIGeneration
 from app.schemas.products import (
     ProductImportRequest, 
     ProductImportBatchRequest,
@@ -35,10 +35,6 @@ from app.services.ai_providers import AIProviderType
 from app.worker.tasks.product_sync_tasks import sync_products_from_etsy
 
 router = APIRouter()
-
-
-class AssignSupplierToProductRequest(BaseModel):
-    supplier_user_id: int
 
 
 @router.post("/import", tags=["Products"])
@@ -168,8 +164,6 @@ async def import_csv(
             images=images,
             price=price,
             quantity=quantity,
-            supplier_name=row.get('supplier'),
-            supplier_product_id=row.get('supplier_product_id'),
             source='csv',
             ingest_batch_id=batch_id
         )
@@ -236,7 +230,6 @@ async def list_products(
                 "tags_raw": p.tags_raw,
                 "images": p.images,
                 "price": p.price,
-                "supplier_name": p.supplier_name,
                 "source": p.source,
                 "batch_id": p.ingest_batch_id,
                 "created_at": p.created_at.isoformat()
@@ -280,8 +273,6 @@ async def get_product(
         "images": product.images,
         "variants": product.variants,
         "price": product.price,
-        "supplier_name": product.supplier_name,
-        "supplier_product_id": product.supplier_product_id,
         "source": product.source,
         "batch_id": product.ingest_batch_id,
         "created_at": product.created_at.isoformat()
@@ -400,61 +391,6 @@ async def update_product(
         "message": "Product updated successfully",
         "product_id": product.id
     }
-
-
-@router.post("/{product_id}/assign-supplier", tags=["Products"])
-async def assign_supplier_to_product(
-    product_id: int,
-    request: AssignSupplierToProductRequest,
-    context: UserContext = Depends(require_permission(Permission.ASSIGN_ORDER)),
-    db: Session = Depends(get_db),
-):
-    """
-    Assign a supplier to a product for future order routing.
-    Requires: ASSIGN_ORDER permission (Owner, Admin only)
-    """
-    product = db.query(Product).filter(
-        Product.id == product_id,
-        Product.tenant_id == context.tenant_id
-    ).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    if product.shop_id is None:
-        raise HTTPException(status_code=400, detail="Product must be linked to a shop before assigning a supplier")
-
-    ensure_shop_access(product.shop_id, context, db)
-
-    supplier_membership = db.query(Membership).filter(
-        Membership.user_id == request.supplier_user_id,
-        Membership.tenant_id == context.tenant_id,
-        Membership.role == "supplier",
-        Membership.invitation_status == "accepted",
-    ).first()
-    if not supplier_membership:
-        raise HTTPException(status_code=400, detail="Supplier membership not found")
-
-    assignment = db.query(SupplierProductAssignment).filter(
-        SupplierProductAssignment.product_id == product.id
-    ).first()
-    if assignment:
-        assignment.supplier_user_id = request.supplier_user_id
-        assignment.assigned_by_user_id = context.user_id
-        assignment.assigned_at = datetime.now(timezone.utc)
-    else:
-        assignment = SupplierProductAssignment(
-            tenant_id=product.tenant_id,
-            shop_id=product.shop_id,
-            product_id=product.id,
-            supplier_user_id=request.supplier_user_id,
-            assigned_by_user_id=context.user_id,
-            assigned_at=datetime.now(timezone.utc),
-        )
-        db.add(assignment)
-
-    db.commit()
-
-    return {"message": "Supplier assigned to product", "product_id": product.id}
 
 
 @router.delete("/{product_id}", tags=["Products"])

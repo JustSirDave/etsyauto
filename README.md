@@ -71,7 +71,7 @@ docs/           Documentation
 ✅ **Policy Compliance** - Automatic Etsy policy checker  
 ✅ **Smart Publishing** - Rate-limited Etsy API integration  
 ✅ **Automated Scheduling** - Queue management for Etsy listings  
-✅ **Order Sync** - Etsy orders with Printful fulfillment  
+✅ **Order Sync** - Etsy orders with manual tracking
 ✅ **Usage Tracking** - Cost tracking & comprehensive audit logs  
 
 ## 🔐 Security

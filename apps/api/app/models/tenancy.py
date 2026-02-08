@@ -124,6 +124,33 @@ class Membership(Base):
     tenant = relationship("Tenant", back_populates="memberships")
 
 
+class SupplierProfile(Base):
+    """Supplier profile for manual fulfillment"""
+    __tablename__ = "supplier_profiles"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True, unique=True)
+    shop_id = Column(BigInteger, ForeignKey("shops.id"), nullable=True, index=True)
+
+    company_name = Column(Text, nullable=True)
+    contact_name = Column(Text, nullable=True)
+    email = Column(CITEXT, nullable=True)
+    phone = Column(Text, nullable=True)
+
+    address_line1 = Column(Text, nullable=True)
+    address_line2 = Column(Text, nullable=True)
+    city = Column(Text, nullable=True)
+    state = Column(Text, nullable=True)
+    postal_code = Column(Text, nullable=True)
+    country = Column(Text, nullable=True)
+
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class Shop(Base):
     """Connected Etsy shops"""
     __tablename__ = "shops"
@@ -167,7 +194,7 @@ class OAuthToken(Base):
     tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)  # Added for faster queries
     provider = Column(
         String(20),
-        CheckConstraint("provider IN ('etsy', 'printful')"),
+        CheckConstraint("provider IN ('etsy')"),
         nullable=False
     )
     

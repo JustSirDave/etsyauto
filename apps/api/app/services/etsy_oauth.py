@@ -86,6 +86,9 @@ class EtsyOAuthService:
         Returns:
             Dict with access_token, refresh_token, expires_in
         """
+        if not self.client_id or not self.redirect_uri:
+            raise Exception("Etsy OAuth is not configured. Missing client_id or redirect_uri.")
+
         data = {
             "grant_type": "authorization_code",
             "client_id": self.client_id,

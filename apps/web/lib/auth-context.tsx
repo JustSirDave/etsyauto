@@ -88,29 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   
-  // Check if auth is disabled
-  const authDisabled = process.env.NEXT_PUBLIC_AUTH_DISABLED === 'true';
-
   // Load user on mount
   useEffect(() => {
-    if (authDisabled) {
-      // Bypass auth - set a default user
-      setUser({
-        id: 1,
-        email: 'admin@example.com',
-        name: 'Admin',
-        tenant_id: 1,
-        tenant_name: 'Default Tenant',
-        role: 'owner',
-        profile_picture_url: null,
-        tenant_description: null,
-        onboarding_completed: true,
-      });
-      setIsLoading(false);
-    } else {
-      loadUser();
-    }
-  }, [authDisabled]);
+    loadUser();
+  }, []);
 
   const loadUser = async () => {
     try {
@@ -126,12 +107,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string, rememberMe: boolean = false) => {
-    // Bypass auth if disabled
-    if (authDisabled) {
-      router.push('/');
-      return;
-    }
-    
     try {
       setError(null);
       setIsLoading(true);
