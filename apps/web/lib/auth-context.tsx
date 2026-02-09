@@ -130,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Redirect to dashboard
-      router.push('/');
+      router.push('/dashboard');
     } catch (err: any) {
       setError(getSafeAuthError(err, 'Login failed. Please try again.'));
       throw err;
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Post-registration onboarding (new users always see onboarding)
-      router.push('/?welcome=true');
+      router.push('/dashboard?welcome=true');
     } catch (err: any) {
       // Status 202 means account created successfully but needs email verification
       // Check both err.status and fall through to message check
@@ -227,10 +227,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.user.is_new_user) {
         // TODO: Show onboarding modal or redirect to onboarding flow
         // For now, redirect to dashboard with a welcome message
-        router.push('/?welcome=true');
+        router.push('/dashboard?welcome=true');
       } else {
         // Existing user - redirect to dashboard
-        router.push('/');
+        router.push('/dashboard');
       }
     } catch (err) {
       setError(getSafeAuthError(err, 'Google sign in failed. Please try again.'));
