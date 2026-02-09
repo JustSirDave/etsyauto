@@ -7,12 +7,12 @@
 
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { 
+import {
   Sparkles, 
   BarChart3, 
   Zap, 
   Shield, 
-  Package, 
+  Package,
   TrendingUp,
   Clock,
   Users,
@@ -74,7 +74,7 @@ export default function LandingPage() {
           animate={{ x: [0, 60, 0], y: [0, -40, 0] }}
           transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
         />
-      </div>
+          </div>
 
       {/* Navigation */}
       <motion.nav 
@@ -104,7 +104,7 @@ export default function LandingPage() {
           >
             Get Started
           </button>
-        </div>
+      </div>
       </motion.nav>
 
       {/* Hero Section */}
@@ -121,7 +121,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/60 backdrop-blur-sm rounded-full text-blue-700 text-sm font-medium mb-6">
               <Sparkles className="w-4 h-4" />
               AI-Powered Etsy Automation
-            </div>
+    </div>
           </motion.div>
 
           <motion.h1
@@ -189,7 +189,7 @@ export default function LandingPage() {
                     <div className="w-3 h-3 rounded-full bg-green-400" />
                   </div>
                   <div className="text-sm text-gray-400">Dashboard</div>
-                </div>
+      </div>
                 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-4 gap-4 mb-6">
@@ -211,7 +211,7 @@ export default function LandingPage() {
                       <div className="text-xs text-green-600 font-medium">{stat.change}</div>
                     </motion.div>
                   ))}
-                </div>
+        </div>
 
                 {/* Chart Preview */}
                 <div className="h-48 bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl flex items-center justify-center border border-blue-100">
@@ -234,8 +234,8 @@ export default function LandingPage() {
                       </linearGradient>
                     </defs>
                   </svg>
-                </div>
-              </div>
+        </div>
+      </div>
             </motion.div>
 
             {/* Floating elements around dashboard */}
@@ -254,7 +254,7 @@ export default function LandingPage() {
               <Zap className="w-6 h-6 text-yellow-600" />
             </motion.div>
           </motion.div>
-        </div>
+      </div>
       </motion.section>
 
       {/* Feature Section */}
@@ -329,7 +329,7 @@ export default function LandingPage() {
               >
                 <div className={`w-14 h-14 bg-gradient-to-br ${feature.gradient} rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
                   <feature.icon className="w-7 h-7 text-white" />
-                </div>
+      </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{feature.title}</h3>
                 <p className="text-gray-600 leading-relaxed">{feature.description}</p>
               </motion.div>
@@ -392,10 +392,10 @@ export default function LandingPage() {
                       <div className="flex-1">
                         <div className="h-3 bg-gray-200 rounded w-3/4 mb-2" />
                         <div className="h-2 bg-gray-100 rounded w-1/2" />
-                      </div>
-                    </div>
+      </div>
+    </div>
                   ))}
-                </div>
+      </div>
               </div>
             </motion.div>
           </div>
@@ -440,7 +440,7 @@ export default function LandingPage() {
               >
                 <div className="h-12 flex items-center justify-center text-gray-700 font-semibold">
                   {tool}
-                </div>
+            </div>
               </motion.div>
             ))}
           </motion.div>
@@ -506,8 +506,8 @@ export default function LandingPage() {
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
                     {testimonial.avatar}
-                  </div>
-                  <div>
+      </div>
+          <div>
                     <div className="font-semibold text-gray-900">{testimonial.author}</div>
                     <div className="text-sm text-gray-500">{testimonial.role}</div>
                   </div>
@@ -515,7 +515,7 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </motion.div>
-        </div>
+          </div>
       </section>
 
       {/* Pricing Section */}
@@ -740,7 +740,7 @@ export default function LandingPage() {
                 <li><a href="/docs" className="hover:text-gray-900 transition-colors">Documentation</a></li>
               </ul>
             </div>
-            <div>
+        <div>
               <h4 className="font-semibold text-gray-900 mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-gray-600">
                 <li><a href="/terms" className="hover:text-gray-900 transition-colors">Terms</a></li>

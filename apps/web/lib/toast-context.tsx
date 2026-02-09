@@ -50,26 +50,26 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const getIcon = (type: Toast['type']) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5" />;
+        return <CheckCircle className="w-5 h-5 text-green-600" />;
       case 'error':
-        return <XCircle className="w-5 h-5" />;
+        return <XCircle className="w-5 h-5 text-red-600" />;
       case 'warning':
-        return <AlertTriangle className="w-5 h-5" />;
+        return <AlertTriangle className="w-5 h-5 text-yellow-600" />;
       case 'info':
-        return <Info className="w-5 h-5" />;
+        return <Info className="w-5 h-5 text-blue-600" />;
     }
   };
 
   const getColors = (type: Toast['type']) => {
     switch (type) {
       case 'success':
-        return 'bg-[var(--background)] border-[var(--text-primary)] text-[var(--text-primary)]';
+        return 'bg-green-50 border-green-500 text-green-800';
       case 'error':
-        return 'bg-[var(--background)] border-[var(--text-secondary)] text-[var(--text-primary)]';
+        return 'bg-red-50 border-red-500 text-red-800';
       case 'warning':
-        return 'bg-[var(--background)] border-[var(--border-color)] text-[var(--text-primary)]';
+        return 'bg-yellow-50 border-yellow-500 text-yellow-800';
       case 'info':
-        return 'bg-[var(--background)] border-[var(--text-muted)] text-[var(--text-primary)]';
+        return 'bg-blue-50 border-blue-500 text-blue-800';
     }
   };
 

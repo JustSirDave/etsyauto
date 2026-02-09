@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, XCircle, Edit3, AlertTriangle, Sparkles, Clock, Tag } from "lucide-react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
 
 interface PolicyViolation {
   type: string;
@@ -212,30 +213,30 @@ export default function AIReviewPage() {
   };
 
   const getPolicySeverityColor = (severity?: string) => {
-    if (severity === "critical") return "text-red-600 bg-red-50";
-    if (severity === "warning") return "text-yellow-600 bg-yellow-50";
-    return "text-gray-600 bg-gray-50";
+    if (severity === "critical") return "text-[var(--danger)] bg-[var(--danger-bg)]";
+    if (severity === "warning") return "text-[var(--warning)] bg-[var(--warning-bg)]";
+    return "text-[var(--text-secondary)] bg-[var(--background)] border border-[var(--border-color)]";
   };
 
   const getPolicyStatusBadge = (status: string) => {
     if (status === "failed") {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-          <XCircle className="w-3 h-3 mr-1" />
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--danger-bg)] text-[var(--danger)]">
+          <XCircle className="w-3 h-3 mr-1 text-[var(--danger)]" />
           Failed
         </span>
       );
     }
     if (status === "needs_review") {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-          <AlertTriangle className="w-3 h-3 mr-1" />
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--warning-bg)] text-[var(--warning)]">
+          <AlertTriangle className="w-3 h-3 mr-1 text-[var(--warning)]" />
           Needs Review
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--primary-bg)] text-[var(--text-primary)]">
         {status}
       </span>
     );
@@ -243,54 +244,57 @@ export default function AIReviewPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading pending reviews...</p>
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)] mx-auto"></div>
+            <p className="mt-4 text-[var(--text-muted)]">Loading pending reviews...</p>
+          </div>
         </div>
-      </div>
+      </DashboardLayout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                <Sparkles className="w-6 h-6 mr-2 text-blue-600" />
-                AI Content Review
-              </h1>
-              <p className="mt-1 text-sm text-gray-500">
-                Review AI-generated content with policy violations
-              </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">{pendingReviews.length}</div>
-                <div className="text-xs text-gray-500">Pending Reviews</div>
+    <DashboardLayout>
+      <div className="max-w-[1600px] mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
+            <Sparkles className="w-7 h-7 text-[var(--primary)]" />
+            AI Content Review
+          </h1>
+          <p className="text-[var(--text-muted)] mt-1">
+            Review AI-generated content with policy violations
+          </p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[var(--primary-bg)] flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-[var(--primary)]" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-[var(--text-primary)]">{pendingReviews.length}</p>
+                <p className="text-[var(--text-muted)] text-sm">Pending Reviews</p>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {pendingReviews.length === 0 ? (
-          // Empty state
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">All caught up!</h3>
-            <p className="text-gray-500">No pending AI-generated content to review.</p>
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-10 text-center">
+            <CheckCircle2 className="w-14 h-14 text-[var(--text-muted)] mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">All caught up!</h3>
+            <p className="text-[var(--text-secondary)]">No pending AI-generated content to review.</p>
           </div>
         ) : (
-          // Review list and detail view
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: List of pending reviews */}
             <div className="lg:col-span-1 space-y-3">
-              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider px-2">
+              <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider px-2">
                 Pending Reviews
               </h2>
               <div className="space-y-2">
@@ -298,26 +302,26 @@ export default function AIReviewPage() {
                   <button
                     key={review.id}
                     onClick={() => setSelectedReview(review)}
-                    className={`w-full text-left p-4 rounded-lg border transition-all ${
+                    className={`w-full text-left p-4 rounded-xl border transition-all card-hover ${
                       selectedReview?.id === review.id
-                        ? "bg-blue-50 border-blue-500 shadow-md"
-                        : "bg-white border-gray-200 hover:border-gray-300 hover:shadow"
+                        ? "bg-[var(--primary-bg)] border-[var(--primary)]"
+                        : "bg-[var(--card-bg)] border-[var(--border-color)]"
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-gray-900 truncate">{review.title}</h3>
-                        <p className="text-xs text-gray-500 mt-1">Product #{review.product_id}</p>
+                        <h3 className="font-medium text-[var(--text-primary)] truncate">{review.title}</h3>
+                        <p className="text-xs text-[var(--text-muted)] mt-1">Product #{review.product_id}</p>
                       </div>
                       {getPolicyStatusBadge(review.policy_status)}
                     </div>
-                    <div className="flex items-center text-xs text-gray-500 space-x-2">
+                    <div className="flex items-center text-xs text-[var(--text-muted)] space-x-2">
                       <Clock className="w-3 h-3" />
                       <span>{new Date(review.created_at).toLocaleDateString()}</span>
-                      <span className="text-gray-400">•</span>
+                      <span className="text-[var(--border-color)]">•</span>
                       <span className="capitalize">{review.provider}</span>
                     </div>
-                    <div className="mt-2 flex items-center text-xs text-red-600">
+                    <div className="mt-2 flex items-center text-xs text-[var(--danger)]">
                       <AlertTriangle className="w-3 h-3 mr-1" />
                       {review.policy_flags?.violations?.length || 0} violation(s)
                     </div>
@@ -329,15 +333,14 @@ export default function AIReviewPage() {
             {/* Right: Detail view */}
             <div className="lg:col-span-2">
               {selectedReview ? (
-                <div className="bg-white rounded-lg shadow">
-                  {/* Header */}
-                  <div className="border-b p-6">
+                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl">
+                  <div className="border-b border-[var(--border-color)] p-6">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-2">
+                        <h2 className="text-xl font-bold text-[var(--text-primary)] mb-2">
                           {selectedReview.title}
                         </h2>
-                        <div className="flex items-center space-x-4 text-sm text-gray-500">
+                        <div className="flex items-center space-x-4 text-sm text-[var(--text-muted)]">
                           <span>Product #{selectedReview.product_id}</span>
                           <span>•</span>
                           <span className="capitalize">{selectedReview.provider}</span>
@@ -350,9 +353,9 @@ export default function AIReviewPage() {
                   </div>
 
                   {/* Policy Violations */}
-                  <div className="p-6 border-b bg-red-50">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
-                      <AlertTriangle className="w-4 h-4 mr-2 text-red-600" />
+                  <div className="p-6 border-b border-[var(--border-color)] bg-[var(--background)]">
+                    <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center">
+                      <AlertTriangle className="w-4 h-4 mr-2 text-[var(--danger)]" />
                       Policy Violations ({selectedReview.policy_flags?.violations?.length || 0})
                     </h3>
                     <div className="space-y-2">
@@ -364,7 +367,7 @@ export default function AIReviewPage() {
                           )}`}
                         >
                           <div className="flex items-start">
-                            <XCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+                            <XCircle className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0 text-[var(--danger)]" />
                             <div className="flex-1">
                               <p className="font-medium text-sm">{violation.message}</p>
                               {violation.field && (
@@ -386,11 +389,11 @@ export default function AIReviewPage() {
                     {/* Suggestions */}
                     {selectedReview.policy_flags?.suggestions &&
                       selectedReview.policy_flags.suggestions.length > 0 && (
-                        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                          <h4 className="text-sm font-semibold text-blue-900 mb-2">
-                            💡 Suggestions:
+                        <div className="mt-4 p-3 bg-[var(--info-bg)] rounded-lg border border-[var(--border-color)]">
+                          <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
+                            Suggestions
                           </h4>
-                          <ul className="text-sm text-blue-800 space-y-1">
+                          <ul className="text-sm text-[var(--text-secondary)] space-y-1">
                             {selectedReview.policy_flags.suggestions.map((suggestion, idx) => (
                               <li key={idx} className="flex items-start">
                                 <span className="mr-2">•</span>
@@ -405,19 +408,19 @@ export default function AIReviewPage() {
                   {/* Generated Content */}
                   <div className="p-6 space-y-4">
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2">Title</h3>
-                      <p className="text-gray-900">{selectedReview.title}</p>
+                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Title</h3>
+                      <p className="text-[var(--text-primary)]">{selectedReview.title}</p>
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2">Description</h3>
-                      <p className="text-gray-900 whitespace-pre-wrap">
+                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Description</h3>
+                      <p className="text-[var(--text-primary)] whitespace-pre-wrap">
                         {selectedReview.description}
                       </p>
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center">
+                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2 flex items-center">
                         <Tag className="w-4 h-4 mr-1" />
                         Tags ({selectedReview.tags.length})
                       </h3>
@@ -425,7 +428,7 @@ export default function AIReviewPage() {
                         {selectedReview.tags.map((tag, idx) => (
                           <span
                             key={idx}
-                            className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                            className="px-3 py-1 bg-[var(--primary-bg)] text-[var(--text-primary)] border border-[var(--border-color)] rounded-full text-sm"
                           >
                             {tag}
                           </span>
@@ -435,11 +438,11 @@ export default function AIReviewPage() {
                   </div>
 
                   {/* Actions */}
-                  <div className="border-t p-6 bg-gray-50 flex items-center justify-between">
+                  <div className="border-t border-[var(--border-color)] p-6 bg-[var(--background)] flex items-center justify-between">
                     <button
                       onClick={() => handleReject(selectedReview.id)}
                       disabled={actionLoading}
-                      className="px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                      className="px-4 py-2 border border-[var(--danger)]/40 text-[var(--danger)] rounded-lg hover:bg-[var(--danger-bg)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                     >
                       <XCircle className="w-4 h-4 mr-2" />
                       Reject
@@ -449,7 +452,7 @@ export default function AIReviewPage() {
                       <button
                         onClick={() => openModifyModal(selectedReview)}
                         disabled={actionLoading}
-                        className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        className="px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--card-bg-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                       >
                         <Edit3 className="w-4 h-4 mr-2" />
                         Modify
@@ -458,7 +461,7 @@ export default function AIReviewPage() {
                       <button
                         onClick={() => handleAccept(selectedReview.id)}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                        className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                       >
                         <CheckCircle2 className="w-4 h-4 mr-2" />
                         Accept Anyway
@@ -467,12 +470,12 @@ export default function AIReviewPage() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-white rounded-lg shadow p-12 text-center">
-                  <Sparkles className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-10 text-center">
+                  <Sparkles className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">
                     Select a review to get started
                   </h3>
-                  <p className="text-gray-500">
+                  <p className="text-[var(--text-secondary)]">
                     Choose an item from the list to review its AI-generated content and policy
                     violations.
                   </p>
@@ -485,74 +488,74 @@ export default function AIReviewPage() {
 
       {/* Modify Modal */}
       {showModifyModal && selectedReview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-[var(--border-color)]">
+              <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center">
                 <Edit3 className="w-5 h-5 mr-2" />
                 Modify Content
               </h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-[var(--text-secondary)] mt-1">
                 Edit the content to fix policy violations. It will be re-checked automatically.
               </p>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Title</label>
                 <input
                   type="text"
                   value={modifyForm.title}
                   onChange={(e) => setModifyForm({ ...modifyForm, title: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
                   maxLength={140}
                 />
-                <p className="text-xs text-gray-500 mt-1">{modifyForm.title.length}/140 characters</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{modifyForm.title.length}/140 characters</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
                 <textarea
                   value={modifyForm.description}
                   onChange={(e) => setModifyForm({ ...modifyForm, description: e.target.value })}
                   rows={6}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
                   maxLength={1000}
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-[var(--text-muted)] mt-1">
                   {modifyForm.description.length}/1000 characters
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Tags (comma-separated)
                 </label>
                 <input
                   type="text"
                   value={modifyForm.tags}
                   onChange={(e) => setModifyForm({ ...modifyForm, tags: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
                   placeholder="handmade, ceramic, mug, coffee"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-[var(--text-muted)] mt-1">
                   {modifyForm.tags.split(",").filter((t) => t.trim()).length} tags (max 13)
                 </p>
               </div>
             </div>
 
-            <div className="p-6 border-t bg-gray-50 flex items-center justify-end space-x-3">
+            <div className="p-6 border-t border-[var(--border-color)] bg-[var(--background)] flex items-center justify-end space-x-3">
               <button
                 onClick={() => setShowModifyModal(false)}
                 disabled={actionLoading}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                className="px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--card-bg)] transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleModify}
                 disabled={actionLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
                 {actionLoading ? (
                   <>
@@ -570,7 +573,6 @@ export default function AIReviewPage() {
           </div>
         </div>
       )}
-    </div>
+    </DashboardLayout>
   );
 }
-

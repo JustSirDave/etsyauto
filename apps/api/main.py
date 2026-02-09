@@ -25,6 +25,7 @@ from app.middleware.metrics_middleware import MetricsMiddleware
 from app.middleware.sentry_middleware import SentryContextMiddleware
 from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.idempotency import IdempotencyMiddleware
+from app.middleware.content_length_fix import ContentLengthFixMiddleware
 
 # Initialize logging redaction and Sentry
 setup_log_redaction()
@@ -93,6 +94,9 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
             else:
                 response.headers["X-Dev-CORS"] = "1"
         return response
+
+# Content-Length fix must be the outermost layer.
+app.add_middleware(ContentLengthFixMiddleware)
 
 # CORS Middleware - Explicitly configured for all endpoints including OPTIONS
 cors_allow_all = settings.ENVIRONMENT != "production"

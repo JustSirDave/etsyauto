@@ -71,9 +71,9 @@ export default function RegisterPage() {
     <AuthLayout mode="register">
       {/* Error Message */}
       {displayError && (
-        <div className="mb-6 bg-[var(--primary-bg)] border border-[var(--border-color)] rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-[var(--text-primary)] flex-shrink-0 mt-0.5" />
-          <p className="text-[var(--text-primary)] text-sm">{displayError}</p>
+        <div className="mb-6 bg-red-50 border-2 border-red-500 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <p className="text-red-800 text-sm font-medium">{displayError}</p>
         </div>
       )}
 
