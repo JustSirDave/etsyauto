@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
-import { Package, Upload, Plus } from 'lucide-react';
+import { Package, Upload, Plus, Download } from 'lucide-react';
 import { productsApi, listingsApi, type Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
@@ -85,6 +85,37 @@ function ProductsContent() {
       showToast(error.detail || t('toast.syncFailed'), 'error');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleExportProblemProducts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/products/export/problem-products`;
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Export failed');
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `problem_products_${new Date().getTime()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(downloadUrl);
+      document.body.removeChild(a);
+
+      showToast('Problem products exported successfully', 'success');
+    } catch (error: any) {
+      console.error('Failed to export:', error);
+      showToast(error.detail || 'Failed to export problem products', 'error');
     }
   };
 
@@ -202,6 +233,14 @@ function ProductsContent() {
               >
                 <Upload className="w-4 h-4" />
                 {t('products.importCsv')}
+              </button>
+              <button
+                onClick={handleExportProblemProducts}
+                className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] transition-colors"
+                title="Export products with validation issues"
+              >
+                <Download className="w-4 h-4" />
+                Export Problems
               </button>
               <button
                 onClick={() => setShowAddModal(true)}

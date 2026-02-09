@@ -182,6 +182,88 @@ async def import_csv(
     }
 
 
+@router.get("/export/problem-products", tags=["Products"])
+async def export_problem_products(
+    batch_id: Optional[str] = None,
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Export products with validation issues as CSV
+    Includes products with missing required fields or other problems
+    Requires: READ_PRODUCT permission
+    """
+    from fastapi.responses import StreamingResponse
+    
+    # Get products with issues (missing required fields for Etsy listing)
+    query = filter_by_tenant(db.query(Product), context.tenant_id, Product.tenant_id)
+    
+    if batch_id:
+        query = query.filter(Product.ingest_batch_id == batch_id)
+    
+    products = query.all()
+    
+    # Filter products with issues
+    problem_products = []
+    for product in products:
+        issues = []
+        
+        # Check for missing required fields
+        if not product.title_raw or len(product.title_raw) < 1:
+            issues.append("Missing title")
+        if not product.description_raw or len(product.description_raw) < 1:
+            issues.append("Missing description")
+        if not product.price or product.price <= 0:
+            issues.append("Missing or invalid price")
+        if not product.quantity or product.quantity < 0:
+            issues.append("Missing or invalid quantity")
+        if not product.tags_raw or len(product.tags_raw) == 0:
+            issues.append("Missing tags")
+        
+        if issues:
+            problem_products.append({
+                "product": product,
+                "issues": "; ".join(issues)
+            })
+    
+    # Generate CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "Product ID", "SKU", "Title", "Description", "Price", "Quantity", 
+        "Tags", "Source", "Batch ID", "Issues", "Created At"
+    ])
+    
+    # Data rows
+    for item in problem_products:
+        product = item["product"]
+        writer.writerow([
+            product.id,
+            product.sku or "",
+            product.title_raw or "",
+            (product.description_raw or "")[:100] + "..." if product.description_raw and len(product.description_raw) > 100 else product.description_raw or "",
+            f"{product.price / 100:.2f}" if product.price else "",
+            product.quantity or "",
+            "|".join(product.tags_raw) if product.tags_raw else "",
+            product.source or "",
+            product.ingest_batch_id or "",
+            item["issues"],
+            product.created_at.isoformat() if product.created_at else ""
+        ])
+    
+    # Return as downloadable CSV
+    output.seek(0)
+    filename = f"problem_products_{batch_id or 'all'}_{int(datetime.now(timezone.utc).timestamp())}.csv"
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+
 @router.post("/sync/etsy", tags=["Products"])
 async def sync_products_from_shop(
     shop_id: int,
