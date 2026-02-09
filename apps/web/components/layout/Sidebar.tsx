@@ -39,7 +39,7 @@ interface NavSection {
 const navigation: NavSection[] = [
   {
     items: [
-  { name: 'nav.dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
     ],
   },
   {

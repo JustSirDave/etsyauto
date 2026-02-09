@@ -343,8 +343,9 @@ function DashboardContent() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('dashboard.title')}</h1>
-          <p className="text-[var(--text-muted)] mt-1">{t('dashboard.subtitle')}</p>
+        <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+          Hi, {selectedShop?.display_name || user?.name || 'there'}. Welcome back! Here's your Etsy shop overview.
+        </h1>
       </div>
 
       {/* Main Grid: Left (Connection Status + Quick Actions) / Right (KPIs) */}
