@@ -3,6 +3,7 @@ Products API Endpoints
 """
 
 from datetime import datetime, timezone
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -33,6 +34,8 @@ from app.schemas.products import (
 from app.services.ai_generation_service import AIGenerationService
 from app.services.ai_providers import AIProviderType
 from app.worker.tasks.product_sync_tasks import sync_products_from_etsy
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -190,8 +193,9 @@ async def sync_products_from_shop(
     Requires: CREATE_PRODUCT permission (Owner, Admin, Creator)
     """
     ensure_shop_access(shop_id, context, db)
-    sync_products_from_etsy.delay(shop_id=shop_id, tenant_id=context.tenant_id)
-    return {"message": "Etsy product sync started", "shop_id": shop_id}
+    task = sync_products_from_etsy.delay(shop_id=shop_id, tenant_id=context.tenant_id)
+    logger.info("Queued Etsy product sync task %s for shop_id=%s tenant_id=%s", task.id, shop_id, context.tenant_id)
+    return {"message": "Etsy product sync started", "shop_id": shop_id, "task_id": task.id}
 
 
 @router.get("/", tags=["Products"])
@@ -199,6 +203,7 @@ async def list_products(
     skip: int = 0,
     limit: int = 50,
     batch_id: Optional[str] = None,
+    shop_id: Optional[int] = None,
     context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
     db: Session = Depends(get_db)
 ):
@@ -215,6 +220,10 @@ async def list_products(
     
     if batch_id:
         query = query.filter(Product.ingest_batch_id == batch_id)
+
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        query = query.filter(Product.shop_id == shop_id)
     
     total = query.count()
     products = query.offset(skip).limit(limit).all()

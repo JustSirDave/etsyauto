@@ -240,7 +240,7 @@ function DashboardContent() {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLanguage();
-  const { shops, selectedShopId, isLoading: loadingShops } = useShop();
+  const { shops, selectedShopId, selectedShop, isLoading: loadingShops } = useShop();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [metrics, setMetrics] = useState<DashboardStats | null>(null);
   const [loadingMetrics, setLoadingMetrics] = useState(true);
@@ -335,8 +335,6 @@ function DashboardContent() {
     showToast(`${t('dashboard.messageOpening')} ${customer}...`, 'info');
   };
 
-  const etsyShop = shops.find((s) => s.status === 'connected');
-
   return (
     <div className="space-y-6">
       <Suspense fallback={null}>
@@ -364,8 +362,8 @@ function DashboardContent() {
               <div className="flex gap-3">
                 <ConnectionItem
                   name={t('dashboard.etsyShop')}
-                  status={etsyShop ? 'connected' : 'disconnected'}
-                  storeName={etsyShop?.display_name || user?.tenant_name}
+                  status={selectedShop ? 'connected' : 'disconnected'}
+                  storeName={selectedShop?.display_name || user?.tenant_name}
                   onConnect={() => window.location.href = '/settings'}
                   connectedLabel={t('dashboard.connected')}
                   notConnectedLabel={t('dashboard.notConnected')}

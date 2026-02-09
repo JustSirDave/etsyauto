@@ -153,13 +153,8 @@ def get_user_context(
             detail="Membership not found or not active"
         )
     
-    # Get allowed shop IDs (from JWT or membership - for now all shops in tenant for Owner/Admin)
-    allowed_shop_ids = current_user.get("shop_ids", [])
-    
-    # For Owner/Admin, allowed_shop_ids should be empty (meaning all shops)
-    # For Creator/Viewer, it should contain specific shop IDs
-    if role.lower() in ('owner', 'admin'):
-        allowed_shop_ids = []  # Empty = all shops
+    # Get allowed shop IDs from membership (user-linked shops)
+    allowed_shop_ids = membership.allowed_shop_ids or []
     
     context = UserContext(
         user_id=user_id,
@@ -286,18 +281,10 @@ def require_shop_access(
             )
         
         # Check access permissions
-        if allow_all_shops_for_owner_admin and context.role.lower() in ('owner', 'admin'):
-            # Owner/Admin can access all shops in tenant
+        if allow_all_shops_for_owner_admin and context.role.lower() in ('owner', 'admin') and not context.allowed_shop_ids:
             return context
-        
-        # Creator/Viewer must have explicit access
-        if shop_id not in context.allowed_shop_ids:
-            # Try to get all shops for tenant (in case allowed_shop_ids is empty = all)
-            if not context.allowed_shop_ids:
-                # If empty list and not owner/admin, check if user should have access
-                # For now, deny if not explicitly in allowed_shop_ids
-                pass
-            
+
+        if not can_access_shop(context.role, shop_id, context.allowed_shop_ids):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied to this shop"

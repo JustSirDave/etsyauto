@@ -31,11 +31,13 @@ def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
     """
     db = SessionLocal()
     try:
+        logger.info("Starting Etsy product sync for shop_id=%s tenant_id=%s", shop_id, tenant_id)
         shop = db.query(Shop).filter(
             Shop.id == shop_id,
             Shop.tenant_id == tenant_id
         ).first()
         if not shop:
+            logger.warning("Etsy product sync aborted: shop not found shop_id=%s tenant_id=%s", shop_id, tenant_id)
             return {"success": False, "error": "Shop not found"}
 
         redis_client = get_redis_client()
@@ -115,6 +117,15 @@ def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
                 offset += limit
 
         db.commit()
+        logger.info(
+            "Etsy product sync complete for shop_id=%s tenant_id=%s listings=%s created=%s updated=%s errors=%s",
+            shop_id,
+            tenant_id,
+            results["listings_fetched"],
+            results["products_created"],
+            results["products_updated"],
+            len(results["errors"]),
+        )
 
         shop_name = shop.display_name or f"Shop {shop.id}"
         if results["products_created"] or results["products_updated"]:

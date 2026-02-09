@@ -49,14 +49,13 @@ def filter_by_shops(
         - Owner/Admin: No filtering (all shops in tenant)
         - Creator/Viewer: Filter to allowed_shop_ids only
     """
-    if context.role.lower() in ('owner', 'admin'):
-        # Owner/Admin can access all shops in tenant
-        # Verify shop belongs to tenant (via join or subquery)
-        return query.join(Shop).filter(Shop.tenant_id == context.tenant_id)
-    
-    # Creator/Viewer: Only allowed shops
+    # If explicit shop links exist, always enforce them (all roles)
     if context.allowed_shop_ids:
         return query.filter(shop_id_column.in_(context.allowed_shop_ids))
+
+    if context.role.lower() in ('owner', 'admin'):
+        # Owner/Admin can access all shops in tenant if no explicit links set
+        return query.join(Shop).filter(Shop.tenant_id == context.tenant_id)
     
     # No allowed shops = no access
     return query.filter(shop_id_column == -1)  # Impossible condition = empty result
@@ -150,14 +149,21 @@ def ensure_shop_access(
         )
     
     # Check access permissions
-    if context.role.lower() in ('owner', 'admin'):
-        # Owner/Admin can access all shops in tenant
+    if context.allowed_shop_ids:
+        if shop_id not in context.allowed_shop_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this shop"
+            )
         return
-    
-    # Creator/Viewer must have explicit access
-    if shop_id not in (context.allowed_shop_ids or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this shop"
-        )
+
+    # No explicit links: Owner/Admin can access all shops in tenant
+    if context.role.lower() in ('owner', 'admin'):
+        return
+
+    # Non-owner/admin with no explicit links
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Access denied to this shop"
+    )
 

@@ -287,7 +287,7 @@ export interface Product {
 }
 
 export const productsApi = {
-  getAll: async (page: number = 1, limit: number = 20, batchId?: string) => {
+  getAll: async (page: number = 1, limit: number = 20, batchId?: string, options: ShopQueryOptions = {}) => {
     const params = new URLSearchParams({
       skip: String((page - 1) * limit),
       limit: String(limit),
@@ -295,6 +295,9 @@ export const productsApi = {
 
     if (batchId) {
       params.append('batch_id', batchId);
+    }
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
     }
 
     return apiRequest<{

@@ -240,12 +240,16 @@ def can_access_shop(role: str, shop_id: int, allowed_shop_ids: List[int]) -> boo
     """
     role_enum = Role(role.lower()) if role else None
     
-    # Owner and Admin have access to all shops
+    # If explicit shop links exist, enforce them for all roles
+    if allowed_shop_ids:
+        return shop_id in allowed_shop_ids
+
+    # Owner and Admin have access to all shops when no explicit links
     if role_enum in (Role.OWNER, Role.ADMIN):
         return True
-    
+
     # Creator, Viewer, and Supplier are restricted to allowed shops
-    return shop_id in allowed_shop_ids
+    return False
 
 
 def get_accessible_shop_ids(role: str, tenant_id: int, allowed_shop_ids: List[int], db) -> List[int]:
@@ -263,12 +267,16 @@ def get_accessible_shop_ids(role: str, tenant_id: int, allowed_shop_ids: List[in
     """
     role_enum = Role(role.lower()) if role else None
     
+    # If explicit links exist, return them for any role
+    if allowed_shop_ids:
+        return allowed_shop_ids
+
     # Owner and Admin can access all shops in tenant
     if role_enum in (Role.OWNER, Role.ADMIN):
         from app.models.tenancy import Shop
         all_shops = db.query(Shop.id).filter(Shop.tenant_id == tenant_id).all()
         return [shop.id for shop in all_shops]
-    
+
     # Creator, Viewer, and Supplier are restricted to explicitly allowed shops
-    return allowed_shop_ids or []
+    return []
 

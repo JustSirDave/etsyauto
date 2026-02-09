@@ -74,11 +74,15 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         if cached:
             cached_payload = json.loads(cached)
             cached_body = base64.b64decode(cached_payload["body"])
+            cached_headers = {
+                k: v for k, v in cached_payload.get("headers", {}).items()
+                if k.lower() not in ("content-length", "transfer-encoding")
+            }
             return Response(
                 content=cached_body,
                 status_code=cached_payload["status"],
                 media_type=cached_payload.get("content_type", "application/json"),
-                headers=cached_payload.get("headers", {}),
+                headers=cached_headers,
             )
 
         response = await call_next(request)
@@ -99,11 +103,17 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             }
             redis_client.setex(cache_key, self.ttl_seconds, json.dumps(payload))
 
+        # Filter out Content-Length as it will be recalculated
+        filtered_headers = {
+            k: v for k, v in response.headers.items() 
+            if k.lower() not in ("content-length", "transfer-encoding")
+        }
+        
         return Response(
             content=response_body,
             status_code=response.status_code,
             media_type=response.media_type,
-            headers=dict(response.headers),
+            headers=filtered_headers,
         )
 
 

@@ -18,7 +18,7 @@ from app.api.dependencies import (
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access
-from app.models.tenancy import Shop, OAuthToken
+from app.models.tenancy import Shop, OAuthToken, Membership
 from app.services.etsy_oauth import etsy_oauth, EtsyOAuthService
 from app.services.encryption import token_encryptor
 from app.services.token_manager import TokenManager
@@ -153,6 +153,18 @@ async def etsy_oauth_callback(
             )
             db.add(shop)
             db.flush()
+
+        # Link shop to the connecting user
+        membership = db.query(Membership).filter(
+            Membership.user_id == context.user_id,
+            Membership.tenant_id == context.tenant_id,
+            Membership.invitation_status == 'accepted'
+        ).first()
+        if membership:
+            allowed_shop_ids = membership.allowed_shop_ids or []
+            if shop.id not in allowed_shop_ids:
+                allowed_shop_ids.append(shop.id)
+                membership.allowed_shop_ids = allowed_shop_ids
         
         # Use TokenManager to save encrypted tokens
         token_manager = TokenManager(db, redis_client)
@@ -165,6 +177,20 @@ async def etsy_oauth_callback(
             provider="etsy",
             scopes=" ".join(EtsyOAuthService.SCOPES)
         )
+
+        # Link shop to the connecting user (per-user shop access)
+        membership = db.query(Membership).filter(
+            Membership.user_id == context.user_id,
+            Membership.tenant_id == context.tenant_id,
+            Membership.invitation_status == 'accepted'
+        ).first()
+        if membership:
+            allowed_shop_ids = membership.allowed_shop_ids or []
+            if shop.id not in allowed_shop_ids:
+                allowed_shop_ids.append(shop.id)
+                membership.allowed_shop_ids = allowed_shop_ids
+
+        db.commit()
         
         db.refresh(shop)
         
@@ -199,10 +225,29 @@ async def list_shops(
     """
     # Filter by tenant
     query = filter_by_tenant(db.query(Shop), context.tenant_id, Shop.tenant_id)
-    
-    # Filter by allowed shops for Creator/Viewer
-    if context.role.lower() not in ('owner', 'admin') and context.allowed_shop_ids:
-        query = query.filter(Shop.id.in_(context.allowed_shop_ids))
+
+    # Enforce per-user shop links
+    membership = db.query(Membership).filter(
+        Membership.user_id == context.user_id,
+        Membership.tenant_id == context.tenant_id,
+        Membership.invitation_status == 'accepted'
+    ).first()
+    if not membership:
+        raise HTTPException(status_code=403, detail="Membership not found or not active")
+
+    allowed_shop_ids = membership.allowed_shop_ids or []
+
+    # Backfill explicit links for owner/admin to preserve access
+    if not allowed_shop_ids and context.role.lower() in ('owner', 'admin'):
+        all_shop_ids = [row[0] for row in db.query(Shop.id).filter(Shop.tenant_id == context.tenant_id).all()]
+        membership.allowed_shop_ids = all_shop_ids
+        db.commit()
+        allowed_shop_ids = all_shop_ids
+
+    if allowed_shop_ids:
+        query = query.filter(Shop.id.in_(allowed_shop_ids))
+    elif context.role.lower() not in ('owner', 'admin'):
+        query = query.filter(Shop.id == -1)
     
     shops = query.all()
     

@@ -36,12 +36,17 @@ function ProductsContent() {
   // Load products
   useEffect(() => {
     loadProducts();
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, selectedShopId]);
 
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const data = await productsApi.getAll(currentPage, pageSize);
+      const data = await productsApi.getAll(
+        currentPage,
+        pageSize,
+        undefined,
+        { shopId: selectedShopId ?? undefined }
+      );
       setProducts(data.products);
       setTotal(data.total);
     } catch (error: any) {
