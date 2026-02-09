@@ -6,11 +6,11 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 
@@ -59,19 +59,45 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+class CustomCORSMiddleware(BaseHTTPMiddleware):
+    """
+    CORS middleware that guarantees headers on errors and preflights.
+    """
+
+    def __init__(self, app, allowed_origins: list[str], allow_all: bool) -> None:
+        super().__init__(app)
+        self.allowed_origins = allowed_origins
+        self.allow_all = allow_all
+
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        origin_allowed = bool(origin) and (self.allow_all or origin in self.allowed_origins)
+
+        if request.method == "OPTIONS":
+            response = JSONResponse(status_code=204, content=None)
+        else:
+            try:
+                response = await call_next(request)
+            except HTTPException as exc:
+                response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+            except Exception:
+                response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+        if origin_allowed:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,Idempotency-Key,X-Request-Id"
+            if not self.allow_all:
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+            else:
+                response.headers["X-Dev-CORS"] = "1"
+        return response
+
 # CORS Middleware - Explicitly configured for all endpoints including OPTIONS
-cors_origins = list(dict.fromkeys(settings.CORS_ORIGINS + [settings.FRONTEND_URL]))
 cors_allow_all = settings.ENVIRONMENT != "production"
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_origin_regex=".*" if cors_allow_all else None,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
-)
+cors_origins = list(dict.fromkeys(settings.CORS_ORIGINS + [settings.FRONTEND_URL]))
+app.add_middleware(CustomCORSMiddleware, allowed_origins=cors_origins, allow_all=cors_allow_all)
 
 # Middleware stack (order matters - first added = outermost layer)
 app.add_middleware(MetricsMiddleware)  # Track all requests
