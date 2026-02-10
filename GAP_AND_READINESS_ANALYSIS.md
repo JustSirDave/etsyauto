@@ -143,15 +143,16 @@ The platform has **ALL CORE FUNCTIONALITY IMPLEMENTED**. All critical blockers p
 | **TEST-003** | E2E tests (Playwright) | ✅ Complete | Playwright framework + critical path tests added (2026-02-09) | NO |
 | **TEST-004** | Load tests (1k listings/10 shops) | ✅ Complete | Locust load testing infrastructure + scenarios added (2026-02-09) | NO |
 | **TEST-005** | Security tests (JWT tamper, OAuth replay, CSV injection) | ❌ Missing | Security posture unknown | NO |
-| **RUNBOOK-001** | 429 storm runbook | ❌ Missing | No operational guidance | NO |
-| **RUNBOOK-002** | Token refresh loop runbook | ❌ Missing | No operational guidance | NO |
-| **RUNBOOK-003** | Redis restart runbook | ❌ Missing | No operational guidance | NO |
+| **RUNBOOK-001** | 429 storm runbook | ✅ Complete | Comprehensive incident response guide (2026-02-09) | NO |
+| **RUNBOOK-002** | Token refresh loop runbook | ✅ Complete | Comprehensive incident response guide (2026-02-09) | NO |
+| **RUNBOOK-003** | Redis restart runbook | ✅ Complete | Comprehensive incident response guide (2026-02-09) | NO |
+| **RUNBOOK-004** | Etsy API outage runbook | ✅ Complete | Comprehensive incident response guide (2026-02-09) | NO |
 | **CHAOS-001** | Chaos testing (Redis kill, Etsy 429 ramp) | ❌ Missing | Resilience unverified | NO |
 | **DR-001** | Disaster recovery drills (restore test) | ❌ Missing | RPO/RTO unverified | NO |
 | **ORDER-003** | Order export to CSV | ❌ Missing | Nice-to-have feature | NO |
-| **POLICY-002** | Policy remediation workflow (rewrite UI) | ❌ Missing | Policy failures cannot be fixed | NO |
+| **POLICY-002** | Policy remediation workflow (rewrite UI) | ✅ Complete | Full modify modal with re-validation | NO |
 | **CSV-002** | CSV validation + mapping UI | ❌ Missing | Ingestion UX incomplete | NO |
-| **ERROR-001** | Error CSV download | ❌ Missing | Users cannot act on failures | NO |
+| **ERROR-001** | Error CSV download | ✅ Complete | Problem products export endpoint (2026-02-09) | NO |
 | **WEBHOOKS-001** | Webhook processing (Etsy) | ✅ Complete | Signature verification, event routing, async processing | NO |
 
 ---
