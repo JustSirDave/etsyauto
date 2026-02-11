@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response as StarletteResponse
 
 from app.core.config import settings
 
@@ -60,55 +61,85 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-class CustomCORSMiddleware(BaseHTTPMiddleware):
+class CustomCORSMiddleware:
     """
-    CORS middleware that guarantees headers on errors and preflights.
+    Pure-ASGI CORS middleware.  Avoids BaseHTTPMiddleware to prevent the
+    'Response content longer than Content-Length' RuntimeError caused by
+    body-re-streaming in stacked BaseHTTPMiddleware layers.
     """
 
-    def __init__(self, app, allowed_origins: list[str], allow_all: bool) -> None:
-        super().__init__(app)
-        self.allowed_origins = allowed_origins
+    def __init__(self, app, allowed_origins: list[str] | None = None, allow_all: bool = False) -> None:
+        self.app = app
+        self.allowed_origins = allowed_origins or []
         self.allow_all = allow_all
 
-    async def dispatch(self, request: Request, call_next):
-        origin = request.headers.get("origin")
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+
+        headers_raw = scope.get("headers", [])
+        origin = None
+        method = scope.get("method", "")
+        for k, v in headers_raw:
+            if k == b"origin":
+                origin = v.decode("latin-1")
+                break
+
         origin_allowed = bool(origin) and (self.allow_all or origin in self.allowed_origins)
 
-        if request.method == "OPTIONS":
-            response = JSONResponse(status_code=204, content=None)
-        else:
-            try:
-                response = await call_next(request)
-            except HTTPException as exc:
-                response = JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
-            except Exception:
-                response = JSONResponse(status_code=500, content={"detail": "Internal server error"})
-
-        if origin_allowed:
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Vary"] = "Origin"
-            response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,PATCH,OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Authorization,Content-Type,Idempotency-Key,X-Request-Id"
+        # Fast-path for CORS preflight
+        if method == "OPTIONS" and origin_allowed:
+            cors_headers = [
+                (b"access-control-allow-origin", origin.encode()),
+                (b"vary", b"Origin"),
+                (b"access-control-allow-methods", b"GET,POST,PUT,DELETE,PATCH,OPTIONS"),
+                (b"access-control-allow-headers", b"Authorization,Content-Type,Idempotency-Key,X-Request-Id"),
+            ]
             if not self.allow_all:
-                response.headers["Access-Control-Allow-Credentials"] = "true"
+                cors_headers.append((b"access-control-allow-credentials", b"true"))
             else:
-                response.headers["X-Dev-CORS"] = "1"
-        return response
+                cors_headers.append((b"x-dev-cors", b"1"))
+            await send({"type": "http.response.start", "status": 204, "headers": cors_headers})
+            await send({"type": "http.response.body", "body": b""})
+            return
 
-# Content-Length fix must be the outermost layer.
-app.add_middleware(ContentLengthFixMiddleware)
+        # Normal request – inject CORS headers into the response start message
+        async def send_with_cors(message):
+            if message.get("type") == "http.response.start" and origin_allowed:
+                extra = [
+                    (b"access-control-allow-origin", origin.encode()),
+                    (b"vary", b"Origin"),
+                    (b"access-control-allow-methods", b"GET,POST,PUT,DELETE,PATCH,OPTIONS"),
+                    (b"access-control-allow-headers", b"Authorization,Content-Type,Idempotency-Key,X-Request-Id"),
+                ]
+                if not self.allow_all:
+                    extra.append((b"access-control-allow-credentials", b"true"))
+                else:
+                    extra.append((b"x-dev-cors", b"1"))
+
+                existing = list(message.get("headers", []))
+                # Strip content-length to prevent mismatch from upstream BaseHTTPMiddleware layers
+                existing = [(k, v) for k, v in existing if k.lower() not in (b"content-length",)]
+                message = {**message, "headers": existing + extra}
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
 
 # CORS Middleware - Explicitly configured for all endpoints including OPTIONS
 cors_allow_all = settings.ENVIRONMENT != "production"
 cors_origins = list(dict.fromkeys(settings.CORS_ORIGINS + [settings.FRONTEND_URL]))
 app.add_middleware(CustomCORSMiddleware, allowed_origins=cors_origins, allow_all=cors_allow_all)
 
-# Middleware stack (order matters - first added = outermost layer)
+# Middleware stack (order matters - last added = outermost layer)
 app.add_middleware(MetricsMiddleware)  # Track all requests
 app.add_middleware(SentryContextMiddleware)  # Sentry error tracking context
 app.add_middleware(TenantContextMiddleware)  # Extract tenant context
 app.add_middleware(AuditMiddleware)  # Audit logging
 app.add_middleware(IdempotencyMiddleware)  # HTTP idempotency enforcement
+
+# Content-Length fix MUST be outermost (added last) to strip Content-Length
+# after all BaseHTTPMiddleware layers have re-added it.
+app.add_middleware(ContentLengthFixMiddleware)
 
 # Include API routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])

@@ -126,7 +126,7 @@ function SettingsContent() {
       await teamApi.updateShopAccess(shopAccessMember.user_id, shopAccessSelections);
       await loadTeamMembers();
       closeShopAccessModal();
-    } catch (err) {
+    } catch (err: any) {
       setError((err as ApiError).detail || 'Failed to update shop access');
     } finally {
       setSavingShopAccess(false);

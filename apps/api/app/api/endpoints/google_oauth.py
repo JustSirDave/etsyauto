@@ -173,7 +173,7 @@ async def google_callback(
                     ]
                     if tenant_shop_ids:
                         membership.allowed_shop_ids = tenant_shop_ids
-                
+
                 # Get tenant info for response
                 tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
                 

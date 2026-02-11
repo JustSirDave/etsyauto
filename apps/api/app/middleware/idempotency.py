@@ -1,129 +1,157 @@
 """
-Idempotency Middleware
+Idempotency Middleware (pure-ASGI)
 Enforces Idempotency-Key on mutating HTTP requests and caches responses.
+
+Implemented as a raw ASGI middleware (not BaseHTTPMiddleware) to avoid the
+stacked-BaseHTTPMiddleware deadlock when reading the request body.
 """
 import base64
 import hashlib
 import json
 import time
-from typing import Iterable
-
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import Response, JSONResponse
 
 from app.core.redis import get_redis_client
 
+IDEMPOTENCY_METHODS_STR = {"POST", "PUT", "PATCH", "DELETE"}
 
-IDEMPOTENCY_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-
-# Paths that don't require idempotency key (e.g., auth endpoints where frontend may not have token yet)
+# Paths that don't require idempotency key
 EXEMPT_PATHS = {
     "/api/auth/login",
     "/api/auth/register",
-    "/api/auth/google",  # Google OAuth (implicit flow - login/register page)
+    "/api/auth/google",
     "/api/auth/token",
     "/api/auth/refresh",
-    "/api/team/members/invite",  # Team invitations can be safely retried
-    "/api/team/invitations/accept",  # Invitation acceptance (user may not have token yet)
-    "/api/oauth/google/auth",  # Google OAuth initiation (authorization code flow - invitation page)
-    "/api/oauth/google/callback",  # Google OAuth callback (authorization code flow)
+    "/api/team/members/invite",
+    "/api/team/invitations/accept",
+    "/api/oauth/google/auth",
+    "/api/oauth/google/callback",
 }
 
 
-class IdempotencyMiddleware(BaseHTTPMiddleware):
+class IdempotencyMiddleware:
     """
+    Pure-ASGI idempotency middleware.
     Enforce Idempotency-Key header for mutating endpoints and cache responses.
-    Skips OPTIONS requests and certain auth endpoints.
     """
 
     def __init__(self, app, ttl_seconds: int = 86400) -> None:
-        super().__init__(app)
+        self.app = app
         self.ttl_seconds = ttl_seconds
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        # Skip OPTIONS requests (CORS preflight)
-        if request.method == "OPTIONS":
-            return await call_next(request)
-        
-        # Skip non-mutating methods
-        if request.method not in IDEMPOTENCY_METHODS:
-            return await call_next(request)
-        
-        # Skip exempt paths (e.g., auth endpoints)
-        if request.url.path in EXEMPT_PATHS:
-            return await call_next(request)
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
 
-        idempotency_key = request.headers.get("Idempotency-Key")
+        method = scope.get("method", "")
+        path = scope.get("path", "")
+
+        # Skip OPTIONS, non-mutating methods, and exempt paths
+        if method == "OPTIONS" or method not in IDEMPOTENCY_METHODS_STR or path in EXEMPT_PATHS:
+            return await self.app(scope, receive, send)
+
+        # Extract Idempotency-Key from headers
+        headers_raw = scope.get("headers", [])
+        idempotency_key = None
+        for k, v in headers_raw:
+            if k.lower() == b"idempotency-key":
+                idempotency_key = v.decode("latin-1")
+                break
+
         if not idempotency_key:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": {
-                        "code": "IDEMPOTENCY_KEY_REQUIRED",
-                        "message": "Idempotency-Key header is required for mutating requests.",
-                        "request_id": request.headers.get("X-Request-Id", "unknown"),
-                    }
-                },
-            )
+            body = json.dumps({
+                "error": {
+                    "code": "IDEMPOTENCY_KEY_REQUIRED",
+                    "message": "Idempotency-Key header is required for mutating requests.",
+                }
+            }).encode()
+            await send({
+                "type": "http.response.start",
+                "status": 400,
+                "headers": [(b"content-type", b"application/json")],
+            })
+            await send({"type": "http.response.body", "body": body})
+            return
 
-        body = await request.body()
-        request._body = body
-        body_hash = hashlib.sha256(body).hexdigest()
+        # Read the full request body from ASGI receive
+        request_body = b""
+        while True:
+            message = await receive()
+            request_body += message.get("body", b"")
+            if not message.get("more_body", False):
+                break
 
-        cache_key = f"idempotency:{request.method}:{request.url.path}:{idempotency_key}:{body_hash}"
+        body_hash = hashlib.sha256(request_body).hexdigest()
+        cache_key = f"idempotency:{method}:{path}:{idempotency_key}:{body_hash}"
+
         redis_client = get_redis_client()
-
         cached = redis_client.get(cache_key)
+
         if cached:
             cached_payload = json.loads(cached)
             cached_body = base64.b64decode(cached_payload["body"])
-            cached_headers = {
-                k: v for k, v in cached_payload.get("headers", {}).items()
-                if k.lower() not in ("content-length", "transfer-encoding")
-            }
-            return Response(
-                content=cached_body,
-                status_code=cached_payload["status"],
-                media_type=cached_payload.get("content_type", "application/json"),
-                headers=cached_headers,
-            )
+            resp_headers = [(b"content-type", cached_payload.get("content_type", "application/json").encode())]
+            await send({
+                "type": "http.response.start",
+                "status": cached_payload["status"],
+                "headers": resp_headers,
+            })
+            await send({"type": "http.response.body", "body": cached_body})
+            return
 
-        response = await call_next(request)
+        # Create a synthetic receive that replays the already-consumed body
+        body_sent = False
+        async def replay_receive():
+            nonlocal body_sent
+            if not body_sent:
+                body_sent = True
+                return {"type": "http.request", "body": request_body, "more_body": False}
+            # After body is sent, wait forever (connection close would end this)
+            return await receive()
 
-        # Read the response body (consume iterator) and rebuild response
+        # Capture the response from the inner app
+        response_status = None
+        response_headers = []
         response_body = b""
-        async for chunk in response.body_iterator:
-            response_body += chunk
+        response_started = False
 
-        # Cache only if not a server error
-        if response.status_code < 500:
+        async def capture_send(message):
+            nonlocal response_status, response_headers, response_body, response_started
+            if message["type"] == "http.response.start":
+                response_status = message["status"]
+                response_headers = list(message.get("headers", []))
+                response_started = True
+            elif message["type"] == "http.response.body":
+                response_body += message.get("body", b"")
+                # Don't forward yet — we buffer the full response for caching
+
+        await self.app(scope, replay_receive, capture_send)
+
+        # Cache the response (non-5xx only)
+        if response_status is not None and response_status < 500:
+            content_type = "application/json"
+            for k, v in response_headers:
+                if k.lower() == b"content-type":
+                    content_type = v.decode("latin-1")
+                    break
             payload = {
-                "status": response.status_code,
+                "status": response_status,
                 "body": base64.b64encode(response_body).decode("utf-8"),
-                "content_type": response.media_type,
-                "headers": _filter_headers(response.headers),
+                "content_type": content_type,
                 "created_at": int(time.time()),
             }
-            redis_client.setex(cache_key, self.ttl_seconds, json.dumps(payload))
+            try:
+                redis_client.setex(cache_key, self.ttl_seconds, json.dumps(payload))
+            except Exception:
+                pass  # Don't fail the request if caching fails
 
-        # Filter out Content-Length as it will be recalculated
-        filtered_headers = {
-            k: v for k, v in response.headers.items() 
-            if k.lower() not in ("content-length", "transfer-encoding")
-        }
-        
-        return Response(
-            content=response_body,
-            status_code=response.status_code,
-            media_type=response.media_type,
-            headers=filtered_headers,
-        )
-
-
-def _filter_headers(headers: Iterable) -> dict:
-    """
-    Keep safe headers that help clients parse cached responses.
-    """
-    allowed = {"content-type", "cache-control"}
-    return {k: v for k, v in headers.items() if k.lower() in allowed}
+        # Forward the buffered response, stripping content-length to avoid mismatch
+        filtered_headers = [
+            (k, v) for k, v in response_headers
+            if k.lower() not in (b"content-length", b"transfer-encoding")
+        ]
+        await send({
+            "type": "http.response.start",
+            "status": response_status or 500,
+            "headers": filtered_headers,
+        })
+        await send({"type": "http.response.body", "body": response_body})
