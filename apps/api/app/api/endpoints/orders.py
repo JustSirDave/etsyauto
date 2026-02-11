@@ -271,6 +271,15 @@ async def list_orders(
 
         is_supplier = context.role.lower() == "supplier"
         supplier_user = supplier_map.get(order.supplier_user_id) if order.supplier_user_id else None
+
+        # Extract latest tracking code from shipments JSONB
+        tracking_code = None
+        if order.shipments and isinstance(order.shipments, list):
+            for shipment in reversed(order.shipments):
+                if isinstance(shipment, dict) and shipment.get("tracking_code"):
+                    tracking_code = shipment["tracking_code"]
+                    break
+
         formatted_orders.append({
             "id": order.id,
             "order_id": order.etsy_receipt_id or f"#{order.id}",
@@ -287,6 +296,7 @@ async def list_orders(
             "lifecycle_status": derive_lifecycle_status(order),
             "payment_status": order.payment_status or derive_payment_status(order),
             "fulfillment_status": order.fulfillment_status or "unshipped",
+            "tracking_code": tracking_code,
             "item_image": item_image,
             "item_title": item_title,
             "created_at": (

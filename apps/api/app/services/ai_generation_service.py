@@ -14,6 +14,25 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Approximate cost per 1K tokens (input+output blended) in USD cents
+# Updated for OpenAI pricing as of early 2025
+MODEL_COST_PER_1K_TOKENS = {
+    "gpt-4o-mini": 0.015,      # ~$0.00015 / 1K tokens blended
+    "gpt-4o": 0.5,             # ~$0.005 / 1K tokens blended
+    "gpt-4-turbo": 1.0,        # ~$0.01 / 1K tokens blended
+    "gpt-4": 3.0,              # ~$0.03 / 1K tokens blended
+    "gpt-3.5-turbo": 0.05,     # ~$0.0005 / 1K tokens blended
+}
+
+
+def _estimate_cost_usd_cents(model: str, tokens_used: Optional[int]) -> int:
+    """Estimate cost in USD cents from model name and token count."""
+    if not tokens_used or tokens_used <= 0:
+        return 0
+    rate = MODEL_COST_PER_1K_TOKENS.get(model, MODEL_COST_PER_1K_TOKENS.get("gpt-4o-mini", 0.015))
+    cost_cents = (tokens_used / 1000.0) * rate
+    return max(1, round(cost_cents))  # Minimum 1 cent if any tokens used
+
 
 class AIGenerationService:
     """
@@ -41,7 +60,8 @@ class AIGenerationService:
         style: str = "friendly",
         tone: str = "professional",
         provider_type: AIProviderType = AIProviderType.OPENAI,
-        model: Optional[str] = None
+        model: Optional[str] = None,
+        generate_type: str = "all"
     ) -> Tuple[AIGeneration, bool]:
         """
         Generate AI content and run policy checks
@@ -57,10 +77,20 @@ class AIGenerationService:
             tone: Tone of voice
             provider_type: AI provider to use
             model: Model name (optional)
+            generate_type: What to generate — "all", "title", "description", or "tags"
             
         Returns:
             Tuple of (AIGeneration object, needs_review boolean)
         """
+        # Use fewer tokens for single-field generation
+        max_tokens = 500
+        if generate_type == "title":
+            max_tokens = 150
+        elif generate_type == "tags":
+            max_tokens = 200
+        elif generate_type == "description":
+            max_tokens = 400
+
         # Build generation request
         request = GenerationRequest(
             product_info=product_info,
@@ -69,8 +99,10 @@ class AIGenerationService:
             tags_raw=tags_raw,
             style=style,
             tone=tone,
-            include_handmade=True,  # Always enforce for Etsy
-            model=model
+            include_handmade=True if generate_type in ("all", "title") else False,
+            generate_type=generate_type,
+            model=model,
+            max_tokens=max_tokens
         )
         
         # Get provider and generate
@@ -85,11 +117,14 @@ class AIGenerationService:
             # Generate content
             response = await provider.generate_content(request)
             
-            # Run policy checks
+            # Run policy checks (only on fields that were generated)
+            policy_title = response.title if generate_type in ("all", "title") else ""
+            policy_desc = response.description if generate_type in ("all", "description") else ""
+            policy_tags = response.tags if generate_type in ("all", "tags") else []
             policy_status, violations = self.policy_engine.check_content(
-                title=response.title,
-                description=response.description,
-                tags=response.tags
+                title=policy_title,
+                description=policy_desc,
+                tags=policy_tags
             )
             
             logger.info(f"Policy check result: {policy_status}, violations: {len(violations)}")
@@ -100,6 +135,9 @@ class AIGenerationService:
                 "suggestions": self.policy_engine.suggest_fixes(violations) if violations else []
             }
             
+            # Calculate cost
+            cost_cents = _estimate_cost_usd_cents(response.model_used, response.tokens_used)
+
             # Create AIGeneration record
             ai_generation = AIGeneration(
                 tenant_id=tenant_id,
@@ -116,6 +154,9 @@ class AIGenerationService:
                 provider=response.provider.value,
                 tokens_used=response.tokens_used,
                 generation_time_ms=response.generation_time_ms,
+                # Cost tracking
+                cost_tokens=response.tokens_used or 0,
+                cost_usd_cents=cost_cents,
                 # Legacy fields
                 status='flagged' if policy_status == PolicyStatus.FAILED else 'ok'
             )

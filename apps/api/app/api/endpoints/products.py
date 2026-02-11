@@ -12,6 +12,7 @@ import csv
 import io
 import json
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
 from app.api.dependencies import (
@@ -381,6 +382,12 @@ async def generate_ai_content(
     Generate AI content for a product
     Requires: GENERATE_CONTENT permission (Owner, Admin, Creator)
     """
+    if not settings.ENABLE_AI_GENERATION:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="AI generation is currently disabled by the administrator"
+        )
+
     # Get product
     product = db.query(Product).filter(
         Product.id == product_id,
@@ -410,6 +417,11 @@ async def generate_ai_content(
         if hasattr(request, 'provider') and request.provider:
             provider_type = AIProviderType(request.provider)
         
+        # Determine what to generate
+        generate_type = request.generate_type or "all"
+        if generate_type not in ("all", "title", "description", "tags"):
+            raise HTTPException(status_code=400, detail="generate_type must be one of: all, title, description, tags")
+
         # Generate with automatic policy check
         generation, needs_review = await service.generate_with_policy_check(
             product_id=product.id,
@@ -421,11 +433,13 @@ async def generate_ai_content(
             style=request.style or "friendly",
             tone=request.tone or "professional",
             provider_type=provider_type,
-            model=request.model
+            model=request.model,
+            generate_type=generate_type
         )
         
         return {
             "ai_generation_id": generation.id,
+            "generate_type": generate_type,
             "title": generation.title,
             "description": generation.description,
             "tags": generation.tags,

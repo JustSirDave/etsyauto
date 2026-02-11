@@ -8,11 +8,11 @@
  * - Shipment badges: "Synced to Etsy" vs "Manual", recorded-by info
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { ArrowLeft, Package, Calendar, User, MapPin, CreditCard, RefreshCcw, Truck, CheckCircle, Globe, FileText } from 'lucide-react';
+import { ArrowLeft, Package, Calendar, User, MapPin, CreditCard, RefreshCcw, Truck, CheckCircle, Globe, FileText, ChevronDown } from 'lucide-react';
 import { ordersApi, OrderDetail, teamApi, TeamMember } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { cn } from '@/lib/utils';
@@ -25,6 +25,20 @@ import {
   normalizeOrderStatus,
   normalizePaymentStatus,
 } from '@/lib/order-status';
+
+const CARRIER_OPTIONS = [
+  { value: 'usps', label: 'USPS' },
+  { value: 'ups', label: 'UPS' },
+  { value: 'fedex', label: 'FedEx' },
+  { value: 'dhl', label: 'DHL Express' },
+  { value: 'canadapost', label: 'Canada Post' },
+  { value: 'royalmail', label: 'Royal Mail' },
+  { value: 'deutschepost', label: 'Deutsche Post' },
+  { value: 'chinapost', label: 'China Post' },
+  { value: 'japanpost', label: 'Japan Post' },
+  { value: 'australiapost', label: 'Australia Post' },
+  { value: 'other', label: 'Other' },
+];
 
 function PaymentStatus({ status }: { status: string }) {
   const normalized = normalizePaymentStatus(status);
@@ -88,13 +102,19 @@ function OrderDetailContent() {
   const [fulfilling, setFulfilling] = useState(false);
   const [trackingCode, setTrackingCode] = useState('');
   const [carrierName, setCarrierName] = useState('');
-  const [shipDate, setShipDate] = useState('');
   const [note, setNote] = useState('');
   const [sendBcc, setSendBcc] = useState(false);
   const [manualOnly, setManualOnly] = useState(false);
   const [suppliers, setSuppliers] = useState<TeamMember[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
   const [assigningSupplier, setAssigningSupplier] = useState(false);
+  const [trackingError, setTrackingError] = useState('');
+  const [carrierError, setCarrierError] = useState('');
+  const trackingInputRef = useRef<HTMLInputElement>(null);
+
+  // Custom dropdown state
+  const [carrierDropdownOpen, setCarrierDropdownOpen] = useState(false);
+  const [supplierDropdownOpen, setSupplierDropdownOpen] = useState(false);
 
   const orderId = typeof params?.id === 'string' ? parseInt(params.id, 10) : null;
   const canFulfill = user?.role === 'supplier' || user?.role === 'owner' || user?.role === 'admin';
@@ -143,16 +163,36 @@ function OrderDetailContent() {
 
   const handleFulfillOrder = async () => {
     if (!order) return;
+
+    // Reset errors
+    setTrackingError('');
+    setCarrierError('');
+
+    let hasError = false;
+
     if (!trackingCode.trim()) {
-      showToast('Tracking code is required', 'error');
+      setTrackingError('Tracking code is required');
+      trackingInputRef.current?.focus();
+      hasError = true;
+    }
+    if (!carrierName) {
+      setCarrierError('Please select a carrier');
+      hasError = true;
+    }
+
+    if (hasError) {
+      const missing = [];
+      if (!trackingCode.trim()) missing.push('tracking code');
+      if (!carrierName) missing.push('carrier');
+      showToast(`Please fill in required fields: ${missing.join(', ')}`, 'error');
       return;
     }
+
     try {
       setFulfilling(true);
       const payload = {
         tracking_code: trackingCode.trim(),
         carrier_name: carrierName.trim() || undefined,
-        ship_date: shipDate || undefined,
         note: note.trim() || undefined,
       };
       if (manualOnly) {
@@ -164,7 +204,6 @@ function OrderDetailContent() {
       }
       setTrackingCode('');
       setCarrierName('');
-      setShipDate('');
       setNote('');
       await loadOrder();
     } catch (error: any) {
@@ -384,20 +423,53 @@ function OrderDetailContent() {
           {/* Assign Supplier — only owner/admin */}
           {canAssign && suppliers.length > 0 && (
             <div className="mb-4 flex flex-col md:flex-row gap-3 items-start md:items-end">
-              <div className="flex-1">
+              <div className="flex-1 relative">
                 <label className="block text-sm text-[var(--text-muted)] mb-2">Assign Supplier</label>
-                <select
-                  value={selectedSupplierId ?? ''}
-                  onChange={(e) => setSelectedSupplierId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                <button
+                  type="button"
+                  onClick={() => setSupplierDropdownOpen(!supplierDropdownOpen)}
+                  className={cn(
+                    'w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-left flex items-center justify-between transition-colors',
+                    selectedSupplierId ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
+                  )}
                 >
-                  <option value="">Select supplier</option>
-                  {suppliers.map((supplier) => (
-                    <option key={supplier.user_id} value={supplier.user_id}>
-                      {supplier.name} ({supplier.email})
-                    </option>
-                  ))}
-                </select>
+                  <span>
+                    {selectedSupplierId
+                      ? (() => {
+                          const s = suppliers.find(s => s.user_id === selectedSupplierId);
+                          return s ? `${s.name} (${s.email})` : 'Select supplier';
+                        })()
+                      : 'Select supplier'}
+                  </span>
+                  <ChevronDown className={cn('w-4 h-4 transition-transform', supplierDropdownOpen && 'rotate-180')} />
+                </button>
+                {supplierDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setSupplierDropdownOpen(false)} />
+                    <div className="absolute left-0 right-0 mt-1 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+                      <div className="py-1">
+                        {suppliers.map((supplier) => (
+                          <button
+                            key={supplier.user_id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSupplierId(supplier.user_id);
+                              setSupplierDropdownOpen(false);
+                            }}
+                            className={cn(
+                              'w-full text-left px-4 py-2.5 text-sm transition-colors',
+                              selectedSupplierId === supplier.user_id
+                                ? 'bg-[var(--primary-bg)] text-[var(--primary)] font-medium'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                            )}
+                          >
+                            {supplier.name} ({supplier.email})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <button
                 onClick={handleAssignSupplier}
@@ -412,43 +484,77 @@ function OrderDetailContent() {
           {/* Tracking form */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm text-[var(--text-muted)] mb-2">Tracking Code</label>
+              <label className="block text-sm text-[var(--text-muted)] mb-2">
+                Tracking Code <span className="text-red-500">*</span>
+              </label>
               <input
+                ref={trackingInputRef}
                 value={trackingCode}
-                onChange={(e) => setTrackingCode(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                onChange={(e) => { setTrackingCode(e.target.value); if (trackingError) setTrackingError(''); }}
+                className={cn(
+                  'w-full px-3 py-2 bg-[var(--background)] border rounded-lg text-[var(--text-primary)] transition-colors',
+                  trackingError ? 'border-red-500 ring-1 ring-red-500' : 'border-[var(--border-color)]'
+                )}
                 placeholder="Enter tracking number"
+                required
               />
+              {trackingError && (
+                <p className="mt-1 text-xs text-red-500">{trackingError}</p>
+              )}
             </div>
-            <div>
-              <label className="block text-sm text-[var(--text-muted)] mb-2">Carrier</label>
-              <select
-                value={carrierName}
-                onChange={(e) => setCarrierName(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+            <div className="relative">
+              <label className="block text-sm text-[var(--text-muted)] mb-2">
+                Carrier <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setCarrierDropdownOpen(!carrierDropdownOpen)}
+                className={cn(
+                  'w-full px-3 py-2 bg-[var(--background)] border rounded-lg text-left flex items-center justify-between transition-colors',
+                  carrierError ? 'border-red-500 ring-1 ring-red-500' : 'border-[var(--border-color)]',
+                  carrierName ? 'text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
+                )}
               >
-                <option value="">Select a carrier</option>
-                <option value="usps">USPS</option>
-                <option value="ups">UPS</option>
-                <option value="fedex">FedEx</option>
-                <option value="dhl">DHL Express</option>
-                <option value="canadapost">Canada Post</option>
-                <option value="royalmail">Royal Mail</option>
-                <option value="deutschepost">Deutsche Post</option>
-                <option value="chinapost">China Post</option>
-                <option value="japanpost">Japan Post</option>
-                <option value="australiapost">Australia Post</option>
-                <option value="other">Other</option>
-              </select>
+                <span>{carrierName ? CARRIER_OPTIONS.find(c => c.value === carrierName)?.label || carrierName : 'Select a carrier'}</span>
+                <ChevronDown className={cn('w-4 h-4 transition-transform', carrierDropdownOpen && 'rotate-180')} />
+              </button>
+              {carrierError && (
+                <p className="mt-1 text-xs text-red-500">{carrierError}</p>
+              )}
+              {carrierDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setCarrierDropdownOpen(false)} />
+                  <div className="absolute left-0 right-0 mt-1 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden max-h-60 overflow-y-auto">
+                    <div className="py-1">
+                      {CARRIER_OPTIONS.map((carrier) => (
+                        <button
+                          key={carrier.value}
+                          type="button"
+                          onClick={() => {
+                            setCarrierName(carrier.value);
+                            setCarrierDropdownOpen(false);
+                            if (carrierError) setCarrierError('');
+                          }}
+                          className={cn(
+                            'w-full text-left px-4 py-2.5 text-sm transition-colors',
+                            carrierName === carrier.value
+                              ? 'bg-[var(--primary-bg)] text-[var(--primary)] font-medium'
+                              : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                          )}
+                        >
+                          {carrier.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Shipment Date</label>
-              <input
-                type="date"
-                value={shipDate}
-                onChange={(e) => setShipDate(e.target.value)}
-                className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-              />
+              <p className="px-3 py-2 text-sm text-[var(--text-primary)] bg-[var(--background)] border border-[var(--border-color)] rounded-lg">
+                {new Date().toLocaleDateString()} <span className="text-[var(--text-muted)]">(auto-filled with today&apos;s date)</span>
+              </p>
             </div>
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Note</label>
@@ -607,7 +713,7 @@ function OrderDetailContent() {
                         {item.quantity && <span className="text-[var(--text-muted)]">Qty: {item.quantity}</span>}
                         {item.price && (
                           <span className="font-medium text-[var(--text-primary)]">
-                            {order.currency} {parseFloat(item.price).toFixed(2)}
+                            {order.currency} {(parseFloat(item.price) / 100).toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -616,7 +722,7 @@ function OrderDetailContent() {
                       <div className="text-right">
                         <p className="text-sm text-[var(--text-muted)] mb-1">Subtotal</p>
                         <p className="font-medium text-[var(--text-primary)]">
-                          {order.currency} {(parseFloat(item.price) * item.quantity).toFixed(2)}
+                          {order.currency} {(parseFloat(item.price) / 100 * item.quantity).toFixed(2)}
                         </p>
                       </div>
                     )}

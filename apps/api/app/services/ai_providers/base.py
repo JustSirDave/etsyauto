@@ -26,6 +26,7 @@ class GenerationRequest(BaseModel):
     style: str = Field(default="friendly", description="Writing style")
     tone: str = Field(default="professional", description="Tone of voice")
     include_handmade: bool = Field(default=True, description="Ensure handmade terminology")
+    generate_type: str = Field(default="all", description="What to generate: all, title, description, tags")
     
     # AI model settings
     model: Optional[str] = None
@@ -108,52 +109,65 @@ class AIProvider(ABC):
     
     def _build_prompt(self, request: GenerationRequest) -> str:
         """
-        Build a prompt for content generation
-        
-        Can be overridden by providers for custom prompt engineering
-        
-        Args:
-            request: Generation request
-            
-        Returns:
-            Formatted prompt string
+        Build a prompt for content generation.
+        Supports generating all content or a single field (title / description / tags).
         """
-        handmade_instruction = ""
+        gen_type = request.generate_type or "all"
+        handmade_note = ""
         if request.include_handmade:
-            handmade_instruction = "\n- IMPORTANT: The title MUST include one of these terms: 'handmade', 'handcrafted', 'artisan', 'custom made', or 'hand-made'"
-        
-        prompt = f"""Generate compelling Etsy product listing content based on this information:
+            handmade_note = " MUST include one of: 'handmade', 'handcrafted', 'artisan', 'custom made', or 'hand-made'."
 
-{request.product_info}
+        common_header = f"Based on this Etsy product information:\n\n{request.product_info}\n\nStyle: {request.style} | Tone: {request.tone}\n"
 
-Requirements:
-- Style: {request.style}
-- Tone: {request.tone}
-- Title: Max 140 characters, attention-grabbing, Etsy SEO-optimized{handmade_instruction}
-- Description: 2-3 paragraphs, highlight features and benefits for Etsy buyers
-- Tags: Exactly 13 relevant Etsy search tags, each max 20 characters
-
-Generate content in this JSON format:
-{{
-  "title": "your generated title here",
-  "description": "your generated description here",
-  "tags": ["tag1", "tag2", ..., "tag13"]
-}}
-
-Focus on:
-1. Unique selling points that appeal to Etsy shoppers
-2. Materials and craftsmanship (key for Etsy)
-3. Use cases and benefits
-4. Target audience appeal (Etsy's creative community)
-5. Etsy marketplace best practices and search optimization
-
+        common_rules = """
 DO NOT include:
 - Banned terms per Etsy policy (replica, knockoff, dropship, resale, wholesale, bulk order, alibaba, aliexpress, etc.)
 - Unverifiable claims (guaranteed, proven, etc.)
 - Medical or health claims
 - Mass-produced or commercial language
+"""
 
-Generate authentic, Etsy-appropriate listing content now:"""
-        
-        return prompt
+        if gen_type == "title":
+            return f"""{common_header}
+Generate ONLY an Etsy product title.
+Requirements:
+- Max 140 characters, attention-grabbing, Etsy SEO-optimized.{handmade_note}
+{common_rules}
+Return JSON: {{ "title": "your title here" }}"""
+
+        if gen_type == "description":
+            return f"""{common_header}
+Generate ONLY an Etsy product description.
+Requirements:
+- 2-3 paragraphs highlighting features and benefits for Etsy buyers.
+- Focus on materials, craftsmanship, use cases, and target audience.
+{common_rules}
+Return JSON: {{ "description": "your description here" }}"""
+
+        if gen_type == "tags":
+            return f"""{common_header}
+Generate ONLY Etsy search tags for this product.
+Requirements:
+- Exactly 13 relevant Etsy search tags, each max 20 characters.
+- Optimized for Etsy search/SEO.
+{common_rules}
+Return JSON: {{ "tags": ["tag1", "tag2", ..., "tag13"] }}"""
+
+        # Default: generate all
+        return f"""{common_header}
+Generate compelling Etsy product listing content.
+
+Requirements:
+- Title: Max 140 characters, attention-grabbing, Etsy SEO-optimized.{handmade_note}
+- Description: 2-3 paragraphs, highlight features and benefits for Etsy buyers.
+- Tags: Exactly 13 relevant Etsy search tags, each max 20 characters.
+{common_rules}
+Focus on unique selling points, materials, craftsmanship, use cases, and Etsy marketplace best practices.
+
+Return JSON:
+{{
+  "title": "your generated title here",
+  "description": "your generated description here",
+  "tags": ["tag1", "tag2", ..., "tag13"]
+}}"""
 

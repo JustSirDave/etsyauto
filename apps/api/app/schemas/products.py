@@ -49,6 +49,7 @@ class AIGenerationRequest(BaseModel):
     model: str = "gpt-4o-mini"
     style: Optional[str] = "friendly"
     tone: Optional[str] = "helpful"
+    generate_type: Optional[str] = "all"  # "all", "title", "description", "tags"
 
 
 class AIGenerationResponse(BaseModel):

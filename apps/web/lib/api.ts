@@ -439,6 +439,7 @@ export interface Order {
   lifecycle_status?: string;
   payment_status: string;
   fulfillment_status?: string;
+  tracking_code?: string | null;
   item_image?: string | null;
   item_title?: string | null;
   created_at: string;
@@ -1025,13 +1026,14 @@ export const aiApi = {
     return apiRequest<{ generations: AIGeneration[]; total: number }>(`/api/ai/recent?${params.toString()}`);
   },
 
-  generateContent: async (productId: number, options?: { model?: string; style?: string; tone?: string }): Promise<AIGenerationResult> => {
+  generateContent: async (productId: number, options?: { model?: string; style?: string; tone?: string; generate_type?: string }): Promise<AIGenerationResult> => {
     return apiRequest<AIGenerationResult>(`/api/products/${productId}/generate`, {
       method: 'POST',
       body: JSON.stringify({
         model: options?.model || 'gpt-4o-mini',
         style: options?.style || 'friendly',
         tone: options?.tone || 'helpful',
+        generate_type: options?.generate_type || 'all',
       }),
     });
   },

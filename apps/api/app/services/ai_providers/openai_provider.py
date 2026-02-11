@@ -89,21 +89,22 @@ class OpenAIProvider(AIProvider):
                 raise ValueError(f"Invalid JSON response from OpenAI: {e}")
             
             # Extract fields
+            gen_type = request.generate_type or "all"
             title = data.get("title", "").strip()
             description = data.get("description", "").strip()
             tags = data.get("tags", [])
             
-            # Validate we got content
-            if not title:
+            # Validate based on what was requested
+            if gen_type in ("all", "title") and not title:
                 raise ValueError("OpenAI did not generate a title")
-            if not description:
+            if gen_type in ("all", "description") and not description:
                 raise ValueError("OpenAI did not generate a description")
-            if not tags or len(tags) == 0:
+            if gen_type in ("all", "tags") and (not tags or len(tags) == 0):
                 raise ValueError("OpenAI did not generate tags")
             
             # Ensure tags is a list of strings
             if not isinstance(tags, list):
-                tags = [str(tags)]
+                tags = [str(tags)] if tags else []
             tags = [str(tag).strip() for tag in tags if tag]
             
             # Limit to 13 tags

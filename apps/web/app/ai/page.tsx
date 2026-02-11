@@ -130,119 +130,40 @@ export default function AIGenerationPage() {
     loadProducts();
   }, []);
 
-  // Handle AI generation
-  const handleGenerate = async () => {
+  // Shared generate handler — accepts a generate_type
+  const handleGenerate = async (generateType: string = 'all') => {
     if (!selectedProductId) {
       showToast('Please select a product first', 'error');
       return;
     }
 
+    const labels: Record<string, string> = {
+      all: 'All content',
+      title: 'Title',
+      description: 'Description',
+      tags: 'Tags',
+    };
+
     try {
       setGenerating(true);
-      const result = await aiApi.generateContent(selectedProductId);
+      const result = await aiApi.generateContent(selectedProductId, { generate_type: generateType });
 
       showToast(
-        `AI content generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
+        `${labels[generateType]} generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
         'success'
       );
 
       // Reload stats and recent generations
       await Promise.all([loadStats(), loadRecentGenerations()]);
 
-      // Reset selection
-      setSelectedProductId(null);
+      if (generateType === 'all') {
+        setSelectedProductId(null);
+      }
     } catch (error: any) {
       console.error('AI generation failed:', error);
       const errorInfo = parseAIError(error);
       setErrorDetails(errorInfo);
-      // Also show a brief toast
       showToast(errorInfo.title, 'error');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Handle Title Generation
-  const handleGenerateTitle = async () => {
-    if (!selectedProductId) {
-      showToast('Please select a product first to generate a title', 'error');
-      return;
-    }
-
-    try {
-      setGenerating(true);
-      console.log('[AI Generation] Calling API for product:', selectedProductId);
-      const result = await aiApi.generateContent(selectedProductId);
-      console.log('[AI Generation] API response received:', result);
-
-      showToast(
-        `Title generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
-        'success'
-      );
-
-      // Reload stats and recent generations
-      await Promise.all([loadStats(), loadRecentGenerations()]);
-    } catch (error: any) {
-      console.error('[AI Generation] Title generation failed:', error);
-      console.error('[AI Generation] Error details:', {
-        message: error.message,
-        detail: error.detail,
-        status: error.status,
-        fullError: error
-      });
-      showToast(error.detail || error.message || 'Failed to generate title', 'error');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Handle Description Generation
-  const handleGenerateDescription = async () => {
-    if (!selectedProductId) {
-      showToast('Please select a product first to generate a description', 'error');
-      return;
-    }
-
-    try {
-      setGenerating(true);
-      const result = await aiApi.generateContent(selectedProductId);
-
-      showToast(
-        `Description generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
-        'success'
-      );
-
-      // Reload stats and recent generations
-      await Promise.all([loadStats(), loadRecentGenerations()]);
-    } catch (error: any) {
-      console.error('Description generation failed:', error);
-      showToast(error.detail || 'Failed to generate description', 'error');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  // Handle Tag Optimization
-  const handleOptimizeTags = async () => {
-    if (!selectedProductId) {
-      showToast('Please select a product first to optimize tags', 'error');
-      return;
-    }
-
-    try {
-      setGenerating(true);
-      const result = await aiApi.generateContent(selectedProductId);
-
-      showToast(
-        `Tags optimized successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
-        'success'
-      );
-
-      // Reload stats and recent generations
-      await Promise.all([loadStats(), loadRecentGenerations()]);
-    } catch (error: any) {
-      console.error('Tag optimization failed:', error);
-      showToast(error.detail || 'Failed to optimize tags', 'error');
     } finally {
       setGenerating(false);
     }
@@ -288,10 +209,10 @@ export default function AIGenerationPage() {
             </div>
           </div>
 
-          {/* Quick Action: Title Generator */}
+          {/* Quick Action: Title Only */}
           <button
-            onClick={handleGenerateTitle}
-            disabled={generating}
+            onClick={() => handleGenerate('title')}
+            disabled={generating || !selectedProductId}
             className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
@@ -299,18 +220,18 @@ export default function AIGenerationPage() {
                 <FileText className="w-5 h-5 text-[var(--info)]" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Title Generator</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">Title Only</p>
                 <p className="text-[var(--text-muted)] text-sm">
-                  {generating ? 'Generating...' : 'Quick title creation'}
+                  {generating ? 'Generating...' : 'Generate SEO title'}
                 </p>
               </div>
             </div>
           </button>
 
-          {/* Quick Action: Description Writer */}
+          {/* Quick Action: Description Only */}
           <button
-            onClick={handleGenerateDescription}
-            disabled={generating}
+            onClick={() => handleGenerate('description')}
+            disabled={generating || !selectedProductId}
             className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
@@ -318,18 +239,18 @@ export default function AIGenerationPage() {
                 <Wand2 className="w-5 h-5 text-[var(--success)]" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Description Writer</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">Description Only</p>
                 <p className="text-[var(--text-muted)] text-sm">
-                  {generating ? 'Generating...' : 'Generate descriptions'}
+                  {generating ? 'Generating...' : 'Generate product description'}
                 </p>
               </div>
             </div>
           </button>
 
-          {/* Quick Action: Tag Optimizer */}
+          {/* Quick Action: Tags Only */}
           <button
-            onClick={handleOptimizeTags}
-            disabled={generating}
+            onClick={() => handleGenerate('tags')}
+            disabled={generating || !selectedProductId}
             className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-4 hover:border-[var(--primary)] hover:bg-[var(--card-bg-hover)] transition-all cursor-pointer text-left disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="flex items-center gap-3">
@@ -337,9 +258,9 @@ export default function AIGenerationPage() {
                 <Tag className="w-5 h-5 text-[var(--warning)]" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Tag Optimizer</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">Tags Only</p>
                 <p className="text-[var(--text-muted)] text-sm">
-                  {generating ? 'Optimizing...' : 'Optimize product tags'}
+                  {generating ? 'Generating...' : 'Generate 13 Etsy SEO tags'}
                 </p>
               </div>
             </div>
@@ -380,19 +301,14 @@ export default function AIGenerationPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                    What to Generate
+                    Generate All Content
                   </label>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="px-4 py-2 bg-[var(--primary-bg)] border border-[var(--primary)] rounded-lg text-[var(--primary)] text-sm font-medium">
-                      All (Title + Description + Tags)
-                    </span>
-                  </div>
-                  <p className="text-[var(--text-muted)] text-xs mt-2">
-                    Currently generates all content types together for best results
+                  <p className="text-[var(--text-muted)] text-xs mb-3">
+                    Generates title, description, and 13 SEO tags together for best coherence. Or use the quick-action cards above to generate individually.
                   </p>
                 </div>
                 <button
-                  onClick={handleGenerate}
+                  onClick={() => handleGenerate('all')}
                   disabled={!selectedProductId || generating || loadingProducts}
                   className="w-full py-3 gradient-primary text-white font-semibold rounded-lg hover:opacity-90 transition flex items-center justify-center gap-2 shadow-lg shadow-[var(--primary)]/25 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -404,7 +320,7 @@ export default function AIGenerationPage() {
                   ) : (
                     <>
                       <Play className="w-5 h-5" />
-                      Generate Now
+                      Generate All (Title + Description + Tags)
                     </>
                   )}
                 </button>

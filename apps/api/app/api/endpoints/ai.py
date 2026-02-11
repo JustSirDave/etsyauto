@@ -2,7 +2,7 @@
 AI Generation API Endpoints
 Stats and history for AI-generated content
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
@@ -61,9 +61,11 @@ async def get_ai_stats(
     else:
         growth_percentage = 0
 
-    # Average response time (placeholder - we don't currently track this)
-    # In a real implementation, you would track generation_time_ms in the database
-    avg_response_time_ms = 2300  # Hardcoded for now
+    # Average response time from actual generation data
+    avg_time_result = base_query.filter(
+        AIGeneration.generation_time_ms.isnot(None)
+    ).with_entities(func.avg(AIGeneration.generation_time_ms)).scalar()
+    avg_response_time_ms = round(float(avg_time_result)) if avg_time_result else 0
 
     return {
         "total_generations": total_generations,

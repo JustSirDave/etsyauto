@@ -170,8 +170,6 @@ function OrdersContent() {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
     });
   };
 
@@ -348,6 +346,7 @@ function OrdersContent() {
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Assigned To</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Tracking</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Amount</th>
                   <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
                 </tr>
@@ -392,6 +391,15 @@ function OrdersContent() {
                     </td>
                     <td className="py-4 px-5"><PaymentStatus status={order.payment_status} /></td>
                     <td className="py-4 px-5"><OrderStatus status={order.lifecycle_status || order.status} /></td>
+                    <td className="py-4 px-5">
+                      {order.tracking_code ? (
+                        <span className="font-mono text-xs bg-[var(--background)] px-2 py-1 rounded border border-[var(--border-color)] text-[var(--text-primary)]">
+                          {order.tracking_code}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
+                    </td>
                     <td className="py-4 px-5">
                       <span className="font-medium text-[var(--text-primary)]">
                         {order.total_price === null ? '--' : `${order.currency} ${order.total_price.toFixed(2)}`}
