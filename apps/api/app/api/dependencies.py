@@ -293,3 +293,68 @@ def require_shop_access(
         return context
     
     return shop_checker
+
+
+def require_analytics_access():
+    """
+    Dependency to enforce analytics access (Owner/Admin/Viewer only)
+    Explicitly denies Supplier access to analytics endpoints
+    
+    Usage:
+        @app.get("/api/analytics/overview")
+        def get_analytics(
+            context: UserContext = Depends(require_analytics_access())
+        ):
+            ...
+    """
+    def analytics_checker(context: UserContext = Depends(get_user_context)):
+        role_lower = context.role.lower()
+        
+        # Explicit denial for suppliers
+        if role_lower == "supplier":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Suppliers are not authorized to access analytics"
+            )
+        
+        # Check analytics permission
+        if not has_permission(context.role, Permission.VIEW_ANALYTICS):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to view analytics"
+            )
+        
+        return context
+    
+    return analytics_checker
+
+
+def require_revenue_access():
+    """
+    Dependency to enforce revenue/financial data access (Owner/Admin/Viewer only)
+    
+    Usage:
+        @app.get("/api/analytics/revenue")
+        def get_revenue(context: UserContext = Depends(require_revenue_access())):
+            ...
+    """
+    def revenue_checker(context: UserContext = Depends(get_user_context)):
+        role_lower = context.role.lower()
+        
+        # Explicit denial for suppliers
+        if role_lower == "supplier":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Suppliers are not authorized to access revenue data"
+            )
+        
+        # Check revenue permission
+        if not has_permission(context.role, Permission.VIEW_REVENUE):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to view revenue data"
+            )
+        
+        return context
+    
+    return revenue_checker

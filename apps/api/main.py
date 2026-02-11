@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 from app.core.sentry_config import initialize_sentry
 from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors, suppliers
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors, suppliers, analytics
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
@@ -39,13 +39,13 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Etsy Automation Platform API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"JWT Issuer: {settings.JWT_ISSUER}")
-    
+
     # Create tables (for dev - use Alembic in prod)
     if settings.ENVIRONMENT == "development":
         Base.metadata.create_all(bind=engine)
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down API...")
 
@@ -118,6 +118,7 @@ app.include_router(shops.router, prefix="/api/shops", tags=["Shops"])
 app.include_router(products.router, prefix="/api/products", tags=["Products"])
 app.include_router(team.router, prefix="/api/team", tags=["Team Management"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
 app.include_router(suppliers.router, prefix="/api/suppliers", tags=["Suppliers"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
@@ -140,7 +141,7 @@ app.mount("/metrics", metrics_app)
 uploads_dir = "uploads"
 if not os.path.exists(uploads_dir):
     os.makedirs(uploads_dir, exist_ok=True)
-    
+
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 

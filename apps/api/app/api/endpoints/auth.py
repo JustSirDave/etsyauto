@@ -306,12 +306,29 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail="Please verify your email address before logging in. Check your inbox for the verification link."
         )
 
-    # Get user's tenant and role
-    membership = db.query(Membership).filter(Membership.user_id == user.id).first()
+    # Get user's tenant and role (ONLY accepted memberships)
+    # Prefer most recently accepted membership for multi-tenant users
+    membership = db.query(Membership).filter(
+        Membership.user_id == user.id,
+        Membership.invitation_status == 'accepted'
+    ).order_by(Membership.accepted_at.desc()).first()
+    
     if not membership:
+        # Check if they have pending invitations
+        pending = db.query(Membership).filter(
+            Membership.user_id == user.id,
+            Membership.invitation_status == 'pending'
+        ).first()
+        
+        if pending:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You have a pending invitation. Please accept it before logging in."
+            )
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="User has no organization membership"
+            detail="No active organization membership found"
         )
 
     # Get tenant info
@@ -814,10 +831,26 @@ async def google_oauth(
             detail="Authentication failed due to a server error. Please try again."
         )
 
-    # Get user's tenant and role
-    membership = db.query(Membership).filter(Membership.user_id == user.id).first()
+    # Get user's tenant and role (only accepted memberships)
+    membership = db.query(Membership).filter(
+        Membership.user_id == user.id,
+        Membership.invitation_status == 'accepted'
+    ).first()
     if not membership:
-        logger.error(f"Google OAuth: User {user.id} has no organization membership")
+        # Check if user has a pending invitation
+        pending_membership = db.query(Membership).filter(
+            Membership.user_id == user.id,
+            Membership.invitation_status == 'pending'
+        ).first()
+        
+        if pending_membership:
+            logger.info(f"Google OAuth: User {user.id} has pending invitation for tenant {pending_membership.tenant_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You have a pending team invitation. Please use the invitation link sent to your email to complete your registration."
+            )
+        
+        logger.error(f"Google OAuth: User {user.id} has no accepted organization membership")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="User account setup incomplete. Please contact support."

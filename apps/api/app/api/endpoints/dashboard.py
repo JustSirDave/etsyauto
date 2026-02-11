@@ -165,10 +165,21 @@ async def get_recent_orders(
         # Prioritize Etsy-provided dates for accuracy
         order_date = order.etsy_created_at or order.created_at
         is_supplier = context.role.lower() == "supplier"
+        
+        # Get first item title if available
+        item_title = "N/A"
+        if order.line_items and isinstance(order.line_items, list) and len(order.line_items) > 0:
+            first_item = order.line_items[0]
+            if isinstance(first_item, dict):
+                item_title = first_item.get('title') or first_item.get('product_title') or "N/A"
+        
         formatted_orders.append({
-            "order_id": order.etsy_receipt_id or f"#{order.id}",
-            "customer": order.buyer_name or "Unknown Customer",
+            "id": order.id,  # Internal database ID for linking
+            "order_id": order.etsy_receipt_id or f"#{order.id}",  # Display ID
+            "buyer_name": order.buyer_name or "Unknown Customer",  # Frontend expects buyer_name
+            "customer": order.buyer_name or "Unknown Customer",  # Legacy field (keeping for compatibility)
             "customer_email": order.buyer_email,
+            "item_title": item_title,  # First item in the order
             "date": order_date.strftime("%Y-%m-%d") if order_date else "N/A",
             "amount": "--" if is_supplier else f"${float(order.total_price or 0) / 100:.2f}",
             "status": derive_lifecycle_status(order),

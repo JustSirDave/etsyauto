@@ -15,7 +15,7 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
-from app.models.listings import Order, AuditLog
+from app.models.listings import Order, AuditLog, ShipmentEvent
 from app.models.tenancy import Shop, Membership, User
 from app.services.order_utils import build_shipping_address, derive_payment_status, derive_lifecycle_status
 from app.services.etsy_client import EtsyClient
@@ -340,6 +340,15 @@ async def get_order(
                 sanitized_items.append(item)
         items = sanitized_items
 
+    # Get shipments (tracking information)
+    shipments = order.shipments or []
+    if isinstance(shipments, str):
+        import json
+        try:
+            shipments = json.loads(shipments)
+        except:
+            shipments = []
+    
     return {
         "id": order.id,
         "etsy_receipt_id": order.etsy_receipt_id,
@@ -355,6 +364,7 @@ async def get_order(
         "fulfillment_status": order.fulfillment_status or "unshipped",
         "shipping_address": build_shipping_address(order),
         "items": items,
+        "shipments": shipments,  # Include tracking information
         "created_at": (
             (order.etsy_created_at or order.created_at).isoformat()
             if (order.etsy_created_at or order.created_at)
@@ -559,12 +569,34 @@ async def fulfill_order(
     }
     existing_shipments.append(shipment_entry)
 
+    # Record canonical shipment state transition
+    previous_state = order.lifecycle_status
     order.shipments = existing_shipments
     order.fulfillment_status = "shipped"
     if order.lifecycle_status not in ("completed", "cancelled", "refunded"):
         order.lifecycle_status = "in_transit"
     order.status = order.status if order.status in ("cancelled", "refunded") else "shipped"
     order.synced_at = datetime.now(timezone.utc)
+    
+    # Create shipment event for analytics
+    shipment_event = ShipmentEvent(
+        order_id=order.id,
+        tenant_id=order.tenant_id,
+        shop_id=order.shop_id,
+        state="shipped",
+        previous_state=previous_state,
+        tracking_code=request.tracking_code,
+        carrier_name=request.carrier_name,
+        tracking_url=etsy_response.get("tracking_url") if isinstance(etsy_response, dict) else None,
+        source="etsy_sync",
+        actor_user_id=context.user_id,
+        actor_role=context.role,
+        event_timestamp=datetime.now(timezone.utc),
+        shipped_at=datetime.fromisoformat(request.ship_date.replace("Z", "+00:00")) if request.ship_date else datetime.now(timezone.utc),
+        notes=request.note,
+        event_metadata={"etsy_response": etsy_response if isinstance(etsy_response, dict) else None},
+    )
+    db.add(shipment_event)
 
     audit = AuditLog(
         request_id=str(uuid.uuid4()),
@@ -653,12 +685,34 @@ async def record_manual_tracking(
     }
     existing_shipments.append(shipment_entry)
 
+    # Record canonical shipment state transition
+    previous_state = order.lifecycle_status
     order.shipments = existing_shipments
     order.fulfillment_status = "shipped"
     if order.lifecycle_status not in ("completed", "cancelled", "refunded"):
         order.lifecycle_status = "in_transit"
     order.status = order.status if order.status in ("cancelled", "refunded") else "shipped"
     order.synced_at = datetime.now(timezone.utc)
+    
+    # Create shipment event for analytics
+    shipment_event = ShipmentEvent(
+        order_id=order.id,
+        tenant_id=order.tenant_id,
+        shop_id=order.shop_id,
+        state="shipped",
+        previous_state=previous_state,
+        tracking_code=request.tracking_code,
+        carrier_name=request.carrier_name,
+        tracking_url=None,
+        source="manual",
+        actor_user_id=context.user_id,
+        actor_role=context.role,
+        event_timestamp=datetime.now(timezone.utc),
+        shipped_at=datetime.fromisoformat(request.ship_date.replace("Z", "+00:00")) if request.ship_date else datetime.now(timezone.utc),
+        notes=request.note,
+        event_metadata=None,
+    )
+    db.add(shipment_event)
 
     audit = AuditLog(
         request_id=str(uuid.uuid4()),

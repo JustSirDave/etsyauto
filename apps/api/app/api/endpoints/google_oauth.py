@@ -36,18 +36,18 @@ async def google_auth(
 ):
     """
     Initiate Google OAuth flow
-    
+
     Returns authorization URL to redirect user to
     """
     # Generate state for CSRF protection
     state = google_oauth_service.generate_state()
-    
+
     # Get authorization URL
     auth_url = google_oauth_service.get_authorization_url(
         state=state,
         invitation_token=request.invitation_token
     )
-    
+
     return {
         "auth_url": auth_url,
         "state": state
@@ -61,23 +61,21 @@ async def google_callback(
 ):
     """
     Handle Google OAuth callback
-    
     Exchanges code for token, gets user info, and creates/updates user
     """
     try:
         # Exchange code for access token
         token_response = await google_oauth_service.exchange_code_for_token(request.code)
         access_token = token_response.get("access_token")
-        
         if not access_token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get access token from Google"
             )
-        
+
         # Get user info from Google
         user_info = await google_oauth_service.get_user_info(access_token)
-        
+
         email = user_info.get("email")
         name = user_info.get("name")
         picture = user_info.get("picture")
@@ -122,11 +120,39 @@ async def google_callback(
         
         # Handle invitation if token provided
         if invitation_token:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Google OAuth: Processing invitation token for email {email}")
+            
+            # First find the membership by invitation token
             membership = db.query(Membership).filter(
                 Membership.invitation_token == invitation_token,
-                Membership.invitation_status == 'pending',
-                Membership.user_id == user.id
+                Membership.invitation_status == 'pending'
             ).first()
+            
+            if membership:
+                logger.info(f"Google OAuth: Found pending membership {membership.id} for tenant {membership.tenant_id}, role {membership.role}")
+            else:
+                logger.warning(f"Google OAuth: No pending membership found for invitation token")
+            
+            # Verify the email matches (the user_id might be different if user was created during invite)
+            if membership:
+                invited_user = db.query(User).filter(User.id == membership.user_id).first()
+                if invited_user:
+                    logger.info(f"Google OAuth: Invited user {invited_user.id} has email {invited_user.email}, Google user {user.id} has email {email}")
+                    
+                if invited_user and invited_user.email.lower() != email.lower():
+                    # Email mismatch - invitation is for a different user
+                    logger.error(f"Google OAuth: Email mismatch - invited: {invited_user.email}, google: {email}")
+                    membership = None
+                elif invited_user and invited_user.id != user.id:
+                    # The user was created during invite, but we found/created a different user via OAuth
+                    # Merge: delete the placeholder user and update membership to point to the OAuth user
+                    logger.info(f"Google OAuth: Merging users - deleting placeholder {invited_user.id}, using OAuth user {user.id}")
+                    old_user_id = invited_user.id
+                    db.delete(invited_user)
+                    db.flush()
+                    membership.user_id = user.id
             
             if membership:
                 # Accept invitation
@@ -134,6 +160,19 @@ async def google_callback(
                 membership.accepted_at = datetime.now(timezone.utc)
                 membership.invitation_token = None
                 membership.invitation_token_expires = None
+                
+                # Auto-assign shop access for suppliers
+                if membership.role.lower() == 'supplier':
+                    from app.models.tenancy import Shop
+                    # Grant access to all tenant shops automatically
+                    tenant_shop_ids = [
+                        shop.id for shop in db.query(Shop).filter(
+                            Shop.tenant_id == membership.tenant_id,
+                            Shop.status == 'connected'
+                        ).all()
+                    ]
+                    if tenant_shop_ids:
+                        membership.allowed_shop_ids = tenant_shop_ids
                 
                 # Get tenant info for response
                 tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
@@ -156,11 +195,11 @@ async def google_callback(
                 return RedirectResponse(url=redirect_url, status_code=302)
         
         # If no invitation or user already has memberships
-        # Find user's primary membership
+        # Find user's primary membership (prefer most recently accepted)
         membership = db.query(Membership).filter(
             Membership.user_id == user.id,
             Membership.invitation_status == 'accepted'
-        ).first()
+        ).order_by(Membership.accepted_at.desc()).first()
         
         if membership:
             db.commit()

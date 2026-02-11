@@ -77,6 +77,7 @@ function OrderDetailContent() {
   const [carrierName, setCarrierName] = useState('');
   const [shipDate, setShipDate] = useState('');
   const [note, setNote] = useState('');
+  const [sendBcc, setSendBcc] = useState(false);
   const [suppliers, setSuppliers] = useState<TeamMember[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
   const [assigningSupplier, setAssigningSupplier] = useState(false);
@@ -146,7 +147,7 @@ function OrderDetailContent() {
         await ordersApi.recordTracking(order.id, payload);
         showToast('Tracking recorded', 'success');
       } else {
-        await ordersApi.fulfill(order.id, { ...payload, send_bcc: false });
+        await ordersApi.fulfill(order.id, { ...payload, send_bcc: sendBcc });
         showToast('Tracking submitted to Etsy', 'success');
       }
       setTrackingCode('');
@@ -281,6 +282,68 @@ function OrderDetailContent() {
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">Tracking</h2>
             <span className="text-sm text-[var(--text-muted)]">Status: {order.fulfillment_status || 'unshipped'}</span>
           </div>
+          
+          {/* Display existing shipments */}
+          {order.shipments && order.shipments.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Existing Shipments</h3>
+              <div className="space-y-3">
+                {order.shipments.map((shipment: any, index: number) => (
+                  <div key={index} className="p-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">Tracking Number</p>
+                        <p className="text-sm font-medium text-[var(--text-primary)] font-mono">
+                          {shipment.tracking_code}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">Carrier</p>
+                        <p className="text-sm text-[var(--text-primary)]">
+                          {shipment.carrier_name || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[var(--text-muted)]">Ship Date</p>
+                        <p className="text-sm text-[var(--text-primary)]">
+                          {shipment.shipping_date || shipment.ship_date || 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    {shipment.tracking_url && (
+                      <div className="mt-2">
+                        <a
+                          href={shipment.tracking_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-[var(--primary)] hover:underline inline-flex items-center gap-1"
+                        >
+                          Track Package
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
+                    )}
+                    {shipment.is_delivered && (
+                      <div className="mt-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          Delivered
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 border-t border-[var(--border-color)] pt-4">
+                <h3 className="text-sm font-medium text-[var(--text-primary)] mb-2">Add Additional Tracking</h3>
+              </div>
+            </div>
+          )}
+          
           {user?.role === 'supplier' && (
             <p className="text-sm text-[var(--text-muted)] mb-4">
               Tracking is recorded manually and will not be sent to Etsy.
@@ -324,12 +387,24 @@ function OrderDetailContent() {
             </div>
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Carrier</label>
-              <input
+              <select
                 value={carrierName}
                 onChange={(e) => setCarrierName(e.target.value)}
                 className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                placeholder="USPS, UPS, DHL, etc."
-              />
+              >
+                <option value="">Select a carrier</option>
+                <option value="usps">USPS</option>
+                <option value="ups">UPS</option>
+                <option value="fedex">FedEx</option>
+                <option value="dhl">DHL Express</option>
+                <option value="canadapost">Canada Post</option>
+                <option value="royalmail">Royal Mail</option>
+                <option value="deutschepost">Deutsche Post</option>
+                <option value="chinapost">China Post</option>
+                <option value="japanpost">Japan Post</option>
+                <option value="australiapost">Australia Post</option>
+                <option value="other">Other</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Shipment Date</label>
@@ -350,6 +425,25 @@ function OrderDetailContent() {
               />
             </div>
           </div>
+          
+          {/* Send BCC checkbox - only for owner/admin who sync to Etsy */}
+          {(user?.role === 'owner' || user?.role === 'admin') && (
+            <div className="mt-4">
+              <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sendBcc}
+                  onChange={(e) => setSendBcc(e.target.checked)}
+                  className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--primary)] focus:ring-[var(--primary)]"
+                />
+                <span>Send tracking notification to buyer (BCC to shop owner)</span>
+              </label>
+              <p className="text-xs text-[var(--text-muted)] ml-6 mt-1">
+                When enabled, Etsy will send a tracking notification email to the buyer with you in BCC
+              </p>
+            </div>
+          )}
+          
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleFulfillOrder}

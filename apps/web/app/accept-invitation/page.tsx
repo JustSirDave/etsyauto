@@ -41,7 +41,8 @@ function AcceptInvitationContent() {
       setError(null);
 
       // Get Google OAuth URL from backend
-      const response = await fetch(`${API_BASE_URL}/api/oauth/google/auth`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const response = await fetch(`${apiUrl}/api/oauth/google/auth`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -125,10 +126,20 @@ function AcceptInvitationContent() {
       setInvitationData(data);
       setSuccess(true);
 
-      // Redirect to login after 3 seconds
-      setTimeout(() => {
-        router.push('/login?message=invitation_accepted');
-      }, 3000);
+      // Store JWT token for auto-login and redirect to dashboard
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        
+        // Redirect to dashboard after 2 seconds
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+      } else {
+        // Fallback: redirect to login if no token provided
+        setTimeout(() => {
+          router.push('/login?message=invitation_accepted');
+        }, 3000);
+      }
     } catch (err: any) {
       console.error('Accept invitation error:', err);
       setError(err.message || 'Failed to accept invitation. Please try again or contact support.');
@@ -139,17 +150,17 @@ function AcceptInvitationContent() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <div className="bg-dark-card rounded-lg border border-dark-border p-8 text-center">
-            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-white mb-2">Invalid Invitation</h1>
-            <p className="text-dark-muted mb-6">
+          <div className="bg-[var(--card-bg)] rounded-lg border border-[var(--border-color)] p-8 text-center">
+            <XCircle className="w-16 h-16 text-[var(--danger)] mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Invalid Invitation</h1>
+            <p className="text-[var(--text-muted)] mb-6">
               This invitation link is invalid or has expired.
             </p>
             <button
               onClick={() => router.push('/login')}
-              className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors"
+              className="px-6 py-3 bg-[var(--primary)] hover:opacity-90 text-white rounded-lg transition-all"
             >
               Go to Login
             </button>
@@ -161,19 +172,19 @@ function AcceptInvitationContent() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
         <div className="max-w-md w-full">
-          <div className="bg-dark-card rounded-lg border border-dark-border p-8 text-center">
+          <div className="bg-[var(--card-bg)] rounded-lg border border-[var(--border-color)] p-8 text-center">
             <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-            <h1 className="text-2xl font-bold text-white mb-2">Invitation Accepted!</h1>
-            <p className="text-dark-muted mb-2">
-              You have successfully joined <strong className="text-white">{invitationData?.tenant_name}</strong> as a{' '}
-              <strong className="text-teal-400">{invitationData?.role}</strong>.
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Invitation Accepted!</h1>
+            <p className="text-[var(--text-secondary)] mb-2">
+              You have successfully joined <strong className="text-[var(--text-primary)]">{invitationData?.tenant_name}</strong> as a{' '}
+              <strong className="text-[var(--primary)]">{invitationData?.role}</strong>.
             </p>
-            <p className="text-dark-muted mb-6">
-              Redirecting to login...
+            <p className="text-[var(--text-muted)] mb-6">
+              Redirecting to dashboard...
             </p>
-            <div className="flex items-center justify-center gap-2 text-teal-400">
+            <div className="flex items-center justify-center gap-2 text-[var(--primary)]">
               <Loader2 className="w-5 h-5 animate-spin" />
               <span>Please wait</span>
             </div>
@@ -184,25 +195,25 @@ function AcceptInvitationContent() {
   }
 
   return (
-    <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
       <div className="max-w-md w-full">
-        <div className="bg-dark-card rounded-lg border border-dark-border p-8">
+        <div className="bg-[var(--card-bg)] rounded-lg border border-[var(--border-color)] p-8 shadow-lg">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--primary)] to-blue-500 flex items-center justify-center mx-auto mb-4">
               <Mail className="w-8 h-8 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2">Accept Team Invitation</h1>
-            <p className="text-dark-muted">
+            <h1 className="text-2xl font-bold text-[var(--text-primary)] mb-2">Accept Team Invitation</h1>
+            <p className="text-[var(--text-muted)]">
               You've been invited to join a team. Complete the form below to accept.
             </p>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-start gap-3">
-              <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-              <p className="text-red-400 text-sm">{error}</p>
+            <div className="mb-6 p-4 bg-[var(--danger-bg)] border border-[var(--danger)]/50 rounded-lg flex items-start gap-3">
+              <XCircle className="w-5 h-5 text-[var(--danger)] flex-shrink-0 mt-0.5" />
+              <p className="text-[var(--danger)] text-sm">{error}</p>
             </div>
           )}
 
@@ -211,7 +222,7 @@ function AcceptInvitationContent() {
             <button
               onClick={handleGoogleSignIn}
               disabled={loading}
-              className="w-full py-3 px-4 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors flex items-center justify-center gap-3 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 px-4 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition-colors flex items-center justify-center gap-3 border border-[var(--border-color)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -224,10 +235,10 @@ function AcceptInvitationContent() {
             
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-700"></div>
+                <div className="w-full border-t border-[var(--border-color)]"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-dark-card text-dark-muted">Or continue with email</span>
+                <span className="px-4 bg-[var(--card-bg)] text-[var(--text-muted)]">Or continue with email</span>
               </div>
             </div>
           </div>
@@ -240,8 +251,8 @@ function AcceptInvitationContent() {
                 onClick={() => setMode('new')}
                 className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
                   mode === 'new'
-                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/50'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-[var(--background)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] border border-[var(--border-color)]'
                 }`}
                 disabled={loading}
               >
@@ -252,8 +263,8 @@ function AcceptInvitationContent() {
                 onClick={() => setMode('existing')}
                 className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
                   mode === 'existing'
-                    ? 'bg-teal-600 text-white shadow-lg shadow-teal-500/50'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 border border-slate-700'
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-[var(--background)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)] border border-[var(--border-color)]'
                 }`}
                 disabled={loading}
               >
@@ -262,11 +273,11 @@ function AcceptInvitationContent() {
             </div>
             
             {mode === 'new' ? (
-              <p className="text-sm text-dark-muted">
+              <p className="text-sm text-[var(--text-muted)]">
                 Set a password for your new account to complete the invitation.
               </p>
             ) : (
-              <p className="text-sm text-dark-muted">
+              <p className="text-sm text-[var(--text-muted)]">
                 Sign in with your existing password to accept the invitation.
               </p>
             )}
@@ -276,16 +287,16 @@ function AcceptInvitationContent() {
           {mode === 'new' ? (
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     placeholder="Enter password (min 8 characters)"
                     disabled={loading}
                   />
@@ -293,16 +304,16 @@ function AcceptInvitationContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Confirm Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     placeholder="Confirm password"
                     disabled={loading}
                   />
@@ -312,21 +323,21 @@ function AcceptInvitationContent() {
           ) : (
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-2">
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-dark-muted" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
                   <input
                     type="password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className="w-full bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                     placeholder="Enter your existing password"
                     disabled={loading}
                   />
                 </div>
-                <p className="text-xs text-dark-muted mt-2">
+                <p className="text-xs text-[var(--text-muted)] mt-2">
                   Use the password from your existing account.
                 </p>
               </div>
@@ -337,7 +348,7 @@ function AcceptInvitationContent() {
           <button
             onClick={handleAcceptInvitation}
             disabled={loading}
-            className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 bg-[var(--primary)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all flex items-center justify-center gap-2"
           >
             {loading ? (
               <>
@@ -354,11 +365,11 @@ function AcceptInvitationContent() {
 
           {/* Footer */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-dark-muted">
+            <p className="text-sm text-[var(--text-muted)]">
               Already have an account?{' '}
               <button
                 onClick={() => router.push('/login')}
-                className="text-teal-400 hover:text-teal-300 font-medium"
+                className="text-[var(--primary)] hover:opacity-80 font-medium"
               >
                 Log in
               </button>
@@ -374,8 +385,8 @@ export default function AcceptInvitationPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-teal-400 animate-spin" />
+        <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-[var(--primary)] animate-spin" />
         </div>
       }
     >

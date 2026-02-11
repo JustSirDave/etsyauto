@@ -22,6 +22,7 @@ interface AuthContextType {
   deleteProfilePicture: () => Promise<void>;
   error: string | null;
   clearError: () => void;
+  getRoleDashboardPath: () => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -258,6 +259,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   };
 
+  const getRoleDashboardPath = (): string => {
+    if (!user) return '/dashboard';
+    
+    const role = user.role?.toLowerCase() || 'viewer';
+    switch (role) {
+      case 'owner':
+        return '/dashboard/owner';
+      case 'admin':
+        return '/dashboard/admin';
+      case 'supplier':
+        return '/dashboard/supplier';
+      case 'viewer':
+        return '/dashboard/viewer';
+      default:
+        return '/dashboard/viewer';
+    }
+  };
+
   const uploadProfilePicture = async (file: File) => {
     try {
       setError(null);
@@ -309,6 +328,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     deleteProfilePicture,
     error,
     clearError,
+    getRoleDashboardPath,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -332,6 +352,7 @@ export function useAuth() {
         deleteProfilePicture: async () => {},
         error: null,
         clearError: () => {},
+        getRoleDashboardPath: () => '/dashboard',
       };
     }
     throw new Error('useAuth must be used within an AuthProvider');

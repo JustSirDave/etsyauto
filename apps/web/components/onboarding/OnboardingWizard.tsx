@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { CheckCircleIcon, XCircleIcon, ArrowRightIcon, ArrowLeftIcon } from '@heroicons/react/24/solid';
+import { useAuth } from '@/lib/auth-context';
 
 interface Step {
   id: string;
@@ -16,53 +17,72 @@ interface OnboardingWizardProps {
 }
 
 export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [stepData, setStepData] = useState<Record<string, any>>({});
 
-  const steps: Step[] = [
-    {
-      id: 'connect-shop',
-      title: 'Connect Etsy Shop',
-      description: 'Link your Etsy shop to start automating',
-      status: currentStep === 0 ? 'current' : currentStep > 0 ? 'completed' : 'upcoming',
-      component: <ConnectShopStep onNext={handleNext} />
-    },
-    {
-      id: 'ingest-products',
-      title: 'Import Products',
-      description: 'Upload your product catalog via CSV',
-      status: currentStep === 1 ? 'current' : currentStep > 1 ? 'completed' : 'upcoming',
-      component: <IngestProductsStep onNext={handleNext} onBack={handleBack} />
-    },
-    {
-      id: 'ai-generate',
-      title: 'Generate AI Content',
-      description: 'Create optimized titles and descriptions',
-      status: currentStep === 2 ? 'current' : currentStep > 2 ? 'completed' : 'upcoming',
-      component: <AIGenerateStep onNext={handleNext} onBack={handleBack} />
-    },
-    {
-      id: 'create-schedule',
-      title: 'Setup Schedule',
-      description: 'Configure automated publishing',
-      status: currentStep === 3 ? 'current' : currentStep > 3 ? 'completed' : 'upcoming',
-      component: <CreateScheduleStep onNext={handleNext} onBack={handleBack} />
-    },
-    {
-      id: 'publish',
-      title: 'Publish Listings',
-      description: 'Publish your first listing to Etsy',
-      status: currentStep === 4 ? 'current' : currentStep > 4 ? 'completed' : 'upcoming',
-      component: <PublishStep onNext={handleNext} onBack={handleBack} />
-    },
-    {
-      id: 'complete',
-      title: 'All Set!',
-      description: 'Your automation is ready',
-      status: currentStep === 5 ? 'current' : 'upcoming',
-      component: <CompleteStep onFinish={onComplete} />
+  // Build steps array based on user role
+  const allSteps = useMemo(() => {
+    const baseSteps: Step[] = [];
+    
+    // Only show Connect Shop for owner, admin (skip for supplier, creator, viewer)
+    if (user?.role && ['owner', 'admin'].includes(user.role.toLowerCase())) {
+      baseSteps.push({
+        id: 'connect-shop',
+        title: 'Connect Etsy Shop',
+        description: 'Link your Etsy shop to start automating',
+        status: 'upcoming',
+        component: <ConnectShopStep onNext={handleNext} />
+      });
     }
-  ];
+    
+    return baseSteps.concat([
+      {
+        id: 'ingest-products',
+        title: 'Import Products',
+        description: 'Upload your product catalog via CSV',
+        status: 'upcoming',
+        component: <IngestProductsStep onNext={handleNext} onBack={handleBack} />
+      },
+      {
+        id: 'ai-generate',
+        title: 'Generate AI Content',
+        description: 'Create optimized titles and descriptions',
+        status: 'upcoming',
+        component: <AIGenerateStep onNext={handleNext} onBack={handleBack} />
+      },
+      {
+        id: 'create-schedule',
+        title: 'Setup Schedule',
+        description: 'Configure automated publishing',
+        status: 'upcoming',
+        component: <CreateScheduleStep onNext={handleNext} onBack={handleBack} />
+      },
+      {
+        id: 'publish',
+        title: 'Publish Listings',
+        description: 'Publish your first listing to Etsy',
+        status: 'upcoming',
+        component: <PublishStep onNext={handleNext} onBack={handleBack} />
+      },
+      {
+        id: 'complete',
+        title: 'All Set!',
+        description: 'Your automation is ready',
+        status: 'upcoming',
+        component: <CompleteStep onFinish={onComplete} />
+      }
+    ]);
+  }, [user?.role]);
+
+  // Update step statuses based on currentStep
+  const steps: Step[] = useMemo(() => 
+    allSteps.map((step, index) => ({
+      ...step,
+      status: index === currentStep ? 'current' : index < currentStep ? 'completed' : 'upcoming'
+    })),
+    [allSteps, currentStep]
+  );
 
   function handleNext(data?: any) {
     if (data) {

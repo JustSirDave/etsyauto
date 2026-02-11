@@ -234,10 +234,80 @@ async def _sync_shop_orders(
 
                     _log_order_mismatch(db, existing_order, order_data)
 
-                    # Update existing order with all fields
+                    # Track previous fulfillment status for event creation
+                    previous_fulfillment_status = existing_order.fulfillment_status
+                    
+                    # Update existing order with all fields except shipments (merge those)
                     for key, value in order_data.items():
-                        if hasattr(existing_order, key):
+                        if key == "shipments":
+                            # Merge shipments: combine Etsy shipments with platform-only shipments
+                            existing_shipments = existing_order.shipments or []
+                            etsy_shipments = value or []
+                            
+                            # Create a map of Etsy shipments by receipt_shipping_id
+                            etsy_shipment_map = {}
+                            for shipment in etsy_shipments:
+                                if isinstance(shipment, dict):
+                                    receipt_shipping_id = shipment.get("receipt_shipping_id")
+                                    if receipt_shipping_id:
+                                        etsy_shipment_map[receipt_shipping_id] = shipment
+                            
+                            # Merge: Keep platform-only shipments + update/add Etsy shipments
+                            merged_shipments = []
+                            
+                            # Add all Etsy shipments (these are authoritative from Etsy)
+                            merged_shipments.extend(etsy_shipments)
+                            
+                            # Add platform-only shipments (those without receipt_shipping_id or not in Etsy)
+                            for existing_shipment in existing_shipments:
+                                if isinstance(existing_shipment, dict):
+                                    receipt_shipping_id = existing_shipment.get("receipt_shipping_id")
+                                    # Keep if it's platform-only (no receipt_shipping_id or not from Etsy)
+                                    if not receipt_shipping_id or receipt_shipping_id not in etsy_shipment_map:
+                                        # Mark as platform-only if not already marked
+                                        if "source" not in existing_shipment:
+                                            existing_shipment["source"] = "manual"
+                                        merged_shipments.append(existing_shipment)
+                            
+                            setattr(existing_order, key, merged_shipments)
+                        elif hasattr(existing_order, key):
                             setattr(existing_order, key, value)
+                    
+                    # Create ShipmentEvent if fulfillment status changed to delivered
+                    if (
+                        previous_fulfillment_status != "delivered"
+                        and order_data.get("fulfillment_status") == "delivered"
+                    ):
+                        from app.models.listings import ShipmentEvent
+                        from datetime import datetime, timezone
+                        
+                        # Find the delivered shipment
+                        delivered_shipment = None
+                        for shipment in (order_data.get("shipments") or []):
+                            if isinstance(shipment, dict) and shipment.get("is_delivered"):
+                                delivered_shipment = shipment
+                                break
+                        
+                        if delivered_shipment:
+                            shipment_event = ShipmentEvent(
+                                order_id=existing_order.id,
+                                tenant_id=existing_order.tenant_id,
+                                shop_id=existing_order.shop_id,
+                                state="delivered",
+                                previous_state=previous_fulfillment_status,
+                                tracking_code=delivered_shipment.get("tracking_code"),
+                                carrier_name=delivered_shipment.get("carrier_name"),
+                                tracking_url=delivered_shipment.get("tracking_url"),
+                                source="etsy_sync",
+                                actor_user_id=None,  # System-generated
+                                actor_role="system",
+                                event_timestamp=datetime.now(timezone.utc),
+                                delivered_at=datetime.now(timezone.utc),
+                                notes="Automatically marked as delivered via Etsy sync",
+                                event_metadata={"etsy_shipment": delivered_shipment}
+                            )
+                            db.add(shipment_event)
+                            logger.info(f"Created delivered ShipmentEvent for order {receipt_id}")
                     
                     result["orders_updated"] += 1
                     logger.debug(f"Updated order {receipt_id}")

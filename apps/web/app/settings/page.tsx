@@ -501,18 +501,36 @@ function SettingsContent() {
             {isLoading ? <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" /></div>
             : (
               <div className="space-y-4">
-                <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to start automating listings, orders, and inventory management.</p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <input
-                    value={shopNameInput}
-                    onChange={(e) => setShopNameInput(e.target.value)}
-                    placeholder="Shop display name"
-                    className="flex-1 px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                  <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
-                    {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Connecting...</> : <><LinkIcon className="w-4 h-4" />Connect Etsy</>}
-                  </button>
-                </div>
+                {/* Hide Connect Etsy for suppliers - they inherit shop access via organization */}
+                {user?.role === 'supplier' ? (
+                  <div className="p-4 bg-[var(--info-bg)] border border-[var(--info)]/20 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-[var(--info)] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[var(--text-primary)] font-medium mb-1">Shop Access via Organization</p>
+                        <p className="text-[var(--text-secondary)] text-sm">
+                          As a supplier, you have access to shop data through your organization membership. 
+                          Only shop owners can connect Etsy accounts.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-[var(--text-muted)] text-sm">Connect your Etsy shop to start automating listings, orders, and inventory management.</p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <input
+                        value={shopNameInput}
+                        onChange={(e) => setShopNameInput(e.target.value)}
+                        placeholder="Shop display name"
+                        className="flex-1 px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                      />
+                      <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
+                        {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Connecting...</> : <><LinkIcon className="w-4 h-4" />Connect Etsy</>}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </DashboardCard>
@@ -582,13 +600,16 @@ function SettingsContent() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {shop.status === 'connected' && (
-                          <button onClick={() => handleDisconnectShop(shop.id, shop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20">
-                            <Unlink className="w-4 h-4" />Disconnect
-                          </button>
-                        )}
-                      </div>
+                      {/* Hide Disconnect for suppliers - policy compliance */}
+                      {user?.role !== 'supplier' && (
+                        <div className="flex items-center gap-2">
+                          {shop.status === 'connected' && (
+                            <button onClick={() => handleDisconnectShop(shop.id, shop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20">
+                              <Unlink className="w-4 h-4" />Disconnect
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

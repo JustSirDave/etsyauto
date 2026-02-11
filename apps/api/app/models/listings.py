@@ -312,6 +312,60 @@ class UsageCost(Base):
     )
 
 
+class ShipmentEvent(Base):
+    """
+    Shipment event history for analytics and tracking lineage
+    Records all shipment state transitions with full context
+    """
+    __tablename__ = "shipment_events"
+    
+    id = Column(BigInteger, primary_key=True, index=True)
+    order_id = Column(BigInteger, ForeignKey('orders.id'), nullable=False, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False)
+    
+    # Canonical shipment state
+    state = Column(
+        String(20),
+        CheckConstraint("state IN ('processing','shipped','in_transit','delivered','delayed','cancelled')"),
+        nullable=False,
+        index=True
+    )
+    previous_state = Column(String(20), nullable=True)  # For state transition tracking
+    
+    # Tracking details
+    tracking_code = Column(String(255), nullable=True, index=True)
+    carrier_name = Column(String(100), nullable=True)
+    tracking_url = Column(String(500), nullable=True)
+    
+    # Event context
+    source = Column(
+        String(20),
+        CheckConstraint("source IN ('manual','etsy_sync','auto')"),
+        nullable=False,
+        index=True
+    )
+    actor_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    actor_role = Column(String(20), nullable=True)
+    
+    # Timestamps
+    event_timestamp = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, index=True)
+    shipped_at = Column(DateTime(timezone=True), nullable=True)  # When shipment started
+    delivered_at = Column(DateTime(timezone=True), nullable=True)  # When delivered
+    
+    # Additional metadata
+    notes = Column(Text, nullable=True)
+    event_metadata = Column(JSONB, nullable=True)  # Extra event data
+    
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+    
+    __table_args__ = (
+        Index('idx_shipment_events_order_state', 'order_id', 'state'),
+        Index('idx_shipment_events_tenant_timestamp', 'tenant_id', 'event_timestamp'),
+        Index('idx_shipment_events_state_timestamp', 'state', 'event_timestamp'),
+    )
+
+
 class AuditLog(Base):
     """
     Audit log for tracking all significant actions in the system

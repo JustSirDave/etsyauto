@@ -21,9 +21,13 @@ IDEMPOTENCY_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 EXEMPT_PATHS = {
     "/api/auth/login",
     "/api/auth/register",
-    "/api/auth/google",
+    "/api/auth/google",  # Google OAuth (implicit flow - login/register page)
     "/api/auth/token",
     "/api/auth/refresh",
+    "/api/team/members/invite",  # Team invitations can be safely retried
+    "/api/team/invitations/accept",  # Invitation acceptance (user may not have token yet)
+    "/api/oauth/google/auth",  # Google OAuth initiation (authorization code flow - invitation page)
+    "/api/oauth/google/callback",  # Google OAuth callback (authorization code flow)
 }
 
 

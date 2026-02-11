@@ -447,6 +447,7 @@ export interface OrderDetail extends Order {
   shipping_address: any;
   items: any[];
   synced_at: string | null;
+  shipments?: any[];
 }
 
 export interface OrderStats {
@@ -824,6 +825,10 @@ export const suppliersApi = {
  * Onboarding API
  */
 export const onboardingApi = {
+  getStatus: async (): Promise<{ needs_onboarding: boolean; [key: string]: any }> => {
+    return apiRequest('/api/onboarding/status');
+  },
+
   complete: async (shopName: string, description: string | null): Promise<any> => {
     return apiRequest('/api/onboarding/complete', {
       method: 'POST',
@@ -862,13 +867,18 @@ export interface DashboardStats {
 }
 
 export interface DashboardOrder {
+  id: number;
   order_id: string;
+  buyer_name: string;
   customer: string;
   customer_email: string;
+  item_title?: string;
   date: string;
   amount: string;
+  total_price?: number | null;
   status: string;
   payment_status: string;
+  lifecycle_status?: string;
 }
 
 export const dashboardApi = {
@@ -1041,5 +1051,142 @@ export const aiApi = {
     }
 
     return await response.json();
+  },
+};
+
+/**
+ * Analytics API (Owner/Admin/Viewer only)
+ */
+export interface OverviewAnalytics {
+  total_orders: number;
+  total_revenue: number;
+  avg_order_value: number;
+  orders_7d: number;
+  orders_30d: number;
+  revenue_7d: number;
+  revenue_30d: number;
+  orders_7d_trend: number;
+  orders_30d_trend: number;
+  revenue_7d_trend: number;
+  revenue_30d_trend: number;
+  computed_at: string;
+}
+
+export interface OrderAnalytics {
+  status_breakdown: {
+    processing: number;
+    in_transit: number;
+    completed: number;
+    cancelled: number;
+    refunded: number;
+  };
+  payment_breakdown: {
+    paid: number;
+    unpaid: number;
+  };
+  computed_at: string;
+}
+
+export interface ProductAnalytics {
+  total_products: number;
+  published_products: number;
+  draft_products: number;
+  listing_jobs: {
+    total: number;
+    successful: number;
+    failed: number;
+    pending: number;
+  };
+  computed_at: string;
+}
+
+export interface FulfillmentAnalytics {
+  state_breakdown: {
+    processing: number;
+    shipped: number;
+    in_transit: number;
+    delivered: number;
+    delayed: number;
+    cancelled: number;
+  };
+  source_breakdown: {
+    manual: number;
+    etsy_sync: number;
+    auto: number;
+  };
+  avg_fulfillment_time_hours: number;
+  supplier_performance: {
+    [supplierId: string]: {
+      shipment_count: number;
+    };
+  };
+  computed_at: string;
+}
+
+export const analyticsApi = {
+  /**
+   * Get overview analytics (owner/admin/viewer only)
+   * @param shopId Optional shop filter
+   * @param forceRefresh Force cache refresh
+   */
+  getOverview: async (shopId?: number, forceRefresh?: boolean): Promise<OverviewAnalytics> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    if (forceRefresh) params.append('force_refresh', 'true');
+    
+    return apiRequest<OverviewAnalytics>(`/api/analytics/overview?${params.toString()}`);
+  },
+
+  /**
+   * Get order analytics (owner/admin/viewer only)
+   * @param shopId Optional shop filter
+   * @param forceRefresh Force cache refresh
+   */
+  getOrders: async (shopId?: number, forceRefresh?: boolean): Promise<OrderAnalytics> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    if (forceRefresh) params.append('force_refresh', 'true');
+    
+    return apiRequest<OrderAnalytics>(`/api/analytics/orders?${params.toString()}`);
+  },
+
+  /**
+   * Get product analytics (owner/admin/viewer only)
+   * @param shopId Optional shop filter
+   * @param forceRefresh Force cache refresh
+   */
+  getProducts: async (shopId?: number, forceRefresh?: boolean): Promise<ProductAnalytics> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    if (forceRefresh) params.append('force_refresh', 'true');
+    
+    return apiRequest<ProductAnalytics>(`/api/analytics/products?${params.toString()}`);
+  },
+
+  /**
+   * Get fulfillment analytics (owner/admin/viewer only)
+   * Note: supplier_performance field should only be displayed to owners
+   * @param shopId Optional shop filter
+   * @param forceRefresh Force cache refresh
+   */
+  getFulfillment: async (shopId?: number, forceRefresh?: boolean): Promise<FulfillmentAnalytics> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    if (forceRefresh) params.append('force_refresh', 'true');
+    
+    return apiRequest<FulfillmentAnalytics>(`/api/analytics/fulfillment?${params.toString()}`);
+  },
+
+  /**
+   * Invalidate analytics cache (owner/admin/viewer only)
+   * @param shopId Optional shop filter
+   */
+  invalidateCache: async (shopId?: number): Promise<{ message: string }> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    
+    return apiRequest<{ message: string }>(`/api/analytics/invalidate?${params.toString()}`, {
+      method: 'POST',
+    });
   },
 };

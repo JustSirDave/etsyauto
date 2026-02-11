@@ -101,6 +101,15 @@ async def list_team_members(
 
     result = []
     for membership, user in memberships:
+        # Use membership acceptance date for joined_at (when they joined THIS org)
+        # For pending invites, use invited_at instead
+        if membership.invitation_status == 'accepted' and membership.accepted_at:
+            joined_at = membership.accepted_at.isoformat()
+        elif membership.invited_at:
+            joined_at = membership.invited_at.isoformat()
+        else:
+            joined_at = user.created_at.isoformat() if user.created_at else ""
+        
         result.append(MemberResponse(
             id=membership.id,
             user_id=user.id,
@@ -108,7 +117,7 @@ async def list_team_members(
             name=user.name or "No name",
             role=membership.role,
             invitation_status=membership.invitation_status,
-            joined_at=user.created_at.isoformat() if user.created_at else "",
+            joined_at=joined_at,
             last_login=user.last_login_at.isoformat() if user.last_login_at else None,
             allowed_shop_ids=membership.allowed_shop_ids or []
         ))
@@ -321,6 +330,18 @@ async def accept_invitation(
     membership.invitation_status = 'accepted'
     membership.accepted_at = datetime.now(timezone.utc)
     
+    # Auto-assign shop access for suppliers
+    if membership.role.lower() == 'supplier':
+        # Grant access to all tenant shops automatically
+        tenant_shop_ids = [
+            shop.id for shop in db.query(Shop).filter(
+                Shop.tenant_id == membership.tenant_id,
+                Shop.status == 'connected'
+            ).all()
+        ]
+        if tenant_shop_ids:
+            membership.allowed_shop_ids = tenant_shop_ids
+    
     # Get tenant info
     tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
 
@@ -354,7 +375,19 @@ async def accept_invitation(
         # Single commit at the end - all or nothing
         db.commit()
 
-        # Return response with explicit CORS headers
+        # Create JWT token for auto-login
+        from ...core.security import create_access_token
+        jwt_token = create_access_token(
+            user_id=user.id,
+            tenant_id=membership.tenant_id,
+            role=membership.role,
+            email=user.email,
+            name=user.name or "",
+            shop_ids=membership.allowed_shop_ids or [],
+            remember_me=True
+        )
+
+        # Return response with explicit CORS headers and JWT token
         return JSONResponse(
             status_code=200,
             content={
@@ -363,7 +396,8 @@ async def accept_invitation(
                 "email": user.email,
                 "tenant_id": tenant.id,
                 "tenant_name": tenant.name,
-                "role": membership.role
+                "role": membership.role,
+                "token": jwt_token  # Add JWT for auto-login
             },
             headers=CORS_HEADERS
         )

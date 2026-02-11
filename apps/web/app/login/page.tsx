@@ -24,8 +24,44 @@ function LoginContent() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [oauthErrorMessage, setOauthErrorMessage] = useState('');
 
   useEffect(() => {
+    // Check for JWT token from OAuth redirect
+    const token = searchParams.get('token');
+    const invitationAccepted = searchParams.get('invitation_accepted');
+    
+    if (token) {
+      // Store token and redirect to dashboard
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('token', token);
+        
+        if (invitationAccepted === 'true') {
+          showToast('Invitation accepted successfully! Welcome to the team.', 'success');
+        } else {
+          showToast('Logged in successfully!', 'success');
+        }
+        
+        // Redirect to dashboard
+        window.location.href = '/dashboard';
+      }
+      return;
+    }
+
+    const authErrorCode = searchParams.get('auth_error');
+    if (authErrorCode) {
+      const messageByCode: Record<string, string> = {
+        google_oauth_error: 'Google sign-in was cancelled or denied. Please try again.',
+        missing_oauth_params: 'Google sign-in response was incomplete. Please try again.',
+        oauth_callback_rejected: 'Google sign-in could not be completed. Please use your invitation link and try again.',
+        oauth_callback_failed: 'Google sign-in could not be completed right now. Please try again.',
+      };
+      setOauthErrorMessage(
+        messageByCode[authErrorCode] || 'Authentication failed. Please try again.'
+      );
+    }
+    
+    // Check for registration success message
     if (searchParams.get('registered') === 'true') {
       const message = typeof window !== 'undefined' 
         ? sessionStorage.getItem('registration_success') 
@@ -37,7 +73,7 @@ function LoginContent() {
         setSuccessMessage('Account created! Please check your email to verify your account.');
       }
     }
-  }, [searchParams]);
+  }, [searchParams, showToast]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -46,6 +82,7 @@ function LoginContent() {
       [name]: type === 'checkbox' ? checked : value,
     }));
     clearError();
+    setOauthErrorMessage('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,10 +114,10 @@ function LoginContent() {
       )}
 
       {/* Error Message */}
-      {error && (
+      {(error || oauthErrorMessage) && (
         <div className="mb-6 bg-red-50 border-2 border-red-500 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-red-800 text-sm font-medium">{error}</p>
+          <p className="text-red-800 text-sm font-medium">{error || oauthErrorMessage}</p>
         </div>
       )}
 

@@ -61,6 +61,11 @@ class Permission(str, Enum):
     READ_AUDIT_LOG = "read_audit_log"
     READ_AUDIT_LOGS = "read_audit_logs"
     MANAGE_AUDIT_LOGS = "manage_audit_logs"  # For cleanup/admin tasks
+    
+    # Analytics permissions (Owner/Admin only)
+    VIEW_ANALYTICS = "view_analytics"
+    VIEW_REVENUE = "view_revenue"
+    VIEW_SUPPLIER_PERFORMANCE = "view_supplier_performance"
 
 
 # Permission matrix: Role -> Set of Permissions
@@ -103,6 +108,10 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.READ_AUDIT_LOG,
         Permission.READ_AUDIT_LOGS,
         Permission.MANAGE_AUDIT_LOGS,
+        # Analytics (Full access including supplier performance)
+        Permission.VIEW_ANALYTICS,
+        Permission.VIEW_REVENUE,
+        Permission.VIEW_SUPPLIER_PERFORMANCE,
     },
     Role.ADMIN: {
         # Tenant (no billing/delete)
@@ -112,12 +121,12 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CONNECT_SHOP,
         Permission.DISCONNECT_SHOP,
         Permission.MANAGE_SHOP_SETTINGS,
-        # Product
+        # Product (merged creator permissions)
         Permission.CREATE_PRODUCT,
         Permission.READ_PRODUCT,
         Permission.UPDATE_PRODUCT,
         Permission.DELETE_PRODUCT,
-        # Listing
+        # Listing (merged creator permissions)
         Permission.CREATE_LISTING,
         Permission.READ_LISTING,
         Permission.UPDATE_LISTING,
@@ -128,17 +137,20 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SYNC_ORDER,
         Permission.ASSIGN_ORDER,
         Permission.UPDATE_FULFILLMENT,
-        # Schedule
+        # Schedule (merged creator permissions)
         Permission.CREATE_SCHEDULE,
         Permission.READ_SCHEDULE,
         Permission.UPDATE_SCHEDULE,
         Permission.DELETE_SCHEDULE,
         Permission.PAUSE_SCHEDULE,
-        # AI
+        # AI (merged creator permissions)
         Permission.GENERATE_CONTENT,
         # Audit
         Permission.READ_AUDIT_LOG,
         Permission.READ_AUDIT_LOGS,
+        # Analytics (Admin can view analytics but not supplier performance)
+        Permission.VIEW_ANALYTICS,
+        Permission.VIEW_REVENUE,
     },
     Role.CREATOR: {
         # Product (create within scope)
@@ -161,12 +173,14 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.GENERATE_CONTENT,
     },
     Role.VIEWER: {
-        # Read-only access
+        # Read-only access (including analytics)
         Permission.READ_PRODUCT,
         Permission.READ_LISTING,
         Permission.READ_ORDER,
         Permission.READ_SCHEDULE,
         Permission.READ_AUDIT_LOG,
+        Permission.VIEW_ANALYTICS,
+        Permission.VIEW_REVENUE,
     },
     Role.SUPPLIER: {
         Permission.READ_ORDER,

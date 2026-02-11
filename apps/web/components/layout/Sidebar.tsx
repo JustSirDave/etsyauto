@@ -21,9 +21,13 @@ import {
   X,
   BookOpen,
   Shield,
+  Users,
+  TruckIcon,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/language-context';
+import { useAuth } from '@/lib/auth-context';
 
 interface NavItem {
   name: string;
@@ -36,18 +40,25 @@ interface NavSection {
   items: NavItem[];
 }
 
-const navigation: NavSection[] = [
+// Owner navigation: Full access to all features
+const ownerNavigation: NavSection[] = [
   {
     items: [
-  { name: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
+      { name: 'nav.dashboard', href: '/dashboard/owner', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'nav.analytics',
+    items: [
+      { name: 'nav.analytics', href: '/analytics', icon: BarChart3 },
     ],
   },
   {
     title: 'nav.shopManagement',
     items: [
-  { name: 'nav.products', href: '/products', icon: Package },
-  { name: 'nav.listings', href: '/listings', icon: FileText },
-  { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
+      { name: 'nav.products', href: '/products', icon: Package },
+      { name: 'nav.listings', href: '/listings', icon: FileText },
+      { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
     ],
   },
   {
@@ -55,7 +66,14 @@ const navigation: NavSection[] = [
     items: [
       { name: 'nav.aiGeneration', href: '/ai', icon: Sparkles },
       { name: 'nav.aiReview', href: '/ai-review', icon: BookOpen },
-  { name: 'nav.schedules', href: '/schedules', icon: Calendar },
+      { name: 'nav.schedules', href: '/schedules', icon: Calendar },
+    ],
+  },
+  {
+    title: 'nav.team',
+    items: [
+      { name: 'nav.teamMembers', href: '/team', icon: Users },
+      { name: 'nav.suppliers', href: '/suppliers', icon: TruckIcon },
     ],
   },
   {
@@ -67,11 +85,106 @@ const navigation: NavSection[] = [
   },
 ];
 
+// Admin navigation: Analytics + ops (no ownership settings)
+const adminNavigation: NavSection[] = [
+  {
+    items: [
+      { name: 'nav.dashboard', href: '/dashboard/admin', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'nav.analytics',
+    items: [
+      { name: 'nav.analytics', href: '/analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'nav.shopManagement',
+    items: [
+      { name: 'nav.products', href: '/products', icon: Package },
+      { name: 'nav.listings', href: '/listings', icon: FileText },
+      { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
+    ],
+  },
+  {
+    title: 'nav.automation',
+    items: [
+      { name: 'nav.aiGeneration', href: '/ai', icon: Sparkles },
+      { name: 'nav.aiReview', href: '/ai-review', icon: BookOpen },
+      { name: 'nav.schedules', href: '/schedules', icon: Calendar },
+    ],
+  },
+  {
+    title: 'nav.team',
+    items: [
+      { name: 'nav.suppliers', href: '/suppliers', icon: TruckIcon },
+    ],
+  },
+];
+
+// Supplier navigation: Fulfillment and supplier profile settings
+const supplierNavigation: NavSection[] = [
+  {
+    items: [
+      { name: 'nav.dashboard', href: '/dashboard/supplier', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'nav.fulfillment',
+    items: [
+      { name: 'nav.assignedOrders', href: '/orders', icon: ShoppingCart },
+    ],
+  },
+  {
+    title: 'nav.account',
+    items: [
+      { name: 'nav.settings', href: '/settings?tab=supplier_profile', icon: Settings },
+    ],
+  },
+];
+
+// Viewer navigation: Read-only analytics
+const viewerNavigation: NavSection[] = [
+  {
+    items: [
+      { name: 'nav.dashboard', href: '/dashboard/viewer', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'nav.analytics',
+    items: [
+      { name: 'nav.analytics', href: '/analytics', icon: BarChart3 },
+      { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
+    ],
+  },
+];
+
+function getNavigationForRole(role: string | undefined): NavSection[] {
+  const normalizedRole = role?.toLowerCase() || 'viewer';
+  
+  switch (normalizedRole) {
+    case 'owner':
+      return ownerNavigation;
+    case 'admin':
+      return adminNavigation;
+    case 'supplier':
+      return supplierNavigation;
+    case 'viewer':
+      return viewerNavigation;
+    default:
+      return viewerNavigation; // Default to most restrictive
+  }
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showHelpCard, setShowHelpCard] = useState(true);
   const { t } = useLanguage();
+  const { user } = useAuth();
+  
+  // Get role-specific navigation
+  const navigation = getNavigationForRole(user?.role);
 
   // Load saved state from localStorage
   useEffect(() => {
@@ -149,7 +262,8 @@ export function Sidebar() {
             <div className="space-y-1">
               {section.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
+                const hrefBase = item.href.split('?')[0];
+                const isActive = pathname === hrefBase || (hrefBase !== '/' && pathname.startsWith(hrefBase + '/'));
           
           return (
             <Link
