@@ -10,7 +10,6 @@ class Role(str, Enum):
     """User roles with hierarchical permissions"""
     OWNER = "owner"
     ADMIN = "admin"
-    CREATOR = "creator"
     VIEWER = "viewer"
     SUPPLIER = "supplier"
 
@@ -121,12 +120,12 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.CONNECT_SHOP,
         Permission.DISCONNECT_SHOP,
         Permission.MANAGE_SHOP_SETTINGS,
-        # Product (merged creator permissions)
+        # Product
         Permission.CREATE_PRODUCT,
         Permission.READ_PRODUCT,
         Permission.UPDATE_PRODUCT,
         Permission.DELETE_PRODUCT,
-        # Listing (merged creator permissions)
+        # Listing
         Permission.CREATE_LISTING,
         Permission.READ_LISTING,
         Permission.UPDATE_LISTING,
@@ -137,13 +136,13 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.SYNC_ORDER,
         Permission.ASSIGN_ORDER,
         Permission.UPDATE_FULFILLMENT,
-        # Schedule (merged creator permissions)
+        # Schedule
         Permission.CREATE_SCHEDULE,
         Permission.READ_SCHEDULE,
         Permission.UPDATE_SCHEDULE,
         Permission.DELETE_SCHEDULE,
         Permission.PAUSE_SCHEDULE,
-        # AI (merged creator permissions)
+        # AI
         Permission.GENERATE_CONTENT,
         # Audit
         Permission.READ_AUDIT_LOG,
@@ -151,26 +150,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         # Analytics (Admin can view analytics but not supplier performance)
         Permission.VIEW_ANALYTICS,
         Permission.VIEW_REVENUE,
-    },
-    Role.CREATOR: {
-        # Product (create within scope)
-        Permission.CREATE_PRODUCT,
-        Permission.READ_PRODUCT,
-        Permission.UPDATE_PRODUCT,  # Only own products
-        # Listing (create within scope)
-        Permission.CREATE_LISTING,
-        Permission.READ_LISTING,
-        Permission.UPDATE_LISTING,  # Only own listings
-        Permission.PUBLISH_LISTING,  # Only own listings
-        # Order (read only)
-        Permission.READ_ORDER,
-        # Schedule (create/read own)
-        Permission.CREATE_SCHEDULE,
-        Permission.READ_SCHEDULE,
-        Permission.UPDATE_SCHEDULE,  # Only own schedules
-        Permission.PAUSE_SCHEDULE,  # Only own schedules
-        # AI
-        Permission.GENERATE_CONTENT,
     },
     Role.VIEWER: {
         # Read-only access (including analytics)
@@ -194,7 +173,7 @@ def has_permission(role: str, permission: Permission) -> bool:
     Check if a role has a specific permission
     
     Args:
-        role: User role (owner, admin, creator, viewer)
+        role: User role (owner, admin, viewer, supplier)
         permission: Permission to check
         
     Returns:
@@ -250,7 +229,7 @@ def can_access_shop(role: str, shop_id: int, allowed_shop_ids: List[int]) -> boo
         
     Notes:
         - Owner/Admin: Can access all shops in tenant (empty list = all)
-        - Creator/Viewer: Can only access shops in allowed_shop_ids
+        - Viewer/Supplier: Can only access shops in allowed_shop_ids
     """
     role_enum = Role(role.lower()) if role else None
     
@@ -262,7 +241,7 @@ def can_access_shop(role: str, shop_id: int, allowed_shop_ids: List[int]) -> boo
     if role_enum in (Role.OWNER, Role.ADMIN):
         return True
 
-    # Creator, Viewer, and Supplier are restricted to allowed shops
+    # Viewer and Supplier are restricted to allowed shops
     return False
 
 
@@ -291,6 +270,6 @@ def get_accessible_shop_ids(role: str, tenant_id: int, allowed_shop_ids: List[in
         all_shops = db.query(Shop.id).filter(Shop.tenant_id == tenant_id).all()
         return [shop.id for shop in all_shops]
 
-    # Creator, Viewer, and Supplier are restricted to explicitly allowed shops
+    # Viewer and Supplier are restricted to explicitly allowed shops
     return []
 

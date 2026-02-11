@@ -1,14 +1,18 @@
 'use client';
 
 /**
- * Order Detail Page - Vuexy Style
+ * Order Detail Page
+ * - All roles (owner/admin/supplier) can fulfill + sync to Etsy
+ * - "Record Manual Tracking" toggle for local-only tracking
+ * - Shows assigned supplier in header
+ * - Shipment badges: "Synced to Etsy" vs "Manual", recorded-by info
  */
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { ArrowLeft, Package, Calendar, User, MapPin, CreditCard, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Package, Calendar, User, MapPin, CreditCard, RefreshCcw, Truck, CheckCircle, Globe, FileText } from 'lucide-react';
 import { ordersApi, OrderDetail, teamApi, TeamMember } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { cn } from '@/lib/utils';
@@ -37,29 +41,38 @@ function PaymentStatus({ status }: { status: string }) {
 
 function OrderStatus({ status }: { status: string }) {
   const normalized = normalizeOrderStatus(status);
-  
   let badgeClass = '';
   switch (normalized) {
-    case 'completed':
-      badgeClass = 'bg-green-50 text-green-700';
-      break;
-    case 'in_transit':
-      badgeClass = 'bg-yellow-50 text-yellow-700';
-      break;
-    case 'cancelled':
-      badgeClass = 'bg-red-50 text-red-700';
-      break;
-    case 'refunded':
-      badgeClass = 'bg-gray-200 text-gray-800';
-      break;
-    default:
-      badgeClass = 'bg-gray-100 text-gray-700';
+    case 'completed': badgeClass = 'bg-green-50 text-green-700'; break;
+    case 'in_transit': badgeClass = 'bg-yellow-50 text-yellow-700'; break;
+    case 'cancelled': badgeClass = 'bg-red-50 text-red-700'; break;
+    case 'refunded': badgeClass = 'bg-gray-200 text-gray-800'; break;
+    default: badgeClass = 'bg-gray-100 text-gray-700';
   }
-  
   return (
     <span className={`inline-flex px-3 py-1.5 rounded-full text-sm font-medium ${badgeClass}`}>
       {ORDER_STATUS_LABELS[normalized]}
     </span>
+  );
+}
+
+function ShipmentSourceBadge({ source, recordedBy, recordedByRole }: { source?: string; recordedBy?: string; recordedByRole?: string }) {
+  const isEtsy = source === 'etsy_sync';
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-2">
+      <span className={cn(
+        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
+        isEtsy ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600',
+      )}>
+        {isEtsy ? <Globe className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
+        {isEtsy ? 'Synced to Etsy' : 'Manual'}
+      </span>
+      {recordedBy && (
+        <span className="text-xs text-[var(--text-muted)]">
+          by {recordedBy}{recordedByRole ? ` (${recordedByRole})` : ''}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -78,20 +91,21 @@ function OrderDetailContent() {
   const [shipDate, setShipDate] = useState('');
   const [note, setNote] = useState('');
   const [sendBcc, setSendBcc] = useState(false);
+  const [manualOnly, setManualOnly] = useState(false);
   const [suppliers, setSuppliers] = useState<TeamMember[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
   const [assigningSupplier, setAssigningSupplier] = useState(false);
 
   const orderId = typeof params?.id === 'string' ? parseInt(params.id, 10) : null;
+  const canFulfill = user?.role === 'supplier' || user?.role === 'owner' || user?.role === 'admin';
+  const canAssign = user?.role === 'owner' || user?.role === 'admin';
 
   useEffect(() => {
-    if (orderId) {
-      loadOrder();
-    }
+    if (orderId) loadOrder();
   }, [orderId]);
 
   useEffect(() => {
-    if (user?.role === 'owner' || user?.role === 'admin') {
+    if (canAssign) {
       teamApi.getMembers()
         .then((members) => setSuppliers(members.filter((m) => m.role === 'supplier')))
         .catch(() => setSuppliers([]));
@@ -100,7 +114,6 @@ function OrderDetailContent() {
 
   const loadOrder = async () => {
     if (!orderId) return;
-
     try {
       setLoading(true);
       const data = await ordersApi.getById(orderId);
@@ -122,7 +135,6 @@ function OrderDetailContent() {
       showToast('Order synced successfully!', 'success');
       await loadOrder();
     } catch (error: any) {
-      console.error('Failed to sync order:', error);
       showToast(error.detail || 'Failed to sync order', 'error');
     } finally {
       setSyncing(false);
@@ -143,12 +155,12 @@ function OrderDetailContent() {
         ship_date: shipDate || undefined,
         note: note.trim() || undefined,
       };
-      if (user?.role === 'supplier') {
+      if (manualOnly) {
         await ordersApi.recordTracking(order.id, payload);
-        showToast('Tracking recorded', 'success');
+        showToast('Tracking recorded (manual only — not synced to Etsy)', 'success');
       } else {
         await ordersApi.fulfill(order.id, { ...payload, send_bcc: sendBcc });
-        showToast('Tracking submitted to Etsy', 'success');
+        showToast('Tracking submitted and synced to Etsy!', 'success');
       }
       setTrackingCode('');
       setCarrierName('');
@@ -156,7 +168,6 @@ function OrderDetailContent() {
       setNote('');
       await loadOrder();
     } catch (error: any) {
-      console.error('Failed to submit tracking:', error);
       showToast(error.detail || 'Failed to submit tracking', 'error');
     } finally {
       setFulfilling(false);
@@ -169,8 +180,8 @@ function OrderDetailContent() {
       setAssigningSupplier(true);
       await ordersApi.assignSupplier(order.id, selectedSupplierId);
       showToast('Supplier assigned to order', 'success');
+      await loadOrder();
     } catch (error: any) {
-      console.error('Failed to assign supplier:', error);
       showToast(error.detail || 'Failed to assign supplier', 'error');
     } finally {
       setAssigningSupplier(false);
@@ -180,13 +191,7 @@ function OrderDetailContent() {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    });
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
   };
 
   if (loading) {
@@ -209,6 +214,8 @@ function OrderDetailContent() {
     );
   }
 
+  const orderDetail = order as any; // access supplier_name etc.
+
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
       {/* Header with Back Button */}
@@ -221,7 +228,7 @@ function OrderDetailContent() {
           <span>Back to Orders</span>
         </button>
 
-        {(user?.role === 'owner' || user?.role === 'admin') && (
+        {canAssign && (
           <button
             onClick={handleSyncOrder}
             disabled={syncing}
@@ -264,7 +271,7 @@ function OrderDetailContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4 mt-6">
+        <div className="flex flex-wrap items-center gap-4 mt-6">
           <div>
             <p className="text-xs text-[var(--text-muted)] mb-1">Order Status</p>
             <OrderStatus status={order.lifecycle_status || order.status} />
@@ -273,17 +280,44 @@ function OrderDetailContent() {
             <p className="text-xs text-[var(--text-muted)] mb-1">Payment Status</p>
             <PaymentStatus status={order.payment_status} />
           </div>
+
+          {/* Assigned Supplier */}
+          {orderDetail.supplier_name ? (
+            <div>
+              <p className="text-xs text-[var(--text-muted)] mb-1">Assigned Supplier</p>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-violet-50 text-violet-700">
+                <Truck className="w-3.5 h-3.5" />
+                {orderDetail.supplier_name}
+              </span>
+            </div>
+          ) : order.supplier_user_id ? (
+            <div>
+              <p className="text-xs text-[var(--text-muted)] mb-1">Assigned Supplier</p>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-600">
+                <User className="w-3.5 h-3.5" />
+                Supplier #{order.supplier_user_id}
+              </span>
+            </div>
+          ) : canAssign ? (
+            <div>
+              <p className="text-xs text-[var(--text-muted)] mb-1">Supplier</p>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-gray-50 text-gray-500">
+                Unassigned
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
-      {(user?.role === 'supplier' || user?.role === 'owner' || user?.role === 'admin') && (
+      {/* Tracking & Fulfillment Section */}
+      {canFulfill && (
         <DashboardCard>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Tracking</h2>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)]">Tracking & Fulfillment</h2>
             <span className="text-sm text-[var(--text-muted)]">Status: {order.fulfillment_status || 'unshipped'}</span>
           </div>
-          
-          {/* Display existing shipments */}
+
+          {/* Display existing shipments with source badges */}
           {order.shipments && order.shipments.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-medium text-[var(--text-primary)] mb-3">Existing Shipments</h3>
@@ -328,13 +362,16 @@ function OrderDetailContent() {
                     {shipment.is_delivered && (
                       <div className="mt-2">
                         <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-50 text-green-700 text-xs rounded-full">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
+                          <CheckCircle className="w-3 h-3" />
                           Delivered
                         </span>
                       </div>
                     )}
+                    <ShipmentSourceBadge
+                      source={shipment.source}
+                      recordedBy={shipment.recorded_by_name}
+                      recordedByRole={shipment.recorded_by_role}
+                    />
                   </div>
                 ))}
               </div>
@@ -343,13 +380,9 @@ function OrderDetailContent() {
               </div>
             </div>
           )}
-          
-          {user?.role === 'supplier' && (
-            <p className="text-sm text-[var(--text-muted)] mb-4">
-              Tracking is recorded manually and will not be sent to Etsy.
-            </p>
-          )}
-          {(user?.role === 'owner' || user?.role === 'admin') && suppliers.length > 0 && (
+
+          {/* Assign Supplier — only owner/admin */}
+          {canAssign && suppliers.length > 0 && (
             <div className="mb-4 flex flex-col md:flex-row gap-3 items-start md:items-end">
               <div className="flex-1">
                 <label className="block text-sm text-[var(--text-muted)] mb-2">Assign Supplier</label>
@@ -375,6 +408,8 @@ function OrderDetailContent() {
               </button>
             </div>
           )}
+
+          {/* Tracking form */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Tracking Code</label>
@@ -421,14 +456,31 @@ function OrderDetailContent() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                placeholder={user?.role === 'supplier' ? 'Optional internal note' : 'Optional note to buyer'}
+                placeholder="Optional note to buyer"
               />
             </div>
           </div>
-          
-          {/* Send BCC checkbox - only for owner/admin who sync to Etsy */}
-          {(user?.role === 'owner' || user?.role === 'admin') && (
-            <div className="mt-4">
+
+          {/* Options row */}
+          <div className="mt-4 space-y-3">
+            {/* Manual-only toggle */}
+            <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={manualOnly}
+                onChange={(e) => setManualOnly(e.target.checked)}
+                className="w-4 h-4 rounded border-[var(--border-color)] text-[var(--primary)] focus:ring-[var(--primary)]"
+              />
+              <span>Record manually (do not sync to Etsy)</span>
+            </label>
+            {manualOnly && (
+              <p className="text-xs text-amber-600 ml-6">
+                Tracking will be saved locally only. It will not appear on the Etsy order.
+              </p>
+            )}
+
+            {/* BCC option — visible when syncing to Etsy */}
+            {!manualOnly && (
               <label className="flex items-center gap-2 text-sm text-[var(--text-secondary)] cursor-pointer">
                 <input
                   type="checkbox"
@@ -438,19 +490,25 @@ function OrderDetailContent() {
                 />
                 <span>Send tracking notification to buyer (BCC to shop owner)</span>
               </label>
-              <p className="text-xs text-[var(--text-muted)] ml-6 mt-1">
-                When enabled, Etsy will send a tracking notification email to the buyer with you in BCC
-              </p>
-            </div>
-          )}
-          
+            )}
+          </div>
+
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleFulfillOrder}
               disabled={fulfilling}
-              className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+              className={cn(
+                'px-5 py-2.5 rounded-lg font-medium transition disabled:opacity-50',
+                manualOnly
+                  ? 'bg-gray-600 text-white hover:bg-gray-700'
+                  : 'bg-[var(--primary)] text-white hover:opacity-90',
+              )}
             >
-              {fulfilling ? 'Submitting...' : 'Submit Tracking'}
+              {fulfilling
+                ? 'Submitting...'
+                : manualOnly
+                  ? 'Save Manual Tracking'
+                  : 'Submit & Sync to Etsy'}
             </button>
           </div>
         </DashboardCard>
@@ -459,7 +517,6 @@ function OrderDetailContent() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Customer & Shipping */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Customer Information */}
           <DashboardCard title="Customer Information">
             <div className="space-y-4">
               <div className="flex items-start gap-3">
@@ -474,7 +531,6 @@ function OrderDetailContent() {
             </div>
           </DashboardCard>
 
-          {/* Shipping Address */}
           <DashboardCard title="Shipping Address">
             {order.shipping_address ? (
               <div className="flex items-start gap-3">
@@ -500,7 +556,6 @@ function OrderDetailContent() {
             )}
           </DashboardCard>
 
-          {/* Timestamps */}
           <DashboardCard title="Timestamps">
             <div className="space-y-3 text-sm">
               <div>
@@ -529,10 +584,7 @@ function OrderDetailContent() {
             {order.items && order.items.length > 0 ? (
               <div className="space-y-4">
                 {order.items.map((item: any, index: number) => (
-                  <div
-                    key={index}
-                    className="flex items-start gap-4 p-4 border border-[var(--border-color)] rounded-lg"
-                  >
+                  <div key={index} className="flex items-start gap-4 p-4 border border-[var(--border-color)] rounded-lg">
                     {item.image && (
                       <div className="w-20 h-20 rounded-lg overflow-hidden border border-[var(--border-color)] flex-shrink-0">
                         <img
@@ -550,13 +602,9 @@ function OrderDetailContent() {
                       <h3 className="font-medium text-[var(--text-primary)] mb-1">
                         {item.title || item.product_name || `Item ${index + 1}`}
                       </h3>
-                      {item.sku && (
-                        <p className="text-sm text-[var(--text-muted)] mb-2">SKU: {item.sku}</p>
-                      )}
+                      {item.sku && <p className="text-sm text-[var(--text-muted)] mb-2">SKU: {item.sku}</p>}
                       <div className="flex items-center gap-4 text-sm">
-                        {item.quantity && (
-                          <span className="text-[var(--text-muted)]">Qty: {item.quantity}</span>
-                        )}
+                        {item.quantity && <span className="text-[var(--text-muted)]">Qty: {item.quantity}</span>}
                         {item.price && (
                           <span className="font-medium text-[var(--text-primary)]">
                             {order.currency} {parseFloat(item.price).toFixed(2)}
@@ -574,8 +622,6 @@ function OrderDetailContent() {
                     )}
                   </div>
                 ))}
-
-                {/* Order Summary */}
                 <div className="border-t border-[var(--border-color)] pt-4 mt-4">
                   <div className="flex items-center justify-between text-lg font-bold">
                     <span className="text-[var(--text-primary)]">Total</span>

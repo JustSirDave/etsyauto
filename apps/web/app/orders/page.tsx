@@ -345,6 +345,7 @@ function OrdersContent() {
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Order</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Date</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Customer</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Assigned To</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
                   <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Amount</th>
@@ -379,6 +380,15 @@ function OrdersContent() {
                         <CustomerAvatar customer={{ name: order.buyer_name, initials: order.buyer_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) }} />
                         <div><p className="font-medium text-[var(--text-primary)]">{order.buyer_name}</p><p className="text-sm text-[var(--text-muted)]">{order.buyer_email}</p></div>
                       </div>
+                    </td>
+                    <td className="py-4 px-5">
+                      {order.supplier_name ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700">
+                          {order.supplier_name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--text-muted)]">—</span>
+                      )}
                     </td>
                     <td className="py-4 px-5"><PaymentStatus status={order.payment_status} /></td>
                     <td className="py-4 px-5"><OrderStatus status={order.lifecycle_status || order.status} /></td>

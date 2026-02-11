@@ -25,7 +25,7 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
   const allSteps = useMemo(() => {
     const baseSteps: Step[] = [];
     
-    // Only show Connect Shop for owner, admin (skip for supplier, creator, viewer)
+    // Only show Connect Shop for owner, admin (skip for supplier, viewer)
     if (user?.role && ['owner', 'admin'].includes(user.role.toLowerCase())) {
       baseSteps.push({
         id: 'connect-shop',

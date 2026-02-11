@@ -244,6 +244,13 @@ async def list_orders(
         .all()
     )
 
+    # Pre-fetch supplier names for all orders in one query
+    supplier_ids = list({o.supplier_user_id for o in orders if o.supplier_user_id})
+    supplier_map: dict = {}
+    if supplier_ids:
+        supplier_users = db.query(User).filter(User.id.in_(supplier_ids)).all()
+        supplier_map = {u.id: u for u in supplier_users}
+
     # Format orders for response
     formatted_orders = []
     for order in orders:
@@ -263,12 +270,15 @@ async def list_orders(
             item_title = first_item.get("title") or first_item.get("product_name")
 
         is_supplier = context.role.lower() == "supplier"
+        supplier_user = supplier_map.get(order.supplier_user_id) if order.supplier_user_id else None
         formatted_orders.append({
             "id": order.id,
             "order_id": order.etsy_receipt_id or f"#{order.id}",
             "etsy_receipt_id": order.etsy_receipt_id,
             "shop_id": order.shop_id,
             "supplier_user_id": order.supplier_user_id,
+            "supplier_name": supplier_user.name if supplier_user else None,
+            "supplier_email": supplier_user.email if supplier_user else None,
             "buyer_name": order.buyer_name,
             "buyer_email": order.buyer_email,
             "total_price": None if is_supplier else float(order.total_price or 0) / 100,
@@ -349,11 +359,18 @@ async def get_order(
         except:
             shipments = []
     
+    # Look up supplier info
+    supplier_user = None
+    if order.supplier_user_id:
+        supplier_user = db.query(User).filter(User.id == order.supplier_user_id).first()
+
     return {
         "id": order.id,
         "etsy_receipt_id": order.etsy_receipt_id,
         "shop_id": order.shop_id,
         "supplier_user_id": order.supplier_user_id,
+        "supplier_name": supplier_user.name if supplier_user else None,
+        "supplier_email": supplier_user.email if supplier_user else None,
         "buyer_name": order.buyer_name,
         "buyer_email": order.buyer_email,
         "total_price": None if is_supplier else float(order.total_price or 0) / 100,
@@ -364,7 +381,7 @@ async def get_order(
         "fulfillment_status": order.fulfillment_status or "unshipped",
         "shipping_address": build_shipping_address(order),
         "items": items,
-        "shipments": shipments,  # Include tracking information
+        "shipments": shipments,
         "created_at": (
             (order.etsy_created_at or order.created_at).isoformat()
             if (order.etsy_created_at or order.created_at)
@@ -520,8 +537,9 @@ async def fulfill_order(
 
     ensure_shop_access(order.shop_id, context, db)
 
-    if context.role.lower() == "supplier":
-        raise HTTPException(status_code=403, detail="Suppliers must use manual tracking endpoint")
+    # Suppliers can only fulfill orders assigned to them
+    if context.role.lower() == "supplier" and order.supplier_user_id != context.user_id:
+        raise HTTPException(status_code=403, detail="Order not assigned to supplier")
 
     existing_shipments = order.shipments or []
     for shipment in existing_shipments:
@@ -560,12 +578,19 @@ async def fulfill_order(
         send_bcc=request.send_bcc,
     )
 
+    # Look up actor name for metadata
+    actor_user = db.query(User).filter(User.id == context.user_id).first()
+
     shipment_entry = {
         "tracking_code": request.tracking_code,
         "carrier_name": request.carrier_name,
         "shipping_date": request.ship_date,
         "tracking_url": etsy_response.get("tracking_url") if isinstance(etsy_response, dict) else None,
         "notification_date": datetime.now(timezone.utc).isoformat(),
+        "source": "etsy_sync",
+        "recorded_by_user_id": context.user_id,
+        "recorded_by_name": actor_user.name if actor_user else None,
+        "recorded_by_role": context.role,
     }
     existing_shipments.append(shipment_entry)
 
@@ -672,6 +697,9 @@ async def record_manual_tracking(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid ship_date format")
 
+    # Look up actor name for metadata
+    actor_user = db.query(User).filter(User.id == context.user_id).first()
+
     shipment_entry = {
         "tracking_code": request.tracking_code,
         "carrier_name": request.carrier_name,
@@ -679,8 +707,9 @@ async def record_manual_tracking(
         "shipping_date_ts": ship_date_ts,
         "note": request.note,
         "source": "manual",
-        "submitted_by_user_id": context.user_id,
-        "submitted_by_role": context.role,
+        "recorded_by_user_id": context.user_id,
+        "recorded_by_name": actor_user.name if actor_user else None,
+        "recorded_by_role": context.role,
         "notification_date": datetime.now(timezone.utc).isoformat(),
     }
     existing_shipments.append(shipment_entry)

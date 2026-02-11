@@ -36,14 +36,14 @@ CORS_HEADERS = {
 class InviteMemberRequest(BaseModel):
     email: EmailStr
     name: str
-    role: str  # owner, admin, creator, viewer, supplier
+    role: str  # owner, admin, viewer, supplier
 
     class Config:
         json_schema_extra = {
             "example": {
                 "email": "teammate@example.com",
                 "name": "John Doe",
-                "role": "creator"
+                "role": "admin"
             }
         }
 
@@ -141,7 +141,7 @@ async def invite_team_member(
     tenant_id = context.tenant_id
 
     # Validate role
-    valid_roles = ["owner", "admin", "creator", "viewer", "supplier"]
+    valid_roles = ["owner", "admin", "viewer", "supplier"]
     if request.role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -432,7 +432,7 @@ async def update_member_role(
     current_user_role = context.role
 
     # Validate role
-    valid_roles = ["owner", "admin", "creator", "viewer", "supplier"]
+    valid_roles = ["owner", "admin", "viewer", "supplier"]
     if request.role not in valid_roles:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -493,7 +493,7 @@ async def update_member_shop_access(
     db: Session = Depends(get_db)
 ):
     """
-    Update per-shop access for a team member (creator/viewer/supplier only).
+    Update per-shop access for a team member (viewer/supplier only).
     Requires: MANAGE_TEAM permission (Owner, Admin)
     """
     tenant_id = context.tenant_id
@@ -512,10 +512,10 @@ async def update_member_shop_access(
     if not membership:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User is not a member of this organization")
 
-    if membership.role not in ("creator", "viewer", "supplier"):
+    if membership.role not in ("viewer", "supplier"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Shop access can only be configured for creator/viewer/supplier roles"
+            detail="Shop access can only be configured for viewer/supplier roles"
         )
 
     # Validate shop IDs belong to tenant

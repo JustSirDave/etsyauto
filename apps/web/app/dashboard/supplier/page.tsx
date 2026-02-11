@@ -192,13 +192,12 @@ function SupplierDashboardContent() {
               const isShipped = order.status === 'shipped' || order.lifecycle_status === 'in_transit';
 
               return (
-                <Link
+                <div
                   key={order.id}
-                  href={`/orders/${order.id}`}
-                  className="block p-4 rounded-lg bg-[var(--background)] hover:bg-[var(--card-hover)] border border-[var(--border-color)] transition-colors"
+                  className="p-4 rounded-lg bg-[var(--background)] border border-[var(--border-color)]"
                 >
                   <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4 flex-1">
+                    <Link href={`/orders/${order.id}`} className="flex items-center gap-4 flex-1 min-w-0 hover:opacity-80 transition">
                       <div className={cn(
                         "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
                         isPending ? "bg-yellow-500/10" : isShipped ? "bg-blue-500/10" : "bg-green-500/10"
@@ -224,8 +223,8 @@ function SupplierDashboardContent() {
                           </p>
                         )}
                       </div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
+                    </Link>
+                    <div className="flex items-center gap-3 flex-shrink-0">
                       <span className={cn(
                         "inline-block text-xs px-2 py-1 rounded-full font-medium",
                         isPending 
@@ -236,9 +235,17 @@ function SupplierDashboardContent() {
                       )}>
                         {isPending ? 'Pending' : isShipped ? 'Shipped' : 'Completed'}
                       </span>
+                      {isPending && (
+                        <Link
+                          href={`/orders/${order.id}`}
+                          className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[var(--primary)] text-white hover:opacity-90 transition whitespace-nowrap"
+                        >
+                          Fulfill
+                        </Link>
+                      )}
                     </div>
                   </div>
-                </Link>
+                </div>
               );
             })}
           </div>
@@ -256,8 +263,9 @@ function SupplierDashboardContent() {
               Fulfillment Guidelines
             </h3>
             <ul className="text-sm text-[var(--text-secondary)] space-y-1">
-              <li>• Update tracking information as soon as orders are shipped</li>
+              <li>• Click &quot;Fulfill&quot; on pending orders to add tracking and sync to Etsy</li>
               <li>• Include carrier name and tracking code for all shipments</li>
+              <li>• Use &quot;Record manually&quot; option if you don&apos;t want to sync to Etsy</li>
               <li>• Mark orders as shipped within 2 business days</li>
               <li>• Contact admin if you encounter any fulfillment issues</li>
             </ul>

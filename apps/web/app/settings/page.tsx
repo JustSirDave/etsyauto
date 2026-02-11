@@ -43,7 +43,7 @@ function SettingsContent() {
   const [loadingSupplierProfile, setLoadingSupplierProfile] = useState(false);
   const [savingSupplierProfile, setSavingSupplierProfile] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'creator' });
+  const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'admin' });
   const [inviting, setInviting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<{ id: number; name: string } | null>(null);
@@ -246,7 +246,7 @@ function SettingsContent() {
       setError(null);
       await teamApi.inviteMember(inviteForm);
       setShowInviteModal(false);
-      setInviteForm({ email: '', name: '', role: 'creator' });
+      setInviteForm({ email: '', name: '', role: 'admin' });
       setNotification({
         show: true,
         type: 'success',
@@ -301,14 +301,12 @@ function SettingsContent() {
   const getRoleColor = (role: string) => ({
     owner: 'text-[var(--warning)] bg-[var(--warning-bg)]',
     admin: 'text-[var(--primary)] bg-[var(--primary-bg)]',
-    creator: 'text-[var(--info)] bg-[var(--info-bg)]',
     viewer: 'text-[var(--text-muted)] bg-[var(--background)]',
     supplier: 'text-[var(--success)] bg-[var(--success-bg)]',
   }[role] || 'text-[var(--text-muted)] bg-[var(--background)]');
   const getRoleIcon = (role: string) => ({
     owner: <Crown className="w-4 h-4" />,
     admin: <Shield className="w-4 h-4" />,
-    creator: <Edit className="w-4 h-4" />,
     viewer: <Eye className="w-4 h-4" />,
     supplier: <Truck className="w-4 h-4" />,
   }[role] || <Users className="w-4 h-4" />);
@@ -651,7 +649,7 @@ function SettingsContent() {
                       <span className="px-2 py-1 rounded-full text-xs bg-[var(--background)] text-[var(--text-muted)] border border-[var(--border-color)]">
                         {getShopAccessLabel(member)}
                       </span>
-                      {canManageTeam && member.user_id !== user?.id && (member.role === 'creator' || member.role === 'viewer' || member.role === 'supplier') && (
+                      {canManageTeam && member.user_id !== user?.id && (member.role === 'viewer' || member.role === 'supplier') && (
                         <button
                           onClick={() => openShopAccessModal(member)}
                           className="px-3 py-1.5 text-xs bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -698,20 +696,6 @@ function SettingsContent() {
                   </div>
                   <p className="text-sm text-[var(--text-muted)]">
                     Can manage products, listings, and AI generation. Can invite and remove team members. Cannot access billing or delete the workspace.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
-                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('creator'))}>
-                  {getRoleIcon('creator')}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-[var(--text-primary)]">Creator</h3>
-                  </div>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    Can create and edit products, generate AI content, and manage listings. Cannot invite team members or modify workspace settings.
                   </p>
                 </div>
               </div>
@@ -764,7 +748,6 @@ function SettingsContent() {
                   onChange={e => setInviteForm({ ...inviteForm, role: e.target.value })}
                   className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
                 >
-                  <option value="creator">Creator</option>
                   <option value="admin">Admin</option>
                   <option value="viewer">Viewer</option>
                   <option value="supplier">Supplier</option>

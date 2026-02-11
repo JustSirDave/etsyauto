@@ -429,6 +429,8 @@ export interface Order {
   etsy_receipt_id: string | null;
   shop_id: number;
   supplier_user_id?: number | null;
+  supplier_name?: string | null;
+  supplier_email?: string | null;
   buyer_name: string;
   buyer_email: string;
   total_price: number | null;
