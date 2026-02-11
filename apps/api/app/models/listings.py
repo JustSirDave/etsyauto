@@ -17,8 +17,8 @@ class Product(Base):
     __tablename__ = "products"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="SET NULL"), nullable=True, index=True)
     etsy_listing_id = Column(String(50), nullable=True, index=True)
     
     # Raw product data
@@ -69,8 +69,8 @@ class AIGeneration(Base):
     __tablename__ = "ai_generations"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
-    product_id = Column(BigInteger, ForeignKey('products.id'), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
+    product_id = Column(BigInteger, ForeignKey('products.id', ondelete="CASCADE"), nullable=False)
     
     model = Column(String(100))
     prompt_hash = Column(String(64))
@@ -86,7 +86,7 @@ class AIGeneration(Base):
     can_publish = Column(Integer, default=0)  # 0=blocked, 1=can publish
     
     # Review workflow
-    reviewed_by = Column(BigInteger, ForeignKey('users.id'), nullable=True)
+    reviewed_by = Column(BigInteger, ForeignKey('users.id', ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_decision = Column(String(20), CheckConstraint("review_decision IN ('accepted','rejected','modified')"), nullable=True)
     
@@ -108,10 +108,10 @@ class ListingJob(Base):
     __tablename__ = "listing_jobs"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False)
-    product_id = Column(BigInteger, ForeignKey('products.id'), nullable=False)
-    ai_generation_id = Column(BigInteger, ForeignKey('ai_generations.id'))
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="CASCADE"), nullable=False)
+    product_id = Column(BigInteger, ForeignKey('products.id', ondelete="CASCADE"), nullable=False)
+    ai_generation_id = Column(BigInteger, ForeignKey('ai_generations.id', ondelete="SET NULL"), nullable=True)
     
     idempotency_key = Column(String(255), unique=True)
     
@@ -153,8 +153,8 @@ class Schedule(Base):
     __tablename__ = "schedules"
 
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)  # Optional for non-shop tasks
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="SET NULL"), nullable=True, index=True)  # Optional for non-shop tasks
 
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
@@ -201,8 +201,8 @@ class Order(Base):
     __tablename__ = "orders"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="CASCADE"), nullable=False)
     
     etsy_receipt_id = Column(String(50), unique=True, nullable=False, index=True)
     
@@ -264,7 +264,7 @@ class Order(Base):
     shipments = Column(JSONB, nullable=True)  # Array of shipment objects
     
     # Supplier assignment (manual tracking)
-    supplier_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    supplier_user_id = Column(BigInteger, ForeignKey('users.id', ondelete="SET NULL"), nullable=True, index=True)
     supplier_assigned_at = Column(DateTime(timezone=True), nullable=True)
     
     # Message to seller
@@ -299,7 +299,7 @@ class UsageCost(Base):
     __tablename__ = "usage_costs"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
     date = Column(DateTime(timezone=True), nullable=False)
     
     ai_tokens = Column(Integer, default=0)
@@ -320,9 +320,9 @@ class ShipmentEvent(Base):
     __tablename__ = "shipment_events"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    order_id = Column(BigInteger, ForeignKey('orders.id'), nullable=False, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=False)
+    order_id = Column(BigInteger, ForeignKey('orders.id', ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="CASCADE"), nullable=False)
     
     # Canonical shipment state
     state = Column(
@@ -345,7 +345,7 @@ class ShipmentEvent(Base):
         nullable=False,
         index=True
     )
-    actor_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    actor_user_id = Column(BigInteger, ForeignKey('users.id', ondelete="SET NULL"), nullable=True, index=True)
     actor_role = Column(String(20), nullable=True)
     
     # Timestamps
@@ -380,13 +380,13 @@ class AuditLog(Base):
     request_id = Column(String(36), nullable=False, index=True)  # UUID for request correlation
     
     # Actor information
-    actor_user_id = Column(BigInteger, ForeignKey('users.id'), nullable=True, index=True)
+    actor_user_id = Column(BigInteger, ForeignKey('users.id', ondelete="SET NULL"), nullable=True, index=True)
     actor_email = Column(String(255), nullable=True)
     actor_ip = Column(String(45), nullable=True)  # IPv6 max length
     
     # Tenant/Shop scoping (for multi-tenancy)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=True, index=True)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="SET NULL"), nullable=True, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="SET NULL"), nullable=True, index=True)
     
     # Action details
     action = Column(String(100), nullable=False, index=True)  # e.g., 'auth.login', 'product.create'

@@ -128,15 +128,35 @@ async def import_csv(
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="File must be CSV")
     
-    # Read CSV
+    # Read CSV with size limit
     contents = await file.read()
-    csv_text = contents.decode('utf-8')
-    csv_reader = csv.DictReader(io.StringIO(csv_text))
-    
+    if len(contents) > settings.MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds the {settings.MAX_UPLOAD_SIZE_BYTES // (1024*1024)}MB limit"
+        )
+    try:
+        csv_text = contents.decode('utf-8')
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be valid UTF-8")
+
+    # Validate & sanitize CSV (formula-injection prevention, required cols, etc.)
+    from app.services.csv_validator import validate_and_sanitize_csv
+    valid_rows, row_errors = validate_and_sanitize_csv(csv_text)
+
+    if row_errors and not valid_rows:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": "CSV validation failed — no valid rows",
+                "errors": row_errors[:50],  # Cap to prevent huge payloads
+            },
+        )
+
     batch_id = f"csv_{int(datetime.now(timezone.utc).timestamp())}"
     products = []
     
-    for row in csv_reader:
+    for row in valid_rows:
         # Parse tags (pipe-separated, optional)
         tags = row.get('tags', '').split('|') if row.get('tags') else []
         
@@ -148,7 +168,7 @@ async def import_csv(
         if row.get('price'):
             try:
                 price = int(float(row['price']) * 100)
-            except:
+            except Exception:
                 pass
         
         # Parse quantity
@@ -156,7 +176,7 @@ async def import_csv(
         if row.get('quantity'):
             try:
                 quantity = int(row['quantity'])
-            except:
+            except Exception:
                 pass
         
         product = Product(
@@ -176,11 +196,15 @@ async def import_csv(
     db.add_all(products)
     db.commit()
     
-    return {
+    result = {
         "message": f"Imported {len(products)} products from CSV",
         "batch_id": batch_id,
-        "count": len(products)
+        "count": len(products),
     }
+    if row_errors:
+        result["row_errors"] = row_errors[:50]
+        result["skipped_rows"] = len(row_errors)
+    return result
 
 
 @router.get("/export/problem-products", tags=["Products"])
@@ -467,15 +491,16 @@ async def generate_ai_content(
 async def update_product(
     product_id: int,
     request: ProductImportRequest,
-    current_user = Depends(get_current_user),
+    context: UserContext = Depends(require_permission(Permission.UPDATE_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
-    Update an existing product
+    Update an existing product.
+    Requires: UPDATE_PRODUCT permission (Creator+)
     """
     product = db.query(Product).filter(
         Product.id == product_id,
-        Product.tenant_id == int(current_user["tenant_id"])
+        Product.tenant_id == context.tenant_id
     ).first()
     
     if not product:

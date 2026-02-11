@@ -33,10 +33,57 @@ setup_log_redaction()
 initialize_sentry()
 
 
+def _validate_env() -> None:
+    """
+    Validate critical environment variables at startup.
+    Raises RuntimeError with a clear message if anything is missing.
+    """
+    errors: list[str] = []
+
+    if not settings.DATABASE_URL:
+        errors.append("DATABASE_URL is not set")
+
+    if not settings.JWT_PRIVATE_KEY:
+        errors.append("JWT_PRIVATE_KEY is not set")
+    if not settings.JWT_PUBLIC_KEY:
+        errors.append("JWT_PUBLIC_KEY is not set")
+
+    if not settings.REDIS_URL and not settings.CELERY_BROKER_URL:
+        errors.append("Neither REDIS_URL nor CELERY_BROKER_URL is set")
+
+    allowed_envs = {"development", "staging", "production"}
+    if settings.ENVIRONMENT not in allowed_envs:
+        errors.append(
+            f"ENVIRONMENT must be one of {allowed_envs}, got '{settings.ENVIRONMENT}'"
+        )
+
+    # Stricter checks in production
+    if settings.ENVIRONMENT == "production":
+        if not settings.CORS_ORIGINS:
+            errors.append("CORS_ORIGINS must not be empty in production")
+        if not settings.ETSY_CLIENT_ID:
+            errors.append("ETSY_CLIENT_ID is required in production")
+        if not settings.ETSY_CLIENT_SECRET:
+            errors.append("ETSY_CLIENT_SECRET is required in production")
+        if not settings.ENCRYPTION_KEY:
+            errors.append("ENCRYPTION_KEY is required in production (32-byte base64-encoded key for AES-GCM)")
+        if settings.DEBUG:
+            errors.append("DEBUG must be False in production")
+        if not settings.COOKIE_SECURE:
+            errors.append("COOKIE_SECURE must be True in production (requires HTTPS)")
+
+    if errors:
+        msg = "Startup ENV validation failed:\n  - " + "\n  - ".join(errors)
+        logger.critical(msg)
+        raise RuntimeError(msg)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
-    # Startup
+    # Startup — validate environment first
+    _validate_env()
+
     logger.info("Starting Etsy Automation Platform API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"JWT Issuer: {settings.JWT_ISSUER}")
@@ -51,13 +98,14 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down API...")
 
 
-# Create FastAPI app
+# Create FastAPI app — disable API docs in production
+_is_production = settings.ENVIRONMENT == "production"
 app = FastAPI(
     title="Etsy Automation Platform API",
     description="AI-assisted, policy-compliant automation for Etsy sellers",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
     lifespan=lifespan,
 )
 
@@ -94,11 +142,8 @@ class CustomCORSMiddleware:
                 (b"vary", b"Origin"),
                 (b"access-control-allow-methods", b"GET,POST,PUT,DELETE,PATCH,OPTIONS"),
                 (b"access-control-allow-headers", b"Authorization,Content-Type,Idempotency-Key,X-Request-Id"),
+                (b"access-control-allow-credentials", b"true"),
             ]
-            if not self.allow_all:
-                cors_headers.append((b"access-control-allow-credentials", b"true"))
-            else:
-                cors_headers.append((b"x-dev-cors", b"1"))
             await send({"type": "http.response.start", "status": 204, "headers": cors_headers})
             await send({"type": "http.response.body", "body": b""})
             return
@@ -111,11 +156,8 @@ class CustomCORSMiddleware:
                     (b"vary", b"Origin"),
                     (b"access-control-allow-methods", b"GET,POST,PUT,DELETE,PATCH,OPTIONS"),
                     (b"access-control-allow-headers", b"Authorization,Content-Type,Idempotency-Key,X-Request-Id"),
+                    (b"access-control-allow-credentials", b"true"),
                 ]
-                if not self.allow_all:
-                    extra.append((b"access-control-allow-credentials", b"true"))
-                else:
-                    extra.append((b"x-dev-cors", b"1"))
 
                 existing = list(message.get("headers", []))
                 # Strip content-length to prevent mismatch from upstream BaseHTTPMiddleware layers
@@ -126,7 +168,8 @@ class CustomCORSMiddleware:
         await self.app(scope, receive, send_with_cors)
 
 # CORS Middleware - Explicitly configured for all endpoints including OPTIONS
-cors_allow_all = settings.ENVIRONMENT != "production"
+# Only allow all origins in development; staging and production use explicit allowlist
+cors_allow_all = settings.ENVIRONMENT == "development"
 cors_origins = list(dict.fromkeys(settings.CORS_ORIGINS + [settings.FRONTEND_URL]))
 app.add_middleware(CustomCORSMiddleware, allowed_origins=cors_origins, allow_all=cors_allow_all)
 

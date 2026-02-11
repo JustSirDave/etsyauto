@@ -2,7 +2,7 @@
 Error Reporting Model
 Stores structured errors for UI display and retry logic
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, Text, DateTime, Boolean, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -20,9 +20,9 @@ class ErrorReport(Base):
     id = Column(Integer, primary_key=True, index=True)
     
     # Context
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
-    shop_id = Column(Integer, ForeignKey("shops.id"), nullable=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey("shops.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     
     # Item information
     item_id = Column(String(255), nullable=False, index=True)  # Product ID, Listing ID, Order ID, etc.

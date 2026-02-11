@@ -7,7 +7,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi, setAuthToken, removeAuthToken, type User, type ApiError } from './api';
+import { authApi, type User, type ApiError } from './api';
 
 interface AuthContextType {
   user: User | null;
@@ -99,8 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const currentUser = await authApi.getCurrentUser();
       setUser(currentUser);
     } catch (err) {
-      // No valid token, user not logged in
-      removeAuthToken();
+      // No valid cookie/token — user not logged in
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -114,9 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const response = await authApi.login({ email, password, remember_me: rememberMe });
 
-      // Save token
-      setAuthToken(response.access_token);
-
+      // Cookies are set by the backend response — just update React state
       // Set user
       setUser({
         id: response.user.id,
@@ -157,9 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tenant_name: tenantName,
       });
 
-      // Save token
-      setAuthToken(response.access_token);
-
+      // Cookies are set by the backend response — just update React state
       // Set user
       setUser({
         id: response.user.id,
@@ -208,9 +203,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         tenant_name: tenantName,
       });
 
-      // Save token
-      setAuthToken(response.access_token);
-
+      // Cookies are set by the backend response — just update React state
       // Set user
       setUser({
         id: response.user.id,
@@ -248,9 +241,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.push('/login');
     } catch (err) {
       console.error('Logout error:', err);
-      // Force logout anyway
+      // Force logout anyway (cookies may already be cleared)
       setUser(null);
-      removeAuthToken();
       router.push('/login');
     }
   };

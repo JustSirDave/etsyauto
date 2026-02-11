@@ -87,8 +87,8 @@ class Membership(Base):
     __tablename__ = "memberships"
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
-    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     role = Column(
         String(20),
         CheckConstraint("role IN ('owner', 'admin', 'viewer', 'supplier')"),
@@ -129,9 +129,9 @@ class SupplierProfile(Base):
     __tablename__ = "supplier_profiles"
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False, index=True)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True, unique=True)
-    shop_id = Column(BigInteger, ForeignKey("shops.id"), nullable=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)
+    shop_id = Column(BigInteger, ForeignKey("shops.id", ondelete="SET NULL"), nullable=True, index=True)
 
     company_name = Column(Text, nullable=True)
     contact_name = Column(Text, nullable=True)
@@ -156,7 +156,7 @@ class Shop(Base):
     __tablename__ = "shops"
     
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     etsy_shop_id = Column(Text, unique=True, nullable=False, index=True)
     display_name = Column(Text, nullable=True)
     status = Column(
@@ -190,8 +190,8 @@ class OAuthToken(Base):
     __tablename__ = "oauth_tokens"
     
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
-    shop_id = Column(BigInteger, ForeignKey("shops.id"), nullable=False)
-    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False)  # Added for faster queries
+    shop_id = Column(BigInteger, ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)  # Added for faster queries
     provider = Column(
         String(20),
         CheckConstraint("provider IN ('etsy')"),

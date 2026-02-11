@@ -165,7 +165,7 @@ def refresh_single_token(self, tenant_id: int, shop_id: int, provider: str = 'et
         raise self.retry(exc=e, countdown=60)  # Retry after 1 minute
 
 
-@celery_app.task(base=DatabaseTask, bind=True)
+@celery_app.task(base=DatabaseTask, bind=True, max_retries=3)
 def cleanup_expired_tokens(self):
     """
     Clean up tokens that have been expired for more than 30 days
@@ -203,7 +203,7 @@ def cleanup_expired_tokens(self):
         }
 
 
-@celery_app.task(base=DatabaseTask, bind=True)
+@celery_app.task(base=DatabaseTask, bind=True, max_retries=3)
 def audit_token_health(self):
     """
     Audit token health and log statistics

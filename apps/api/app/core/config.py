@@ -146,6 +146,15 @@ class Settings(BaseSettings):
     ACCOUNT_LOCKOUT_MINUTES: int = 30
     REMEMBER_ME_TTL_DAYS: int = 30
 
+    # Cookie Configuration (HttpOnly JWT)
+    COOKIE_DOMAIN: str = ""  # Empty = auto (current domain)
+    COOKIE_SECURE: bool = False  # Auto-derived from ENVIRONMENT if not explicitly set
+    COOKIE_SAMESITE: str = "lax"
+    REFRESH_TOKEN_TTL_DAYS: int = 30
+
+    # Upload limits
+    MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
+
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

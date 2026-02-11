@@ -72,6 +72,22 @@ class IdempotencyMiddleware:
             await send({"type": "http.response.body", "body": body})
             return
 
+        # Validate key format: max 64 chars, printable ASCII only
+        if len(idempotency_key) > 64 or not idempotency_key.isascii() or not idempotency_key.isprintable():
+            body = json.dumps({
+                "error": {
+                    "code": "IDEMPOTENCY_KEY_INVALID",
+                    "message": "Idempotency-Key must be at most 64 printable ASCII characters.",
+                }
+            }).encode()
+            await send({
+                "type": "http.response.start",
+                "status": 400,
+                "headers": [(b"content-type", b"application/json")],
+            })
+            await send({"type": "http.response.body", "body": body})
+            return
+
         # Read the full request body from ASGI receive
         request_body = b""
         while True:

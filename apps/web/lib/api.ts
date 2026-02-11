@@ -29,7 +29,6 @@ export interface GoogleAuthRequest {
 }
 
 export interface AuthResponse {
-  access_token: string;
   token_type: string;
   expires_in: number;
   user: {
@@ -70,30 +69,11 @@ export interface Shop {
 }
 
 /**
- * Get auth token from localStorage
+ * @deprecated No longer used — auth tokens are now HttpOnly cookies.
+ * Kept as no-ops for any lingering call-sites during migration.
  */
-function getAuthToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('auth_token');
-}
-
-/**
- * Set auth token in localStorage
- */
-export function setAuthToken(token: string): void {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('auth_token', token);
-  }
-}
-
-/**
- * Remove auth token from localStorage
- */
-export function removeAuthToken(): void {
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('auth_token');
-  }
-}
+export function setAuthToken(_token: string): void { /* no-op */ }
+export function removeAuthToken(): void { /* no-op */ }
 
 function generateIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -102,15 +82,39 @@ function generateIdempotencyKey(): string {
   return `idem_${Math.random().toString(36).slice(2)}_${Date.now()}`;
 }
 
+/** Mutex to prevent concurrent refresh attempts */
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  if (isRefreshing && refreshPromise) return refreshPromise;
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
 /**
  * Generic API request handler
+ * Auth tokens are sent automatically via HttpOnly cookies (credentials: 'include').
  */
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getAuthToken();
-
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -121,14 +125,30 @@ async function apiRequest<T>(
     headers['Idempotency-Key'] = generateIdempotencyKey();
   }
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  const doFetch = () =>
+    fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response = await doFetch();
+
+  // 401 interceptor — attempt a silent token refresh once
+  if (response.status === 401) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      // Retry the original request with the fresh access_token cookie
+      response = await doFetch();
+    } else {
+      // Refresh also failed — redirect to login
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
+      const error: ApiError = { detail: 'Session expired', status: 401 };
+      throw error;
+    }
+  }
 
   // Handle non-2xx responses as errors
   if (!response.ok) {
@@ -191,17 +211,16 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    removeAuthToken();
+    await apiRequest<void>('/api/auth/logout', { method: 'POST' });
   },
 
   uploadProfilePicture: async (file: File): Promise<{ message: string; profile_picture_url: string }> => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/auth/profile/upload-picture`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
       body: formData,
     });
 
@@ -328,10 +347,9 @@ export const productsApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = getAuthToken();
     const response = await fetch(`${API_BASE_URL}/api/products/import/csv`, {
       method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include',
       body: formData,
     });
 
@@ -1040,12 +1058,9 @@ export const aiApi = {
 
   // Helper for form data uploads (not used in current implementation)
   postForm: async (endpoint: string, formData: FormData) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-      },
+      credentials: 'include',
       body: formData,
     });
 

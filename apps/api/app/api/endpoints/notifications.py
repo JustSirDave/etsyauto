@@ -290,7 +290,8 @@ async def create_notification(
     db: Session = Depends(get_db)
 ):
     """
-    Create a notification for the current user (for testing/admin)
+    Create a notification for the current user.
+    Restricted to owner/admin roles only.
 
     Args:
         request: Notification details
@@ -300,6 +301,12 @@ async def create_notification(
     """
     user_id = int(current_user["sub"])
     tenant_id = int(current_user["tenant_id"])
+    role = current_user.get("role", "").lower()
+    if role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only owners and admins can create notifications"
+        )
 
     notification = Notification(
         user_id=user_id,

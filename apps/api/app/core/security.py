@@ -110,12 +110,61 @@ def create_access_token(
     # Add any additional claims
     data.update(kwargs)
     
-    # Extend expiry for remember_me
-    expires_delta = None
-    if remember_me:
-        expires_delta = timedelta(days=settings.REMEMBER_ME_TTL_DAYS)
-    
+    # Access tokens always use the short TTL (5 min) regardless of remember_me.
+    # The remember_me flag only affects refresh token lifetime, handled separately.
+    return create_token(data)
+
+
+def create_refresh_token(user_id: int, tenant_id: int, role: str) -> str:
+    """
+    Create a long-lived refresh token for cookie-based auth.
+    Contains minimal claims — only enough to mint a new access token.
+    """
+    data = {
+        "sub": str(user_id),
+        "tenant_id": tenant_id,
+        "role": role,
+        "type": "refresh",
+    }
+    expires_delta = timedelta(days=settings.REFRESH_TOKEN_TTL_DAYS)
     return create_token(data, expires_delta)
+
+
+def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
+    """
+    Set HttpOnly auth cookies on a response object.
+    Works with both JSONResponse and RedirectResponse.
+    """
+    is_prod = settings.ENVIRONMENT == "production"
+    domain = settings.COOKIE_DOMAIN or None
+
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_prod or settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.JWT_TTL_SECONDS,
+        path="/",
+        domain=domain,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_prod or settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.REFRESH_TOKEN_TTL_DAYS * 86400,
+        path="/api/auth",
+        domain=domain,
+    )
+
+
+def clear_auth_cookies(response) -> None:
+    """Clear auth cookies on a response object."""
+    domain = settings.COOKIE_DOMAIN or None
+    response.delete_cookie(key="access_token", path="/", domain=domain)
+    response.delete_cookie(key="refresh_token", path="/api/auth", domain=domain)
 
 
 # ==================== Password Hashing ====================
@@ -388,23 +437,14 @@ def check_rate_limit(redis_client, key: str, max_attempts: int, window_seconds: 
         True if allowed, False if rate limit exceeded
     """
     try:
-        current = redis_client.get(key)
-        
-        if current is None:
-            # First attempt
-            redis_client.setex(key, window_seconds, 1)
-            return True
-        
-        current = int(current)
-        
-        if current >= max_attempts:
-            # Rate limit exceeded
-            return False
-        
-        # Increment counter
-        redis_client.incr(key)
-        return True
-        
+        # Atomic increment — if the key doesn't exist, INCR creates it with value 1.
+        # We then set TTL only on the first request (when count == 1) to start the window.
+        count = redis_client.incr(key)
+        if count == 1:
+            redis_client.expire(key, window_seconds)
+
+        return count <= max_attempts
+
     except Exception:
         # Fail open (allow the request if Redis is down)
         return True

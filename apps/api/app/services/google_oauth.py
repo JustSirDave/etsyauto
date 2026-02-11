@@ -225,10 +225,10 @@ class GoogleOAuthService:
             return user, None, tenant, is_new_user
             
         except httpx.HTTPError as e:
-            return None, f"Failed to verify Google token: {str(e)}", None, False
+            return None, "Failed to verify Google token", None, False
         except Exception as e:
             db.rollback()
-            return None, f"Authentication error: {str(e)}", None, False
+            return None, "Authentication error", None, False
     
     @staticmethod
     def generate_state() -> str:

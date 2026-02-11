@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.api.dependencies import get_user_context, UserContext, require_permission
 from app.core.rbac import Permission
@@ -49,16 +50,38 @@ async def upload_csv_batch(
             detail="File must be a CSV file"
         )
     
-    # Read file content
+    # Read file content with size limit
     try:
         contents = await file.read()
+        if len(contents) > settings.MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File size exceeds the {settings.MAX_UPLOAD_SIZE_BYTES // (1024*1024)}MB limit"
+            )
         csv_content = contents.decode('utf-8')
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be valid UTF-8 encoded CSV"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Failed to read file: {str(e)}"
         )
-    
+
+    # Pre-validate CSV structure and sanitize cells (formula injection prevention)
+    from app.services.csv_validator import validate_and_sanitize_csv
+    _valid_rows, csv_errors = validate_and_sanitize_csv(csv_content)
+    if csv_errors and not _valid_rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "message": "CSV validation failed — no valid rows found",
+                "errors": csv_errors[:50],
+            }
+        )
+
     # Verify shop access if shop_id provided
     if shop_id:
         from app.core.query_helpers import ensure_shop_access
@@ -126,9 +149,14 @@ async def upload_json_batch(
             detail="File must be a JSON file"
         )
     
-    # Read file content
+    # Read file content with size limit
     try:
         contents = await file.read()
+        if len(contents) > settings.MAX_UPLOAD_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File size exceeds the {settings.MAX_UPLOAD_SIZE_BYTES // (1024*1024)}MB limit"
+            )
         json_content = contents.decode('utf-8')
         # Validate JSON
         json.loads(json_content)
@@ -137,10 +165,12 @@ async def upload_json_batch(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid JSON format: {str(e)}"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to read file: {str(e)}"
+            detail="Failed to read file"
         )
     
     # Verify shop access if shop_id provided

@@ -13,26 +13,50 @@ from app.core.security import decode_token
 from app.core.rbac import Permission, Role, has_permission, can_access_shop
 from app.models.tenancy import Membership, Shop
 
-# HTTP Bearer token security
-security = HTTPBearer()
+# HTTP Bearer token security — made optional so cookie auth can take over
+security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
 ):
     """
-    Dependency to get current authenticated user from JWT token
+    Dependency to get current authenticated user from JWT token.
+    
+    Reads the token from (in priority order):
+      1. ``access_token`` HttpOnly cookie  (browser clients)
+      2. ``Authorization: Bearer <token>`` header  (M2M / API clients)
     
     Usage:
         @app.get("/protected")
         def protected_route(current_user = Depends(get_current_user)):
             return {"user_id": current_user["sub"]}
     """
-    token = credentials.credentials
-    
+    # 1. Try cookie first (browser sessions)
+    token = request.cookies.get("access_token")
+
+    # 2. Fall back to Authorization header (API / M2M clients)
+    if not token and credentials:
+        token = credentials.credentials
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = decode_token(token)
+        # Reject refresh tokens used as access tokens
+        if payload.get("type") == "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(

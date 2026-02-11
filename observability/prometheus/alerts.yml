@@ -259,6 +259,29 @@ groups:
           summary: "Slow product ingestion (p95 > 10min)"
           description: "Shop {{$labels.shop_id}} ingestion p95 duration: {{$value}}s"
 
+  - name: circuit_breaker_alerts
+    interval: 30s
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit breaker open for shop"
+          description: "Shop {{$labels.shop_id}} circuit breaker is OPEN - Etsy API calls blocked. Consecutive failures: {{$labels.failures}}"
+
+      - alert: CircuitBreakerHalfOpen
+        expr: circuit_breaker_state{state="half_open"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: circuit_breaker
+        annotations:
+          summary: "Circuit breaker in half-open state"
+          description: "Shop {{$labels.shop_id}} circuit breaker is HALF-OPEN for >5m - may indicate recurring Etsy API issues"
+
   - name: database_alerts
     interval: 30s
     rules:

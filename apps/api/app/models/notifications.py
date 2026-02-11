@@ -39,8 +39,8 @@ class Notification(Base):
     id = Column(BigInteger, primary_key=True, index=True)
 
     # User and tenant (changed to BigInteger to match User and Tenant models)
-    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False, index=True)
-    tenant_id = Column(BigInteger, ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Notification content
     type = Column(SQLEnum(NotificationType), nullable=False, default=NotificationType.INFO)

@@ -53,12 +53,13 @@ async def check_product_policy(
     Returns:
         Policy check results with violations and can_publish status
     """
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = db.query(Product).filter(
+        Product.id == product_id,
+        Product.tenant_id == context.tenant_id,
+    ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    ensure_tenant_access(product.tenant_id, context)
     
     # Run policy check
     policy_checker = ListingPolicyChecker(db)
@@ -99,12 +100,13 @@ async def recheck_product_policy(
     
     Use this after remediation to verify compliance
     """
-    product = db.query(Product).filter(Product.id == product_id).first()
+    product = db.query(Product).filter(
+        Product.id == product_id,
+        Product.tenant_id == context.tenant_id,
+    ).first()
     
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    ensure_tenant_access(product.tenant_id, context)
     
     # Run fresh policy check
     policy_checker = ListingPolicyChecker(db)
@@ -161,15 +163,19 @@ async def remediate_generation(
     3. Update policy status
     4. Return new compliance status
     """
-    ai_gen = db.query(AIGeneration).filter(AIGeneration.id == generation_id).first()
+    ai_gen = db.query(AIGeneration).filter(
+        AIGeneration.id == generation_id,
+        AIGeneration.tenant_id == context.tenant_id,
+    ).first()
     
     if not ai_gen:
         raise HTTPException(status_code=404, detail="AI Generation not found")
     
-    ensure_tenant_access(ai_gen.tenant_id, context)
-    
-    # Get product
-    product = db.query(Product).filter(Product.id == ai_gen.product_id).first()
+    # Get product (tenant already verified above)
+    product = db.query(Product).filter(
+        Product.id == ai_gen.product_id,
+        Product.tenant_id == context.tenant_id,
+    ).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     
@@ -245,12 +251,13 @@ async def get_job_policy_status(
     Get policy compliance status for a listing job
     Requires: READ_LISTING permission
     """
-    job = db.query(ListingJob).filter(ListingJob.id == job_id).first()
+    job = db.query(ListingJob).filter(
+        ListingJob.id == job_id,
+        ListingJob.tenant_id == context.tenant_id,
+    ).first()
     
     if not job:
         raise HTTPException(status_code=404, detail="Listing job not found")
-    
-    ensure_tenant_access(job.tenant_id, context)
     
     return {
         "job_id": job.id,
@@ -275,12 +282,13 @@ async def retry_job_after_remediation(
     
     This will re-check policy and retry publishing if compliant
     """
-    job = db.query(ListingJob).filter(ListingJob.id == job_id).first()
+    job = db.query(ListingJob).filter(
+        ListingJob.id == job_id,
+        ListingJob.tenant_id == context.tenant_id,
+    ).first()
     
     if not job:
         raise HTTPException(status_code=404, detail="Listing job not found")
-    
-    ensure_tenant_access(job.tenant_id, context)
     
     if job.status != "policy_blocked":
         raise HTTPException(
@@ -288,8 +296,11 @@ async def retry_job_after_remediation(
             detail=f"Job is not policy blocked (current status: {job.status})"
         )
     
-    # Get product for re-check
-    product = db.query(Product).filter(Product.id == job.product_id).first()
+    # Get product for re-check (tenant already verified via job query)
+    product = db.query(Product).filter(
+        Product.id == job.product_id,
+        Product.tenant_id == context.tenant_id,
+    ).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     

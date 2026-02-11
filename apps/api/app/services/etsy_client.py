@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.models.tenancy import Shop, OAuthToken
 from app.services.rate_limiter import RateLimiter
 from app.services.token_manager import TokenManager
+from app.services.circuit_breaker import get_circuit_breaker, CircuitOpenError
 from app.core.redis import get_redis_client
 import logging
 
@@ -53,6 +54,9 @@ class EtsyClient:
         # Initialize token manager
         redis_client = get_redis_client()
         self.token_manager = TokenManager(db, redis_client)
+
+        # Initialize circuit breaker
+        self.circuit_breaker = get_circuit_breaker()
 
     async def _get_access_token(self, shop_id: int, tenant_id: int) -> str:
         """
@@ -108,6 +112,16 @@ class EtsyClient:
         Returns:
             dict: API response JSON
         """
+        # Circuit breaker check — reject early if circuit is open
+        try:
+            self.circuit_breaker.before_request(shop_id)
+        except CircuitOpenError as coe:
+            raise EtsyAPIError(
+                str(coe),
+                status_code=503,
+                headers={"Retry-After": str(int(coe.retry_after))},
+            )
+
         # Get shop to retrieve tenant_id
         shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
         if not shop:
@@ -172,15 +186,28 @@ class EtsyClient:
                     )
 
             if response.status_code == 429:
+                self.circuit_breaker.record_failure(shop_id, 429)
                 raise EtsyRateLimitError("Etsy API rate limit exceeded")
 
-            if response.status_code >= 400:
+            if response.status_code >= 500:
+                self.circuit_breaker.record_failure(shop_id, response.status_code)
                 raise EtsyAPIError(
                     f"Etsy API error: {response.text}",
                     status_code=response.status_code,
                     response=response.json() if response.text else None
                 )
 
+            if response.status_code >= 400:
+                # 4xx client errors — don't trip the breaker
+                self.circuit_breaker.record_failure(shop_id, response.status_code)
+                raise EtsyAPIError(
+                    f"Etsy API error: {response.text}",
+                    status_code=response.status_code,
+                    response=response.json() if response.text else None
+                )
+
+            # Success — reset consecutive failure counter
+            self.circuit_breaker.record_success(shop_id)
             return response.json()
 
     # ==================== Shop Methods ====================

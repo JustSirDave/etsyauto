@@ -16,7 +16,7 @@ from app.worker.tasks.listing_tasks import publish_listing
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="app.worker.tasks.schedule_tasks.process_scheduled_listings")
+@celery_app.task(name="app.worker.tasks.schedule_tasks.process_scheduled_listings", max_retries=3)
 def process_scheduled_listings() -> Dict[str, Any]:
     """
     Periodic task to process schedules and create listing jobs.
@@ -267,7 +267,7 @@ def _calculate_next_run(schedule: Schedule, current_time: datetime) -> datetime:
     return next_run
 
 
-@celery_app.task(name="app.worker.tasks.schedule_tasks.trigger_schedule_now")
+@celery_app.task(name="app.worker.tasks.schedule_tasks.trigger_schedule_now", max_retries=3)
 def trigger_schedule_now(schedule_id: int) -> Dict[str, Any]:
     """
     Manually trigger a schedule to run immediately.

@@ -10,10 +10,15 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from ...core.database import get_db
+from ...core.redis import get_redis_client
 from ...models.tenancy import User, Membership, Tenant
 from ...services.google_oauth import google_oauth_service
-from ...core.security import create_access_token
+from ...core.security import create_access_token, create_refresh_token, set_auth_cookies
 from ...core.config import settings
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -39,8 +44,15 @@ async def google_auth(
 
     Returns authorization URL to redirect user to
     """
-    # Generate state for CSRF protection
+    # Generate state for CSRF protection and store in Redis
     state = google_oauth_service.generate_state()
+
+    redis_client = get_redis_client()
+    redis_client.setex(
+        f"google_oauth_state:{state}",
+        600,  # 10 minutes TTL
+        "valid",
+    )
 
     # Get authorization URL
     auth_url = google_oauth_service.get_authorization_url(
@@ -64,6 +76,22 @@ async def google_callback(
     Exchanges code for token, gets user info, and creates/updates user
     """
     try:
+        # Parse state to extract the base state and optional invitation token
+        state_parts = request.state.split(":")
+        state = state_parts[0]
+        invitation_token = state_parts[1] if len(state_parts) > 1 else None
+
+        # Verify OAuth state exists in Redis (CSRF protection)
+        redis_client = get_redis_client()
+        stored_state = redis_client.get(f"google_oauth_state:{state}")
+        if not stored_state:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired OAuth state. Please try again."
+            )
+        # Clean up used state (one-time use)
+        redis_client.delete(f"google_oauth_state:{state}")
+
         # Exchange code for access token
         token_response = await google_oauth_service.exchange_code_for_token(request.code)
         access_token = token_response.get("access_token")
@@ -86,11 +114,6 @@ async def google_callback(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email not provided by Google"
             )
-        
-        # Parse state to check for invitation token
-        state_parts = request.state.split(":")
-        state = state_parts[0]
-        invitation_token = state_parts[1] if len(state_parts) > 1 else None
         
         # Check if user exists
         user = db.query(User).filter(User.email == email).first()
@@ -122,7 +145,7 @@ async def google_callback(
         if invitation_token:
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f"Google OAuth: Processing invitation token for email {email}")
+            logger.info(f"Google OAuth: Processing invitation token for user_id={user.id}")
             
             # First find the membership by invitation token
             membership = db.query(Membership).filter(
@@ -139,11 +162,11 @@ async def google_callback(
             if membership:
                 invited_user = db.query(User).filter(User.id == membership.user_id).first()
                 if invited_user:
-                    logger.info(f"Google OAuth: Invited user {invited_user.id} has email {invited_user.email}, Google user {user.id} has email {email}")
+                    logger.info(f"Google OAuth: Invited user_id={invited_user.id}, OAuth user_id={user.id}")
                     
                 if invited_user and invited_user.email.lower() != email.lower():
                     # Email mismatch - invitation is for a different user
-                    logger.error(f"Google OAuth: Email mismatch - invited: {invited_user.email}, google: {email}")
+                    logger.error(f"Google OAuth: Email mismatch between invited user_id={invited_user.id} and OAuth user_id={user.id}")
                     membership = None
                 elif invited_user and invited_user.id != user.id:
                     # The user was created during invite, but we found/created a different user via OAuth
@@ -179,7 +202,7 @@ async def google_callback(
                 
                 db.commit()
                 
-                # Create JWT token
+                # Create JWT tokens
                 jwt_token = create_access_token(
                     user_id=user.id,
                     tenant_id=membership.tenant_id,
@@ -189,10 +212,17 @@ async def google_callback(
                     shop_ids=membership.allowed_shop_ids or [],
                     remember_me=True
                 )
+                refresh_tok = create_refresh_token(
+                    user_id=user.id,
+                    tenant_id=membership.tenant_id,
+                    role=membership.role,
+                )
                 
-                # Redirect to frontend with token
-                redirect_url = f"{settings.FRONTEND_URL}/login?token={jwt_token}&invitation_accepted=true"
-                return RedirectResponse(url=redirect_url, status_code=302)
+                # Redirect to frontend — tokens are now in HttpOnly cookies, not URL
+                redirect_url = f"{settings.FRONTEND_URL}/login?invitation_accepted=true"
+                redirect_response = RedirectResponse(url=redirect_url, status_code=302)
+                set_auth_cookies(redirect_response, jwt_token, refresh_tok)
+                return redirect_response
         
         # If no invitation or user already has memberships
         # Find user's primary membership (prefer most recently accepted)
@@ -204,7 +234,7 @@ async def google_callback(
         if membership:
             db.commit()
             
-            # Create JWT token
+            # Create JWT tokens
             jwt_token = create_access_token(
                 user_id=user.id,
                 tenant_id=membership.tenant_id,
@@ -214,10 +244,17 @@ async def google_callback(
                 shop_ids=membership.allowed_shop_ids or [],
                 remember_me=True
             )
+            refresh_tok = create_refresh_token(
+                user_id=user.id,
+                tenant_id=membership.tenant_id,
+                role=membership.role,
+            )
             
-            # Redirect to frontend with token
-            redirect_url = f"{settings.FRONTEND_URL}/login?token={jwt_token}"
-            return RedirectResponse(url=redirect_url, status_code=302)
+            # Redirect to frontend — tokens are now in HttpOnly cookies, not URL
+            redirect_url = f"{settings.FRONTEND_URL}/login?oauth=success"
+            redirect_response = RedirectResponse(url=redirect_url, status_code=302)
+            set_auth_cookies(redirect_response, jwt_token, refresh_tok)
+            return redirect_response
         else:
             # User exists but has no memberships and no invitation
             db.commit()
@@ -230,7 +267,8 @@ async def google_callback(
         raise
     except Exception as e:
         db.rollback()
+        logger.exception("Google OAuth authentication failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"OAuth authentication failed: {str(e)}"
+            detail="OAuth authentication failed. Please try again."
         )

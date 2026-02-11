@@ -18,8 +18,8 @@ from app.models.notifications import NotificationType
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="scheduled_publishing.process_schedules")
-def process_schedules():
+@shared_task(name="scheduled_publishing.process_schedules", bind=True, max_retries=3)
+def process_schedules(self):
     """
     Main beat task that processes all active schedules
     Runs every minute via Celery beat
@@ -48,8 +48,8 @@ def process_schedules():
         db.close()
 
 
-@shared_task(name="scheduled_publishing.process_schedule")
-def process_schedule(schedule_id: int):
+@shared_task(name="scheduled_publishing.process_schedule", bind=True, max_retries=3)
+def process_schedule(self, schedule_id: int):
     """
     Process a single schedule and enqueue listing jobs
     
@@ -294,8 +294,8 @@ def calculate_next_run(schedule: Schedule, delay_minutes: int = 0) -> datetime:
         return now + timedelta(hours=1, minutes=delay_minutes)
 
 
-@shared_task(name="scheduled_publishing.reset_quota_statuses")
-def reset_quota_statuses():
+@shared_task(name="scheduled_publishing.reset_quota_statuses", bind=True, max_retries=3)
+def reset_quota_statuses(self):
     """
     Periodic task to reset quota_exceeded statuses when quota becomes available
     Runs every hour

@@ -5,8 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
+import logging
 import redis
 import json
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
@@ -204,11 +207,14 @@ async def etsy_oauth_callback(
             }
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
+        logger.exception("Failed to connect shop")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to connect shop: {str(e)}"
+            detail="Failed to connect shop. Please try again."
         )
 
 
@@ -356,10 +362,13 @@ async def refresh_shop_token(
             "refresh_count": oauth_token.refresh_count
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Token refresh failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Token refresh failed: {str(e)}"
+            detail="Token refresh failed. Please try again."
         )
 
 

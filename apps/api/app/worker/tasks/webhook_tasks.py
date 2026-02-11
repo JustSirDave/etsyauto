@@ -18,7 +18,7 @@ from app.core.redis import get_redis_client
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="app.worker.tasks.webhook_tasks.process_webhook_event")
+@celery_app.task(name="app.worker.tasks.webhook_tasks.process_webhook_event", max_retries=3)
 def process_webhook_event(webhook_event_id: int, shop_id: int) -> Dict[str, Any]:
     """
     Process a webhook event asynchronously.
@@ -188,9 +188,15 @@ def _handle_shop_event(db, shop: Shop, payload: Dict[str, Any]) -> Dict[str, Any
     
     logger.info(f"Handling shop event: {event_type} for shop {shop.id}")
     
-    # Update shop metadata if available
+    # Update shop metadata if available (with payload size limit)
     if event_type == "shop.updated" and "data" in payload:
         shop_data = payload.get("data", {})
+        # Limit stored payload size to 64KB to prevent unbounded writes
+        import json as _json
+        serialized = _json.dumps(shop_data)
+        if len(serialized) > 65536:
+            logger.warning(f"Shop event payload too large ({len(serialized)} bytes) for shop {shop.id}, truncating")
+            shop_data = {"_truncated": True, "shop_name": shop_data.get("shop_name")}
         shop.shop_data = shop_data
         shop.display_name = shop_data.get("shop_name", shop.display_name)
         db.commit()
@@ -201,7 +207,7 @@ def _handle_shop_event(db, shop: Shop, payload: Dict[str, Any]) -> Dict[str, Any
     }
 
 
-@celery_app.task(name="app.worker.tasks.webhook_tasks.reconcile_listings")
+@celery_app.task(name="app.worker.tasks.webhook_tasks.reconcile_listings", max_retries=3)
 def reconcile_listings(shop_id: int = None) -> Dict[str, Any]:
     """
     Periodic task to reconcile listing states with Etsy.

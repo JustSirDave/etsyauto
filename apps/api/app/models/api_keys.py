@@ -1,7 +1,7 @@
 """
 API Keys Model for Service-to-Service Authentication
 """
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, ARRAY
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Boolean, Text, ForeignKey, ARRAY
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -30,14 +30,14 @@ class APIKey(Base):
     
     # Permissions
     scopes = Column(ARRAY(String), nullable=False)  # List of permission scopes
-    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True, index=True)
     
     # Lifecycle
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     expires_at = Column(DateTime, nullable=True, index=True)
     last_used_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True, index=True)
-    replaced_by_id = Column(Integer, ForeignKey("api_keys.id"), nullable=True)
+    replaced_by_id = Column(Integer, ForeignKey("api_keys.id", ondelete="SET NULL"), nullable=True)
     
     # Relationships
     tenant = relationship("Tenant", back_populates="api_keys")

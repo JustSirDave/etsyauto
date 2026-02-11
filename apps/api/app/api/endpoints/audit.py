@@ -2,7 +2,7 @@
 Audit Logs API Endpoints
 Track and retrieve audit trail of user actions
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from datetime import datetime, timezone, timedelta
@@ -188,28 +188,28 @@ async def get_audit_stats(
 
 @router.post("/", tags=["Audit Logs"])
 async def create_audit_log(
+    request: "Request",
     action: str,
     resource_type: str,
     resource_id: Optional[str] = None,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
     request_id: Optional[str] = None,
     diff: Optional[dict] = None,
     status_code: Optional[int] = None,
     latency_ms: Optional[int] = None,
-    context: UserContext = Depends(get_user_context),  # All authenticated users can create audit logs
+    context: UserContext = Depends(require_permission(Permission.READ_AUDIT_LOG)),
     db: Session = Depends(get_db)
 ):
     """
-    Create a new audit log entry
-    Available to: all authenticated users (internal use)
+    Create a new audit log entry.
+    Requires: READ_AUDIT_LOG permission (Owner, Admin only).
+    
+    IP address and user agent are always extracted server-side
+    to prevent spoofing.
     
     Args:
         action: Action performed (e.g., 'create', 'update', 'delete', 'login', 'logout')
         resource_type: Type of resource (e.g., 'product', 'order', 'user', 'shop')
         resource_id: ID of the resource affected
-        ip_address: IP address of the user
-        user_agent: User agent string
         request_id: Request ID for tracking
         diff: Changes made (before/after)
         status_code: HTTP status code

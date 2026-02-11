@@ -301,6 +301,14 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                     logger.warning(f"[{request_id}] Rate limit for image upload, waiting {wait_time:.1f}s")
                     time.sleep(wait_time + 1)
                 
+                # Validate URL before server-side fetch (SSRF protection)
+                from app.services.url_validator import validate_image_url
+                url_valid, url_error = validate_image_url(image_url)
+                if not url_valid:
+                    logger.warning(f"[{request_id}] Image {idx} blocked: {url_error} — url={image_url}")
+                    images_failed += 1
+                    continue
+
                 # Fetch image data
                 try:
                     import httpx
@@ -843,7 +851,7 @@ def _prepare_listing_data(product: Product, shop: Shop, ai_generation: AIGenerat
     return listing_data
 
 
-@celery_app.task(name="app.worker.tasks.listing_tasks.retry_failed_listing")
+@celery_app.task(name="app.worker.tasks.listing_tasks.retry_failed_listing", max_retries=3)
 def retry_failed_listing(job_id: int) -> Dict[str, Any]:
     """
     Retry a failed listing job.
@@ -1095,7 +1103,7 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
         logger.info(f"Released concurrency slot for shop {shop_id}")
 
 
-@celery_app.task(name="app.worker.tasks.listing_tasks.cancel_listing_job")
+@celery_app.task(name="app.worker.tasks.listing_tasks.cancel_listing_job", max_retries=3)
 def cancel_listing_job(job_id: int) -> Dict[str, Any]:
     """
     Cancel a pending or scheduled listing job.

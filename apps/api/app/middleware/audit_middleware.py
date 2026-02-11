@@ -151,8 +151,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
         Extract and sanitize request data for logging
         Remove sensitive fields
         """
+        # Filter out sensitive query parameters
+        sensitive_params = {"token", "code", "state", "key", "secret", "password", "access_token", "refresh_token"}
+        filtered_query_params = {
+            k: ("***" if k.lower() in sensitive_params else v)
+            for k, v in request.query_params.items()
+        }
         data = {
-            "query_params": dict(request.query_params),
+            "query_params": filtered_query_params,
             "path_params": request.path_params,
             "headers": {},
         }

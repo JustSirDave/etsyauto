@@ -21,7 +21,7 @@ from app.core.redis import get_redis_client
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="app.worker.tasks.order_tasks.sync_orders")
+@celery_app.task(name="app.worker.tasks.order_tasks.sync_orders", max_retries=3)
 def sync_orders(
     shop_id: int = None,
     tenant_id: Optional[int] = None,
@@ -636,7 +636,7 @@ async def _extract_order_data(
     return order_data
 
 
-@celery_app.task(name="app.worker.tasks.order_tasks.sync_order_by_id")
+@celery_app.task(name="app.worker.tasks.order_tasks.sync_order_by_id", max_retries=3)
 def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
     """
     Sync a specific order by receipt ID.
@@ -740,7 +740,7 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
         db.close()
 
 
-@celery_app.task(name="app.worker.tasks.order_tasks.reconcile_orders")
+@celery_app.task(name="app.worker.tasks.order_tasks.reconcile_orders", max_retries=3)
 def reconcile_orders(shop_id: Optional[int] = None, days: int = 30) -> Dict[str, Any]:
     """
     Periodic task to reconcile order states with Etsy.

@@ -20,7 +20,7 @@ from app.models.notifications import NotificationType
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="app.worker.tasks.product_sync_tasks.sync_products_from_etsy")
+@celery_app.task(name="app.worker.tasks.product_sync_tasks.sync_products_from_etsy", max_retries=3)
 def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
     """
     Sync Etsy listings into Products.

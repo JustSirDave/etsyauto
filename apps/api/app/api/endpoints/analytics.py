@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.api.dependencies import get_user_context, UserContext
 from app.core.database import get_db
+from app.core.query_helpers import ensure_shop_access
 from app.api.dependencies import require_analytics_access, require_revenue_access
 from app.services.analytics_service import AnalyticsService
 
@@ -35,6 +36,8 @@ async def get_overview_analytics(
     Returns:
         Overview analytics with 7-day and 30-day trends
     """
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_overview_analytics(
         tenant_id=context.tenant_id,
@@ -62,6 +65,8 @@ async def get_order_analytics(
     Returns:
         Order analytics with status and payment breakdowns
     """
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_order_analytics(
         tenant_id=context.tenant_id,
@@ -89,6 +94,8 @@ async def get_product_analytics(
     Returns:
         Product and listing job analytics
     """
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_product_analytics(
         tenant_id=context.tenant_id,
@@ -119,6 +126,8 @@ async def get_fulfillment_analytics(
     Returns:
         Fulfillment analytics with shipment states and timing
     """
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_fulfillment_analytics(
         tenant_id=context.tenant_id,
@@ -143,6 +152,8 @@ async def invalidate_analytics_cache(
     Returns:
         Success message
     """
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
     analytics = AnalyticsService(db)
     analytics.invalidate_all(context.tenant_id, shop_id)
     return {"message": "Analytics cache invalidated"}

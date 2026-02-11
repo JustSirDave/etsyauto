@@ -13,7 +13,7 @@ from app.models.listings import AuditLog
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="audit.cleanup_old_logs")
+@celery_app.task(name="audit.cleanup_old_logs", max_retries=3)
 def cleanup_old_audit_logs():
     """
     Delete audit logs older than 30 days
@@ -72,7 +72,7 @@ def cleanup_old_audit_logs():
         db.close()
 
 
-@celery_app.task(name="audit.get_retention_stats")
+@celery_app.task(name="audit.get_retention_stats", max_retries=3)
 def get_audit_retention_stats():
     """
     Get statistics about audit log retention

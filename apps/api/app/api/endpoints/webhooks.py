@@ -43,8 +43,14 @@ async def etsy_webhook(
         body = await request.body()
         body_str = body.decode('utf-8')
         
-        # Verify signature if provided
-        if x_etsy_signature and settings.ETSY_WEBHOOK_SECRET:
+        # Verify webhook signature when secret is configured (mandatory in production)
+        if settings.ETSY_WEBHOOK_SECRET:
+            if not x_etsy_signature:
+                logger.warning("Webhook request missing X-Etsy-Signature header")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Missing webhook signature"
+                )
             expected_signature = hmac.new(
                 settings.ETSY_WEBHOOK_SECRET.encode('utf-8'),
                 body,
@@ -52,7 +58,7 @@ async def etsy_webhook(
             ).hexdigest()
             
             if not hmac.compare_digest(x_etsy_signature, expected_signature):
-                logger.warning(f"Invalid Etsy webhook signature: {x_etsy_signature}")
+                logger.warning("Invalid Etsy webhook signature received")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid webhook signature"
@@ -62,7 +68,7 @@ async def etsy_webhook(
         try:
             payload = json.loads(body_str)
         except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in Etsy webhook: {body_str}")
+            logger.error("Invalid JSON in Etsy webhook payload")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid JSON payload"
@@ -74,7 +80,7 @@ async def etsy_webhook(
         shop_id_etsy = payload.get("shop_id")
         
         if not event_type or not shop_id_etsy:
-            logger.error(f"Missing required fields in webhook: {payload}")
+            logger.error(f"Missing required fields in webhook (event_type={event_type}, shop_id={shop_id_etsy})")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Missing required fields"

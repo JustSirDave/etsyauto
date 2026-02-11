@@ -315,16 +315,26 @@ async def accept_invitation(
     
     # Handle existing users (password already set)
     else:
-        # If existing_password is provided, verify it
-        if request.existing_password:
+        # If they want to change their password, they MUST provide existing_password
+        if request.password:
+            if not request.existing_password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="existing_password is required to change password for existing users"
+                )
             if not verify_password(request.existing_password, user.password_hash):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Incorrect password"
                 )
-        # If they provide a new password, update it (optional)
-        elif request.password:
             user.password_hash = hash_password(request.password)
+        elif request.existing_password:
+            # Verify existing password even if not changing it (identity confirmation)
+            if not verify_password(request.existing_password, user.password_hash):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect password"
+                )
 
     # Update membership status
     membership.invitation_status = 'accepted'

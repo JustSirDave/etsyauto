@@ -18,8 +18,8 @@ class IngestionBatch(Base):
     __tablename__ = "ingestion_batches"
     
     id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id'), nullable=False, index=True)
-    shop_id = Column(BigInteger, ForeignKey('shops.id'), nullable=True, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False, index=True)
+    shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="SET NULL"), nullable=True, index=True)
     
     # Batch metadata
     batch_id = Column(String(255), unique=True, nullable=False, index=True)

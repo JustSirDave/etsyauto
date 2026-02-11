@@ -3,6 +3,7 @@ Authentication API Endpoints
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, field_validator
 from datetime import datetime, timedelta, timezone
@@ -15,12 +16,16 @@ import logging
 
 from app.api.dependencies import get_current_user
 from app.core.database import get_db
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import (
+    hash_password, verify_password, create_access_token,
+    create_refresh_token, decode_token, set_auth_cookies, clear_auth_cookies,
+)
 from app.core.email import generate_token, send_verification_email, send_password_reset_email, send_password_changed_notification
 from app.core.config import settings
 from app.core.password_validator import validate_password as validate_password_strength
 from app.models.tenancy import User, Tenant, Membership
 from app.models.oauth import OAuthProvider
+from jose import jwt as jose_jwt
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -127,7 +132,7 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
+    """Auth response — token is now sent via HttpOnly cookie, not in body."""
     token_type: str = "bearer"
     expires_in: int
     user: dict
@@ -210,16 +215,16 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         )
 
     # Only generate token if email verification is not required
-    token = create_access_token(
+    access_token = create_access_token(
         user_id=user.id,
         tenant_id=tenant.id,
         role='owner',
         shop_ids=[],  # No shops yet
         remember_me=False
     )
+    refresh_tok = create_refresh_token(user_id=user.id, tenant_id=tenant.id, role='owner')
 
-    return TokenResponse(
-        access_token=token,
+    body = TokenResponse(
         expires_in=settings.JWT_TTL_SECONDS,
         user={
             "id": user.id,
@@ -233,6 +238,9 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             "role": "owner"
         }
     )
+    response = JSONResponse(content=body.model_dump())
+    set_auth_cookies(response, access_token, refresh_tok)
+    return response
 
 
 @router.post("/login", response_model=TokenResponse, tags=["Auth"])
@@ -344,12 +352,15 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     db.commit()
 
     # Generate JWT token with remember_me support
-    token = create_access_token(
+    access_token = create_access_token(
         user_id=user.id,
         tenant_id=membership.tenant_id,
         role=membership.role,
         shop_ids=shop_ids,
         remember_me=request.remember_me
+    )
+    refresh_tok = create_refresh_token(
+        user_id=user.id, tenant_id=membership.tenant_id, role=membership.role
     )
 
     # Calculate token expiry
@@ -358,8 +369,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     else:
         expires_in = settings.JWT_TTL_SECONDS
 
-    return TokenResponse(
-        access_token=token,
+    body = TokenResponse(
         expires_in=expires_in,
         user={
             "id": user.id,
@@ -375,17 +385,85 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             "onboarding_completed": tenant.onboarding_completed
         }
     )
+    response = JSONResponse(content=body.model_dump())
+    set_auth_cookies(response, access_token, refresh_tok)
+    return response
 
 
 @router.post("/logout", tags=["Auth"])
 async def logout():
     """
-    Logout (client-side token removal)
-    
-    Since JWT is stateless, logout is handled by client
-    removing the token from storage
+    Logout — clears HttpOnly auth cookies.
     """
-    return {"message": "Logged out successfully"}
+    response = JSONResponse(content={"message": "Logged out successfully"})
+    clear_auth_cookies(response)
+    return response
+
+
+@router.post("/refresh", tags=["Auth"])
+async def refresh_token(request: Request, db: Session = Depends(get_db)):
+    """
+    Refresh the access token using the HttpOnly refresh_token cookie.
+    Issues a new access_token cookie if the refresh token is valid.
+    """
+    token = request.cookies.get("refresh_token")
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token"
+        )
+
+    try:
+        payload = decode_token(token)
+    except jose_jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
+    except jose_jwt.InvalidTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    # Must be a refresh-type token
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+
+    user_id = int(payload["sub"])
+    tenant_id = int(payload["tenant_id"])
+
+    # Verify user still exists and membership is active
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    membership = db.query(Membership).filter(
+        Membership.user_id == user_id,
+        Membership.tenant_id == tenant_id,
+        Membership.invitation_status == 'accepted'
+    ).first()
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Membership not active")
+
+    shop_ids = membership.allowed_shop_ids or []
+
+    new_access_token = create_access_token(
+        user_id=user_id,
+        tenant_id=tenant_id,
+        role=membership.role,
+        shop_ids=shop_ids,
+    )
+
+    response = JSONResponse(content={"message": "Token refreshed"})
+    # Only set the access_token cookie (refresh stays the same)
+    is_prod = settings.ENVIRONMENT == "production"
+    domain = settings.COOKIE_DOMAIN or None
+    response.set_cookie(
+        key="access_token",
+        value=new_access_token,
+        httponly=True,
+        secure=is_prod or settings.COOKIE_SECURE,
+        samesite=settings.COOKIE_SAMESITE,
+        max_age=settings.JWT_TTL_SECONDS,
+        path="/",
+        domain=domain,
+    )
+    return response
 
 
 @router.get("/me", tags=["Auth"])
@@ -506,10 +584,10 @@ class ResetPasswordRequest(BaseModel):
 
     @field_validator('new_password')
     def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
-        if len(v) > 72:
-            raise ValueError('Password must be less than 72 characters')
+        """Validate password strength with the same rules as registration"""
+        is_valid, errors = validate_password_strength(v)
+        if not is_valid:
+            raise ValueError('\n'.join(errors))
         return v
 
 
@@ -864,19 +942,21 @@ async def google_oauth(
     shop_ids = membership.allowed_shop_ids or []
 
     # Generate JWT token with conservative expiry
-    token = create_access_token(
+    access_token = create_access_token(
         user_id=user.id,
         tenant_id=membership.tenant_id,
         role=membership.role,
         shop_ids=shop_ids,
         remember_me=False  # Google OAuth users get standard session lifetime
     )
+    refresh_tok = create_refresh_token(
+        user_id=user.id, tenant_id=membership.tenant_id, role=membership.role
+    )
 
     # Log successful authentication
     logger.info(f"Google OAuth successful: user_id={user.id}, is_new={is_new_user}, tenant_id={tenant.id}")
 
-    return TokenResponse(
-        access_token=token,
+    body = TokenResponse(
         expires_in=settings.JWT_TTL_SECONDS,
         user={
             "id": user.id,
@@ -894,3 +974,6 @@ async def google_oauth(
             "onboarding_completed": tenant.onboarding_completed
         }
     )
+    response = JSONResponse(content=body.model_dump())
+    set_auth_cookies(response, access_token, refresh_tok)
+    return response

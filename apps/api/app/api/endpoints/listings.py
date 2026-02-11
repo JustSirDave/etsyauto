@@ -8,6 +8,9 @@ from sqlalchemy import func
 from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.api.dependencies import get_current_user, get_user_context, UserContext, require_permission, require_shop_access
 from app.core.database import get_db
@@ -286,7 +289,8 @@ async def retry_listing_job(
     try:
         publish_listing.delay(job.id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to queue retry: {str(e)}")
+        logger.exception("Failed to queue listing retry")
+        raise HTTPException(status_code=500, detail="Failed to queue retry. Please try again.")
     
     return {
         "id": job.id,
