@@ -196,19 +196,17 @@ async def accept_generation(
     Requires: UPDATE_PRODUCT permission (Creator+)
     """
     from app.services.ai_generation_service import AIGenerationService
-    from app.core.query_helpers import ensure_tenant_access
     
     service = AIGenerationService(db)
     
-    # Get generation and verify tenant access
+    # Get generation filtered by tenant_id to prevent cross-tenant access
     generation = db.query(AIGeneration).filter(
-        AIGeneration.id == generation_id
+        AIGeneration.id == generation_id,
+        AIGeneration.tenant_id == context.tenant_id
     ).first()
     
     if not generation:
         raise HTTPException(status_code=404, detail="Generation not found")
-    
-    ensure_tenant_access(generation.tenant_id, context)
     
     # Review and accept
     updated = service.review_generation(
@@ -236,19 +234,17 @@ async def reject_generation(
     Requires: UPDATE_PRODUCT permission (Creator+)
     """
     from app.services.ai_generation_service import AIGenerationService
-    from app.core.query_helpers import ensure_tenant_access
     
     service = AIGenerationService(db)
     
-    # Get generation and verify tenant access
+    # Get generation filtered by tenant_id to prevent cross-tenant access
     generation = db.query(AIGeneration).filter(
-        AIGeneration.id == generation_id
+        AIGeneration.id == generation_id,
+        AIGeneration.tenant_id == context.tenant_id
     ).first()
     
     if not generation:
         raise HTTPException(status_code=404, detail="Generation not found")
-    
-    ensure_tenant_access(generation.tenant_id, context)
     
     # Review and reject
     updated = service.review_generation(
@@ -281,19 +277,17 @@ async def modify_generation(
     The modified content will be automatically re-checked against policies
     """
     from app.services.ai_generation_service import AIGenerationService
-    from app.core.query_helpers import ensure_tenant_access
     
     service = AIGenerationService(db)
     
-    # Get generation and verify tenant access
+    # Get generation filtered by tenant_id to prevent cross-tenant access
     generation = db.query(AIGeneration).filter(
-        AIGeneration.id == generation_id
+        AIGeneration.id == generation_id,
+        AIGeneration.tenant_id == context.tenant_id
     ).first()
     
     if not generation:
         raise HTTPException(status_code=404, detail="Generation not found")
-    
-    ensure_tenant_access(generation.tenant_id, context)
     
     # Build modified content
     modified_content = {}
@@ -341,16 +335,14 @@ async def get_generation_detail(
     Get detailed information about a specific generation
     Requires: READ_PRODUCT permission
     """
-    from app.core.query_helpers import ensure_tenant_access
-    
+    # Get generation filtered by tenant_id to prevent cross-tenant access
     generation = db.query(AIGeneration).filter(
-        AIGeneration.id == generation_id
+        AIGeneration.id == generation_id,
+        AIGeneration.tenant_id == context.tenant_id
     ).first()
     
     if not generation:
         raise HTTPException(status_code=404, detail="Generation not found")
-    
-    ensure_tenant_access(generation.tenant_id, context)
     
     return {
         "id": generation.id,

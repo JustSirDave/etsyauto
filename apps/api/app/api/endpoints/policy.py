@@ -119,9 +119,10 @@ async def recheck_product_policy(
     
     result = policy_checker.check_listing_compliance(mock_listing, product)
     
-    # Update AIGeneration policy status if exists
+    # Update AIGeneration policy status if exists (filter by tenant for defense-in-depth)
     ai_gen = db.query(AIGeneration).filter(
-        AIGeneration.product_id == product_id
+        AIGeneration.product_id == product_id,
+        AIGeneration.tenant_id == context.tenant_id
     ).order_by(AIGeneration.created_at.desc()).first()
     
     if ai_gen:

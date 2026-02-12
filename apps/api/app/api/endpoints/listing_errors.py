@@ -64,8 +64,8 @@ async def get_listing_errors(
     product_ids = [job.product_id for job in jobs if job.product_id]
     shop_ids = [job.shop_id for job in jobs if job.shop_id]
     
-    products_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
-    shops_map = {s.id: s for s in db.query(Shop).filter(Shop.id.in_(shop_ids)).all()} if shop_ids else {}
+    products_map = {p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids), Product.tenant_id == context.tenant_id).all()} if product_ids else {}
+    shops_map = {s.id: s for s in db.query(Shop).filter(Shop.id.in_(shop_ids), Shop.tenant_id == context.tenant_id).all()} if shop_ids else {}
     
     # Build error list with context
     errors = []
