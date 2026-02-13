@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { shopsApi } from '@/lib/api';
 
-export default function EtsyOAuthCallbackPage() {
+function EtsyOAuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -45,5 +45,21 @@ export default function EtsyOAuthCallbackPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function EtsyOAuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-[var(--background)] px-6">
+          <div className="max-w-md w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 text-center">
+            <h1 className="text-xl font-semibold text-[var(--text-primary)]">Loading…</h1>
+          </div>
+        </div>
+      }
+    >
+      <EtsyOAuthCallbackContent />
+    </Suspense>
   );
 }
