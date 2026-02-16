@@ -297,6 +297,39 @@ async def get_ledger_entries(
 
 # ── 7. Manual sync trigger ──
 
+@router.get("/comparison", tags=["Financials"])
+async def get_financial_comparison(
+    shop_ids: str = Query(..., description="Comma-separated shop IDs to compare"),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    context: UserContext = Depends(require_revenue_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Get per-shop financial summary breakdown for comparison.
+    Returns individual financial summaries for each shop.
+    """
+    parsed = _parse_shop_ids(shop_ids, None, context, db)
+    if not parsed or len(parsed) < 1:
+        raise HTTPException(status_code=400, detail="At least one shop_id is required")
+
+    svc = FinancialService(db)
+    per_shop = {}
+    for sid in parsed:
+        summary = svc.get_financial_summary(
+            tenant_id=context.tenant_id,
+            shop_ids=[sid],
+            start_date=start_date,
+            end_date=end_date,
+        )
+        per_shop[str(sid)] = summary
+
+    return {
+        "shops": per_shop,
+        "shop_ids": parsed,
+    }
+
+
 @router.post("/sync", tags=["Financials"])
 async def trigger_financial_sync(
     shop_id: Optional[int] = None,

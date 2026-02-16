@@ -211,6 +211,9 @@ app.include_router(financials.router, prefix="/api/financials", tags=["Financial
 from app.api.endpoints import financial_invoices
 app.include_router(financial_invoices.router, prefix="/api/financials/invoices", tags=["Invoices"])
 
+from app.api.endpoints import tasks as tasks_endpoint
+app.include_router(tasks_endpoint.router, prefix="/api/tasks", tags=["Tasks"])
+
 # Mount Prometheus metrics
 metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)

@@ -14,6 +14,8 @@ import { productsApi, listingsApi, type Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
 import { useShop } from '@/lib/shop-context';
+import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
+import { SyncStatusModal, useRecentSync } from '@/components/modals/SyncStatusModal';
 import { ProductImportModal } from '@/components/products/ProductImportModal';
 import { AddProductModal } from '@/components/products/AddProductModal';
 
@@ -21,7 +23,7 @@ function ProductsContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { t } = useLanguage();
-  const { shops, selectedShopId, setSelectedShopId } = useShop();
+  const { shops, selectedShopId, selectedShopIds } = useShop();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -32,11 +34,14 @@ function ProductsContent() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const { wasSyncedRecently } = useRecentSync('products');
 
   // Load products
   useEffect(() => {
     loadProducts();
-  }, [currentPage, pageSize, selectedShopId]);
+  }, [currentPage, pageSize, selectedShopIds]);
 
   const loadProducts = async () => {
     try {
@@ -45,7 +50,7 @@ function ProductsContent() {
         currentPage,
         pageSize,
         undefined,
-        { shopId: selectedShopId ?? undefined }
+        { shopIds: selectedShopIds.length > 0 ? selectedShopIds : undefined }
       );
       setProducts(data.products);
       setTotal(data.total);
@@ -76,10 +81,19 @@ function ProductsContent() {
       showToast(t('toast.connectShopFirst'), 'error');
       return;
     }
+    if (wasSyncedRecently) {
+      const proceed = confirm('You synced products recently. Sync again?');
+      if (!proceed) return;
+    }
     try {
       setSyncing(true);
-      await productsApi.syncFromEtsy(selectedShopId);
-      showToast(t('toast.syncQueued'), 'success');
+      const result = await productsApi.syncFromEtsy(selectedShopId);
+      if (result?.task_id) {
+        setSyncTaskId(result.task_id);
+        setShowSyncModal(true);
+      } else {
+        showToast(t('toast.syncQueued'), 'success');
+      }
     } catch (error: any) {
       console.error('Failed to sync from Etsy:', error);
       showToast(error.detail || t('toast.syncFailed'), 'error');
@@ -134,12 +148,8 @@ function ProductsContent() {
     }
   };
 
-  // Filter products client-side for now
+  // Client-side search filter (shop filtering handled by backend)
   const filteredProducts = products.filter((product) => {
-    if (selectedShopId && product.shop_id && product.shop_id !== selectedShopId) {
-      return false;
-    }
-    // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       if (
@@ -149,11 +159,6 @@ function ProductsContent() {
         return false;
       }
     }
-
-    // Add more filters here if needed (status, category, stock)
-    // Note: Backend products don't have status/category/stock fields yet
-    // These would need to be added to the backend model
-
     return true;
   });
 
@@ -173,6 +178,7 @@ function ProductsContent() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
+      <DisconnectedShopBanner />
 
       {/* Header Stats */}
       <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6">
@@ -203,21 +209,6 @@ function ProductsContent() {
             </div>
             <div className="flex items-center gap-3">
               <PageSizeDropdown value={pageSize} onChange={setPageSize} />
-              {shops.length > 0 && (
-                <select
-                  value={selectedShopId ?? ''}
-                  onChange={(e) => setSelectedShopId(e.target.value ? Number(e.target.value) : null)}
-                  className="appearance-none px-4 py-2.5 pr-10 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] transition cursor-pointer"
-                  title="Select shop"
-                >
-                  <option value="">Select shop</option>
-                  {shops.map((shop) => (
-                    <option key={shop.id} value={shop.id}>
-                      {shop.display_name || shop.etsy_shop_id}
-                    </option>
-                  ))}
-                </select>
-              )}
                 <button
                 onClick={handleSyncFromEtsy}
                 disabled={!selectedShopId || syncing}
@@ -432,6 +423,14 @@ function ProductsContent() {
           loadProducts();
           setCurrentPage(1);
         }}
+      />
+
+      <SyncStatusModal
+        isOpen={showSyncModal}
+        onClose={() => { setShowSyncModal(false); setSyncTaskId(null); }}
+        taskId={syncTaskId}
+        syncType="products"
+        onComplete={loadProducts}
       />
     </div>
   );

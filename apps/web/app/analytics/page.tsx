@@ -12,6 +12,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useToast } from '@/lib/toast-context';
+import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import {
   analyticsApi,
   ordersApi,
@@ -720,9 +721,90 @@ function EmptyState({ message }: { message: string }) {
 /*  Main page                                                          */
 /* ================================================================== */
 
+function ShopComparisonPanel({
+  comparisonData,
+  shops,
+  onClose,
+}: {
+  comparisonData: Record<string, { overview: OverviewAnalytics; orders: OrderAnalytics }>;
+  shops: { id: number; display_name: string }[];
+  onClose: () => void;
+}) {
+  const shopEntries = Object.entries(comparisonData);
+
+  return (
+    <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)]">Shop Comparison</h3>
+        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm">
+          Close
+        </button>
+      </div>
+
+      <div className={`grid gap-4 ${shopEntries.length === 2 ? 'grid-cols-2' : shopEntries.length >= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
+        {shopEntries.map(([shopId, data]) => {
+          const shop = shops.find((s) => s.id === Number(shopId));
+          const shopName = shop?.display_name || `Shop ${shopId}`;
+          return (
+            <div key={shopId} className="bg-[var(--background)] rounded-xl border border-[var(--border-color)] p-4 space-y-3">
+              <h4 className="font-semibold text-[var(--text-primary)] text-sm border-b border-[var(--border-color)] pb-2">
+                {shopName}
+              </h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-[var(--text-muted)] text-xs">Revenue</p>
+                  <p className="text-[var(--text-primary)] font-semibold">${data.overview.total_revenue.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--text-muted)] text-xs">Orders</p>
+                  <p className="text-[var(--text-primary)] font-semibold">{data.overview.total_orders}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--text-muted)] text-xs">Avg Order</p>
+                  <p className="text-[var(--text-primary)] font-semibold">${data.overview.avg_order_value.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--text-muted)] text-xs">Rev (30d)</p>
+                  <p className="text-[var(--text-primary)] font-semibold">${data.overview.revenue_30d.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--text-muted)] text-xs">Orders (7d)</p>
+                  <p className="text-[var(--text-primary)] font-semibold">{data.overview.orders_7d}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--text-muted)] text-xs">Orders (30d)</p>
+                  <p className="text-[var(--text-primary)] font-semibold">{data.overview.orders_30d}</p>
+                </div>
+              </div>
+              <div className="text-xs space-y-1 pt-2 border-t border-[var(--border-color)]">
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Processing</span>
+                  <span className="text-yellow-400">{data.orders.status_breakdown.processing}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">In Transit</span>
+                  <span className="text-blue-400">{data.orders.status_breakdown.in_transit}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Completed</span>
+                  <span className="text-green-400">{data.orders.status_breakdown.completed}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[var(--text-muted)]">Cancelled</span>
+                  <span className="text-red-400">{data.orders.status_breakdown.cancelled}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AnalyticsContent() {
   const { user } = useAuth();
-  const { selectedShop, selectedShopIds } = useShop();
+  const { selectedShop, selectedShopIds, selectedShops } = useShop();
   const { showToast } = useToast();
 
   const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
@@ -732,6 +814,9 @@ function AnalyticsContent() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [detailView, setDetailView] = useState<DetailView>(null);
+  const [comparisonData, setComparisonData] = useState<Record<string, { overview: OverviewAnalytics; orders: OrderAnalytics }> | null>(null);
+  const [showComparison, setShowComparison] = useState(false);
+  const [loadingComparison, setLoadingComparison] = useState(false);
 
   const isOwner = user?.role?.toLowerCase() === 'owner';
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
@@ -766,6 +851,23 @@ function AnalyticsContent() {
     loadAnalytics();
   }, [loadAnalytics]);
 
+  const handleKpiClick = useCallback(async (detailViewValue: DetailView) => {
+    setDetailView(detailViewValue);
+    // If multiple shops are selected, also load comparison
+    if (shopIds && shopIds.length > 1) {
+      setLoadingComparison(true);
+      setShowComparison(true);
+      try {
+        const data = await analyticsApi.getComparison(shopIds);
+        setComparisonData(data.shops);
+      } catch {
+        setComparisonData(null);
+      } finally {
+        setLoadingComparison(false);
+      }
+    }
+  }, [shopIds]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -789,6 +891,7 @@ function AnalyticsContent() {
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-8">
+      <DisconnectedShopBanner />
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
@@ -818,20 +921,20 @@ function AnalyticsContent() {
               value={overview.total_revenue.toFixed(2)}
               prefix="$"
               icon={DollarSign}
-              onClick={() => setDetailView({ kind: 'revenue' })}
+              onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
               title="Total Orders"
               value={overview.total_orders}
               icon={ShoppingCart}
-              onClick={() => setDetailView({ kind: 'orders' })}
+              onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
               title="Avg Order Value"
               value={overview.avg_order_value.toFixed(2)}
               prefix="$"
               icon={BarChart3}
-              onClick={() => setDetailView({ kind: 'revenue' })}
+              onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
               title="Revenue (30d)"
@@ -840,7 +943,7 @@ function AnalyticsContent() {
               icon={DollarSign}
               trend={overview.revenue_30d_trend}
               trendLabel="vs prev 30d"
-              onClick={() => setDetailView({ kind: 'revenue' })}
+              onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
           </div>
 
@@ -851,7 +954,7 @@ function AnalyticsContent() {
               icon={ShoppingCart}
               trend={overview.orders_7d_trend}
               trendLabel="vs prev 7d"
-              onClick={() => setDetailView({ kind: 'orders' })}
+              onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
               title="Orders (30d)"
@@ -859,7 +962,7 @@ function AnalyticsContent() {
               icon={ShoppingCart}
               trend={overview.orders_30d_trend}
               trendLabel="vs prev 30d"
-              onClick={() => setDetailView({ kind: 'orders' })}
+              onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
               title="Revenue (7d)"
@@ -868,7 +971,7 @@ function AnalyticsContent() {
               icon={TrendingUp}
               trend={overview.revenue_7d_trend}
               trendLabel="vs prev 7d"
-              onClick={() => setDetailView({ kind: 'revenue' })}
+              onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
               title="Revenue (30d)"
@@ -877,10 +980,25 @@ function AnalyticsContent() {
               icon={TrendingUp}
               trend={overview.revenue_30d_trend}
               trendLabel="vs prev 30d"
-              onClick={() => setDetailView({ kind: 'revenue' })}
+              onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
           </div>
         </>
+      )}
+
+      {/* ── Shop Comparison (when multiple shops selected) ──── */}
+      {showComparison && shopIds && shopIds.length > 1 && (
+        loadingComparison ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]" />
+          </div>
+        ) : comparisonData ? (
+          <ShopComparisonPanel
+            comparisonData={comparisonData}
+            shops={selectedShops}
+            onClose={() => { setShowComparison(false); setComparisonData(null); }}
+          />
+        ) : null
       )}
 
       {/* ── Order Status & Payment ───────────────────────────── */}

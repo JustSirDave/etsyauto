@@ -13,6 +13,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useToast } from '@/lib/toast-context';
+import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import {
   financialsApi,
   invoicesApi,
@@ -211,15 +212,79 @@ function SectionHeader({ title, children }: { title: string; children?: React.Re
 /*  Main Page                                                          */
 /* ================================================================== */
 
+function FinancialComparisonPanel({
+  comparisonData,
+  shops,
+  onClose,
+}: {
+  comparisonData: Record<string, FinancialSummary>;
+  shops: { id: number; display_name: string }[];
+  onClose: () => void;
+}) {
+  const entries = Object.entries(comparisonData);
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Financial Comparison</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">
+          Close
+        </button>
+      </div>
+      <div className={`grid gap-4 ${entries.length === 2 ? 'grid-cols-2' : entries.length >= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
+        {entries.map(([shopId, summary]) => {
+          const shop = shops.find((s) => s.id === Number(shopId));
+          const shopName = shop?.display_name || `Shop ${shopId}`;
+          return (
+            <div key={shopId} className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 space-y-3">
+              <h4 className="font-semibold text-sm border-b border-gray-200 dark:border-gray-700 pb-2">
+                {shopName}
+              </h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-gray-500 text-xs">Revenue</p>
+                  <p className="font-semibold text-green-600">${(summary.revenue / 100).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Total Expenses</p>
+                  <p className="font-semibold text-red-500">${(summary.total_expenses / 100).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Net Profit</p>
+                  <p className="font-semibold text-blue-600">${(summary.net_profit / 100).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Etsy Fees</p>
+                  <p className="font-semibold">${(summary.etsy_fees / 100).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Advertising</p>
+                  <p className="font-semibold">${(summary.advertising_expenses / 100).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500 text-xs">Margin</p>
+                  <p className="font-semibold">{summary.revenue > 0 ? ((summary.net_profit / summary.revenue) * 100).toFixed(1) : '0.0'}%</p>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function FinancialsPage() {
   const { user } = useAuth();
-  const { selectedShop, selectedShopIds } = useShop();
+  const { selectedShop, selectedShopIds, selectedShops } = useShop();
   const { showToast } = useToast();
 
   const [period, setPeriod] = useState<Period>('30d');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [scopeStatus, setScopeStatus] = useState<BillingScopeStatus | null>(null);
+  const [comparisonData, setComparisonData] = useState<Record<string, FinancialSummary> | null>(null);
+  const [showComparison, setShowComparison] = useState(false);
+  const [loadingComparison, setLoadingComparison] = useState(false);
 
   // Data
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
@@ -362,6 +427,7 @@ export default function FinancialsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <DisconnectedShopBanner />
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -390,6 +456,29 @@ export default function FinancialsPage() {
                 </button>
               ))}
             </div>
+
+            {/* Compare button (visible when multiple shops selected) */}
+            {shopIds && shopIds.length > 1 && (
+              <button
+                onClick={async () => {
+                  setShowComparison(!showComparison);
+                  if (!showComparison && !comparisonData) {
+                    setLoadingComparison(true);
+                    try {
+                      const data = await financialsApi.getComparison(shopIds, start, end);
+                      setComparisonData(data.shops);
+                    } catch {
+                      setComparisonData(null);
+                    } finally {
+                      setLoadingComparison(false);
+                    }
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                {showComparison ? 'Hide Comparison' : 'Compare Shops'}
+              </button>
+            )}
 
             {/* Sync */}
             {user?.role && ['owner', 'admin'].includes(user.role.toLowerCase()) && (
@@ -429,6 +518,21 @@ export default function FinancialsPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* ── Financial Comparison Panel ── */}
+        {showComparison && shopIds && shopIds.length > 1 && (
+          loadingComparison ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+            </div>
+          ) : comparisonData ? (
+            <FinancialComparisonPanel
+              comparisonData={comparisonData}
+              shops={selectedShops}
+              onClose={() => { setShowComparison(false); setComparisonData(null); }}
+            />
+          ) : null
         )}
 
         {/* ── Financial Summary: Revenue → Fees → Ads → Product Costs → Invoices → Net Profit ── */}

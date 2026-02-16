@@ -14,6 +14,7 @@ import { useLanguage } from '@/lib/language-context';
 import { useShop } from '@/lib/shop-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import OnboardingModal from '@/components/OnboardingModal';
+import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import { onboardingApi, dashboardApi, type DashboardStats, type DashboardOrder } from '@/lib/api';
 import { PAYMENT_STATUS_STYLES, normalizePaymentStatus } from '@/lib/order-status';
 import { cn } from '@/lib/utils';
@@ -190,7 +191,7 @@ function OwnerDashboardContent() {
   const { user, setUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLanguage();
-  const { selectedShop, shops, isLoading: shopsLoading } = useShop();
+  const { selectedShop, selectedShops, selectedShopIds, shops, isLoading: shopsLoading } = useShop();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentOrders, setRecentOrders] = useState<DashboardOrder[]>([]);
@@ -219,9 +220,10 @@ function OwnerDashboardContent() {
     const loadDashboard = async () => {
       try {
         setLoading(true);
+        const shopOpts = selectedShopIds.length > 0 ? { shopIds: selectedShopIds } : { shopId: selectedShop?.id };
         const [statsData, ordersData] = await Promise.all([
-          dashboardApi.getStats({ shopId: selectedShop?.id }),
-          dashboardApi.getRecentOrders(5, { shopId: selectedShop?.id }),
+          dashboardApi.getStats(shopOpts),
+          dashboardApi.getRecentOrders(5, shopOpts),
         ]);
         setStats(statsData);
         setRecentOrders(ordersData.orders || []);
@@ -235,16 +237,17 @@ function OwnerDashboardContent() {
     if (!showOnboarding) {
       loadDashboard();
     }
-  }, [selectedShop, showOnboarding, showToast]);
+  }, [selectedShopIds, showOnboarding, showToast]);
 
   const handleCompleteOnboarding = async () => {
     setShowOnboarding(false);
     setLoading(true);
     // Reload data
     try {
+      const shopOpts = selectedShopIds.length > 0 ? { shopIds: selectedShopIds } : { shopId: selectedShop?.id };
       const [statsData, ordersData] = await Promise.all([
-        dashboardApi.getStats({ shopId: selectedShop?.id }),
-        dashboardApi.getRecentOrders(5, { shopId: selectedShop?.id }),
+        dashboardApi.getStats(shopOpts),
+        dashboardApi.getRecentOrders(5, shopOpts),
       ]);
       setStats(statsData);
       setRecentOrders(ordersData.orders || []);
@@ -278,6 +281,8 @@ function OwnerDashboardContent() {
       <Suspense fallback={null}>
         <WelcomeHandler />
       </Suspense>
+
+      <DisconnectedShopBanner />
 
       {/* Header */}
       <div>
@@ -329,15 +334,29 @@ function OwnerDashboardContent() {
               {t('dashboard.connections')}
             </h2>
             <div className="space-y-3">
-              <ConnectionItem
-                name="Etsy"
-                status={etsyConnected ? 'connected' : 'disconnected'}
-                storeName={selectedShop?.display_name}
-                onConnect={handleConnectEtsy}
-                connectedLabel={t('dashboard.connected')}
-                notConnectedLabel={t('dashboard.notConnected')}
-                connectLabel={t('dashboard.connect')}
-              />
+              {selectedShops.length > 0 ? (
+                selectedShops.map((shop) => (
+                  <ConnectionItem
+                    key={shop.id}
+                    name={shop.display_name || `Shop ${shop.id}`}
+                    status={shop.status === 'connected' ? 'connected' : 'disconnected'}
+                    storeName={shop.etsy_shop_id}
+                    onConnect={shop.status !== 'connected' ? handleConnectEtsy : undefined}
+                    connectedLabel={t('dashboard.connected')}
+                    notConnectedLabel={t('dashboard.notConnected')}
+                    connectLabel={t('dashboard.connect')}
+                  />
+                ))
+              ) : (
+                <ConnectionItem
+                  name="Etsy"
+                  status="disconnected"
+                  onConnect={handleConnectEtsy}
+                  connectedLabel={t('dashboard.connected')}
+                  notConnectedLabel={t('dashboard.notConnected')}
+                  connectLabel={t('dashboard.connect')}
+                />
+              )}
             </div>
           </div>
 

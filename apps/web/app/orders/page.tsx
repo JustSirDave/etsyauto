@@ -14,6 +14,8 @@ import { cn } from '@/lib/utils';
 import { ordersApi, Order, OrderStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useShop } from '@/lib/shop-context';
+import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
+import { SyncStatusModal, useRecentSync } from '@/components/modals/SyncStatusModal';
 import { useAuth } from '@/lib/auth-context';
 import {
   ORDER_STATUS_BADGE_CLASSES,
@@ -71,7 +73,7 @@ function OrdersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { selectedShopId } = useShop();
+  const { selectedShopId, selectedShopIds } = useShop();
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
@@ -83,16 +85,27 @@ function OrdersContent() {
   const [loading, setLoading] = useState(true);
   const [loadingStats, setLoadingStats] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const { wasSyncedRecently } = useRecentSync('orders');
 
   // Sync orders from Etsy
   const handleSyncOrders = async () => {
+    if (wasSyncedRecently) {
+      const proceed = confirm('You synced orders recently. Sync again?');
+      if (!proceed) return;
+    }
     try {
       setSyncing(true);
-      showToast('Syncing orders from Etsy...', 'info');
-      await ordersApi.sync({ forceFullSync: total === 0, shopId: selectedShopId });
-      showToast('Orders synced successfully!', 'success');
-      await loadOrders();
-      await loadStats();
+      const result = await ordersApi.sync({ forceFullSync: total === 0, shopIds: selectedShopIds.length > 0 ? selectedShopIds : undefined, shopId: selectedShopId });
+      if (result.task_id) {
+        setSyncTaskId(result.task_id);
+        setShowSyncModal(true);
+      } else {
+        showToast('Orders synced successfully!', 'success');
+        await loadOrders();
+        await loadStats();
+      }
     } catch (error: any) {
       console.error('Failed to sync orders:', error);
       showToast(error.detail || 'Failed to sync orders', 'error');
@@ -108,7 +121,7 @@ function OrdersContent() {
   const loadStats = async () => {
     try {
       setLoadingStats(true);
-      const data = await ordersApi.getStats({ shopId: selectedShopId });
+      const data = await ordersApi.getStats({ shopIds: selectedShopIds.length > 0 ? selectedShopIds : undefined });
       setStats(data);
     } catch (error: any) {
       console.error('Failed to load order stats:', error);
@@ -122,7 +135,7 @@ function OrdersContent() {
     try {
       setLoading(true);
       const data = await ordersApi.getAll(currentPage, pageSize, statusFilter, paymentFilter, {
-        shopId: selectedShopId,
+        shopIds: selectedShopIds.length > 0 ? selectedShopIds : undefined,
       });
       setOrders(data.orders);
       setTotal(data.total);
@@ -136,7 +149,7 @@ function OrdersContent() {
 
   useEffect(() => {
     loadStats();
-  }, [selectedShopId]);
+  }, [selectedShopIds]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -144,7 +157,7 @@ function OrdersContent() {
 
   useEffect(() => {
     loadOrders();
-  }, [currentPage, pageSize, selectedShopId, statusFilter, paymentFilter]);
+  }, [currentPage, pageSize, selectedShopIds, statusFilter, paymentFilter]);
 
   useEffect(() => {
     ordersApi.markViewed().catch(() => null);
@@ -190,6 +203,7 @@ function OrdersContent() {
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
+      <DisconnectedShopBanner />
       <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-start">
         {/* Order Status - Left Column */}
         <div className="space-y-3">
@@ -416,6 +430,14 @@ function OrdersContent() {
           <Pagination currentPage={currentPage} totalPages={totalPages} totalItems={total} pageSize={pageSize} onPageChange={setCurrentPage} />
         )}
       </DashboardCard>
+
+      <SyncStatusModal
+        isOpen={showSyncModal}
+        onClose={() => { setShowSyncModal(false); setSyncTaskId(null); }}
+        taskId={syncTaskId}
+        syncType="orders"
+        onComplete={() => { loadOrders(); loadStats(); }}
+      />
     </div>
   );
 }

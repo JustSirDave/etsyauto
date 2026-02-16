@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import { useShop } from '@/lib/shop-context';
 import { shopsApi, teamApi, suppliersApi, type Shop, type ApiError, type TeamMember, type SupplierProfile } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
@@ -22,6 +23,7 @@ type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_pr
 
 function SettingsContent() {
   const { user } = useAuth();
+  const { refreshShops } = useShop();
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab') as TabType | null;
@@ -51,6 +53,10 @@ function SettingsContent() {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [shopToDisconnect, setShopToDisconnect] = useState<{ id: number; name: string } | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [showDeleteShopModal, setShowDeleteShopModal] = useState(false);
+  const [shopToDelete, setShopToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [deletingShop, setDeletingShop] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [notification, setNotification] = useState<{
     show: boolean;
     type: 'success' | 'error' | 'warning' | 'info';
@@ -76,19 +82,32 @@ function SettingsContent() {
   };
 
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showConnectLinkModal, setShowConnectLinkModal] = useState(false);
+  const [generatedConnectUrl, setGeneratedConnectUrl] = useState('');
+  const [connectLinkCopied, setConnectLinkCopied] = useState(false);
 
   const handleConnectEtsy = async () => {
     try {
       setConnectingEtsy(true);
       setError(null);
       const { connect_url } = await shopsApi.createConnectLink(shopNameInput || undefined);
-      await navigator.clipboard.writeText(connect_url);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 4000);
+      setGeneratedConnectUrl(connect_url);
+      setShowConnectLinkModal(true);
+      setConnectLinkCopied(false);
     } catch (err) {
       setError((err as ApiError).detail || 'Failed to generate connection link');
     } finally {
       setConnectingEtsy(false);
+    }
+  };
+
+  const handleCopyConnectLink = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedConnectUrl);
+      setConnectLinkCopied(true);
+      setTimeout(() => setConnectLinkCopied(false), 4000);
+    } catch {
+      setError('Failed to copy link to clipboard');
     }
   };
 
@@ -148,6 +167,40 @@ function SettingsContent() {
   const handleDisconnectShop = async (shopId: number, shopName: string) => {
     setShopToDisconnect({ id: shopId, name: shopName });
     setShowDisconnectModal(true);
+  };
+
+  const handleDeleteShop = (shopId: number, shopName: string) => {
+    setShopToDelete({ id: shopId, name: shopName });
+    setDeleteConfirmText('');
+    setShowDeleteShopModal(true);
+  };
+
+  const confirmDeleteShop = async () => {
+    if (!shopToDelete) return;
+    try {
+      setDeletingShop(true);
+      await shopsApi.deletePermanently(shopToDelete.id);
+      setShowDeleteShopModal(false);
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Shop Deleted',
+        message: `${shopToDelete.name} and all associated data have been permanently deleted.`
+      });
+      setShopToDelete(null);
+      setDeleteConfirmText('');
+      await loadShops();
+      refreshShops();
+    } catch (err) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Deletion Failed',
+        message: (err as ApiError).detail || 'Failed to delete shop. Please try again.'
+      });
+    } finally {
+      setDeletingShop(false);
+    }
   };
 
   const confirmDisconnectShop = async () => {
@@ -536,7 +589,7 @@ function SettingsContent() {
                         className="flex-1 px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
                       />
                       <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
-                        {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : linkCopied ? <><CheckCircle2 className="w-4 h-4" />Link Copied!</> : <><LinkIcon className="w-4 h-4" />Copy Connection Link</>}
+                        {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : <><LinkIcon className="w-4 h-4" />Create Connection Link</>}
                       </button>
                     </div>
                   </>
@@ -548,7 +601,7 @@ function SettingsContent() {
           {shops.length > 0 && (
             <DashboardCard>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Connected Shops</h2>
+                <h2 className="text-lg font-semibold text-[var(--text-primary)]">Your Shops</h2>
                 <span className="text-sm text-[var(--text-muted)]">{shops.length} total</span>
               </div>
               <div className="space-y-3">
@@ -613,11 +666,22 @@ function SettingsContent() {
                       {/* Hide Disconnect for suppliers - policy compliance */}
                       {user?.role !== 'supplier' && (
                         <div className="flex items-center gap-2">
-                          {shop.status === 'connected' && (
+                          {shop.status === 'connected' ? (
                             <button onClick={() => handleDisconnectShop(shop.id, shop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20">
                               <Unlink className="w-4 h-4" />Disconnect
                             </button>
+                          ) : (
+                            <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
+                              <LinkIcon className="w-4 h-4" />Reconnect
+                            </button>
                           )}
+                          <button
+                            onClick={() => handleDeleteShop(shop.id, shop.display_name || shop.etsy_shop_id)}
+                            className="flex items-center gap-2 px-4 py-2.5 bg-red-600/10 text-red-500 rounded-lg hover:bg-red-600/20 transition-colors"
+                            title="Permanently delete this shop and all its data"
+                          >
+                            <Trash2 className="w-4 h-4" />Delete
+                          </button>
                         </div>
                       )}
                     </div>
@@ -853,6 +917,90 @@ function SettingsContent() {
         variant="danger"
         isProcessing={deleting}
       />
+
+      {/* Connection Link Modal */}
+      {showConnectLinkModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Connection Link Created</h3>
+              <button onClick={() => setShowConnectLinkModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-[var(--text-muted)]">
+              Share this link to connect an Etsy shop. The link expires in 30 minutes and can only be used once.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={generatedConnectUrl}
+                className="flex-1 px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-sm font-mono"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <button
+                onClick={handleCopyConnectLink}
+                className="flex items-center gap-2 px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 flex-shrink-0"
+              >
+                {connectLinkCopied ? <><CheckCircle2 className="w-4 h-4" />Copied!</> : <><LinkIcon className="w-4 h-4" />Copy Link</>}
+              </button>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-amber-400">
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>This link expires in 30 minutes</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Shop Confirmation Modal */}
+      {showDeleteShopModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-[var(--text-primary)]">Permanently Delete Shop</h3>
+                <p className="text-sm text-[var(--text-muted)]">This action cannot be undone</p>
+              </div>
+            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <p className="text-sm text-red-400">
+                This will permanently delete <strong>{shopToDelete?.name}</strong> and all associated data including orders, products, listings, invoices, and tokens.
+              </p>
+            </div>
+            <div>
+              <label className="text-sm text-[var(--text-muted)] block mb-1">
+                Type <strong>DELETE</strong> to confirm
+              </label>
+              <input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => { setShowDeleteShopModal(false); setShopToDelete(null); setDeleteConfirmText(''); }}
+                className="px-4 py-2.5 bg-[var(--background)] text-[var(--text-muted)] rounded-lg border border-[var(--border-color)] hover:text-[var(--text-primary)]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteShop}
+                disabled={deleteConfirmText !== 'DELETE' || deletingShop}
+                className="px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {deletingShop ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deletingShop ? 'Deleting...' : 'Delete Permanently'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notification Modal */}
       <NotificationModal

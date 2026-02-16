@@ -47,19 +47,27 @@ class ManualTrackingRequest(BaseModel):
 @router.get("/stats", tags=["Orders"])
 async def get_order_stats(
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = None,
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     Get order statistics for dashboard cards
     Requires: READ_ORDER permission (all roles)
+    Supports: shop_id (single) or shop_ids (comma-separated) for multi-shop filtering
 
     Returns:
         Statistics about order counts by payment and delivery status
     """
     # Filter by tenant
     base_query = filter_by_tenant(db.query(Order), context.tenant_id, Order.tenant_id)
-    if shop_id:
+    if shop_ids:
+        ids = [int(x) for x in shop_ids.split(',') if x.strip().isdigit()]
+        for sid in ids:
+            ensure_shop_access(sid, context, db)
+        if ids:
+            base_query = base_query.filter(Order.shop_id.in_(ids))
+    elif shop_id:
         ensure_shop_access(shop_id, context, db)
         base_query = base_query.filter(Order.shop_id == shop_id)
     if context.role.lower() == "supplier":
@@ -134,12 +142,14 @@ async def list_orders(
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = None,
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     List all orders for current tenant
     Requires: READ_ORDER permission (all roles)
+    Supports: shop_id (single) or shop_ids (comma-separated) for multi-shop filtering
 
     Args:
         skip: Number of records to skip (pagination)
@@ -153,7 +163,13 @@ async def list_orders(
     # Filter by tenant
     query = filter_by_tenant(db.query(Order), context.tenant_id, Order.tenant_id)
 
-    if shop_id:
+    if shop_ids:
+        ids = [int(x) for x in shop_ids.split(',') if x.strip().isdigit()]
+        for sid in ids:
+            ensure_shop_access(sid, context, db)
+        if ids:
+            query = query.filter(Order.shop_id.in_(ids))
+    elif shop_id:
         ensure_shop_access(shop_id, context, db)
         query = query.filter(Order.shop_id == shop_id)
 

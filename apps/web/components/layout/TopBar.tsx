@@ -24,13 +24,17 @@ import {
   Store,
   CheckSquare,
   Square,
+  WifiOff,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export function TopBar() {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
   const { shops, selectedShopIds, toggleShopId, selectAllShops, clearAllShops, isLoading: shopsLoading } = useShop();
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [disconnectedPromptShopId, setDisconnectedPromptShopId] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
@@ -151,23 +155,51 @@ export function TopBar() {
                   <div className="py-1 max-h-60 overflow-y-auto">
                     {shops.map((shop) => {
                       const isSelected = selectedShopIds.includes(shop.id);
+                      const isDisconnected = shop.status === 'revoked';
                       return (
-                        <button
-                          key={shop.id}
-                          onClick={() => toggleShopId(shop.id)}
-                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                            isSelected
-                              ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
-                              : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          {isSelected ? (
-                            <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                          ) : (
-                            <Square className="w-4 h-4 flex-shrink-0" />
+                        <div key={shop.id}>
+                          <button
+                            onClick={() => {
+                              toggleShopId(shop.id);
+                              if (isDisconnected && !isSelected) {
+                                setDisconnectedPromptShopId(shop.id);
+                              }
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                              isSelected
+                                ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
+                                : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                            } ${isDisconnected ? 'opacity-60' : ''}`}
+                          >
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 flex-shrink-0" />
+                            ) : (
+                              <Square className="w-4 h-4 flex-shrink-0" />
+                            )}
+                            <span className={`font-medium truncate flex-1 ${isDisconnected ? 'line-through' : ''}`}>
+                              {shop.display_name || `Shop ${shop.id}`}
+                            </span>
+                            {isDisconnected && (
+                              <span title="Disconnected"><WifiOff className="w-3.5 h-3.5 text-red-400 flex-shrink-0" /></span>
+                            )}
+                          </button>
+                          {disconnectedPromptShopId === shop.id && isDisconnected && (
+                            <div className="mx-4 mb-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
+                              <p className="text-amber-400 mb-1.5">This shop is disconnected. Data won&apos;t sync.</p>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowShopMenu(false);
+                                  setDisconnectedPromptShopId(null);
+                                  router.push('/settings?tab=shops');
+                                }}
+                                className="text-amber-300 hover:text-amber-200 underline font-medium"
+                              >
+                                Reconnect
+                              </button>
+                            </div>
                           )}
-                          <span className="font-medium truncate">{shop.display_name || `Shop ${shop.id}`}</span>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>

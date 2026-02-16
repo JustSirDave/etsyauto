@@ -41,7 +41,7 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'Reconnect Shop', href: '/shops', variant: 'primary' },
+      { label: 'Reconnect Shop', href: '/settings?tab=shops', variant: 'primary' },
       { label: 'Learn More', href: '/docs/authentication', variant: 'secondary' }
     ],
     documentation: '/docs/authentication#token-expiry'
@@ -311,8 +311,8 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
       window.location.href = `/products/${context.productId}/edit`;
     } else if (action.label === 'Update Product' && context?.productId) {
       window.location.href = `/products/${context.productId}`;
-    } else if (action.label === 'Reconnect Shop' && context?.shopId) {
-      window.location.href = `/shops/${context.shopId}/reconnect`;
+    } else if (action.label === 'Reconnect Shop') {
+      window.location.href = '/settings?tab=shops';
     }
   };
 

@@ -71,7 +71,7 @@ function ConnectLinkHandler() {
             <h1 className="text-xl font-semibold text-[var(--text-primary)] mb-2">Connection Failed</h1>
             <p className="text-red-400 text-sm mb-4">{errorMsg}</p>
             <button
-              onClick={() => router.push('/settings')}
+              onClick={() => router.push('/settings?tab=shops')}
               className="px-4 py-2 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 text-sm"
             >
               Go to Settings

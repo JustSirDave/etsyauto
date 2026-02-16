@@ -114,6 +114,45 @@ async def get_fulfillment_analytics(
     )
 
 
+@router.get("/comparison", tags=["Analytics"])
+async def get_comparison_analytics(
+    shop_ids: str = Query(..., description="Comma-separated shop IDs to compare"),
+    force_refresh: bool = Query(False, description="Force cache refresh"),
+    context: UserContext = Depends(require_analytics_access()),
+    db: Session = Depends(get_db)
+):
+    """
+    Get per-shop analytics breakdown for comparison.
+    Returns individual analytics for each shop so they can be displayed side-by-side.
+    """
+    parsed = _parse_analytics_shop_ids(shop_ids, None, context, db)
+    if not parsed or len(parsed) < 1:
+        raise HTTPException(status_code=400, detail="At least one shop_id is required")
+
+    analytics = AnalyticsService(db)
+    per_shop = {}
+    for sid in parsed:
+        overview = analytics.get_overview_analytics(
+            tenant_id=context.tenant_id,
+            shop_id=sid,
+            force_refresh=force_refresh,
+        )
+        orders = analytics.get_order_analytics(
+            tenant_id=context.tenant_id,
+            shop_id=sid,
+            force_refresh=force_refresh,
+        )
+        per_shop[str(sid)] = {
+            "overview": overview,
+            "orders": orders,
+        }
+
+    return {
+        "shops": per_shop,
+        "shop_ids": parsed,
+    }
+
+
 @router.post("/invalidate", tags=["Analytics"])
 async def invalidate_analytics_cache(
     shop_id: Optional[int] = None,

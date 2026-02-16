@@ -509,3 +509,42 @@ async def disconnect_shop(
     db.commit()
     
     return {"message": "Shop disconnected successfully"}
+
+
+@router.delete("/{shop_id}/permanent", tags=["Shops"])
+async def delete_shop_permanently(
+    shop_id: int,
+    context: UserContext = Depends(require_permission(Permission.DISCONNECT_SHOP)),
+    db: Session = Depends(get_db)
+):
+    """
+    Permanently delete an Etsy shop and ALL associated data.
+    Requires: DISCONNECT_SHOP permission (Owner, Admin only)
+    This action is irreversible.
+    """
+    if context.role.lower() not in ('owner', 'admin'):
+        raise HTTPException(status_code=403, detail="Only owners and admins can permanently delete shops")
+
+    ensure_shop_access(shop_id, context, db)
+
+    shop = db.query(Shop).filter(
+        Shop.id == shop_id,
+        Shop.tenant_id == context.tenant_id
+    ).first()
+
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+
+    # Revoke tokens first (if any remain)
+    try:
+        token_manager = TokenManager(db, redis_client)
+        await token_manager.revoke_token(context.tenant_id, shop_id, provider='etsy')
+    except Exception:
+        pass  # Token may already be revoked
+
+    # Delete the shop record — CASCADE constraints handle related rows
+    shop_name = shop.display_name or shop.etsy_shop_id
+    db.delete(shop)
+    db.commit()
+
+    return {"message": f"Shop '{shop_name}' and all associated data have been permanently deleted"}

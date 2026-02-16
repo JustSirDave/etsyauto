@@ -21,6 +21,7 @@ router = APIRouter()
 @router.get("/stats", tags=["Dashboard"])
 async def get_dashboard_stats(
     shop_id: int | None = None,
+    shop_ids: str | None = None,
     context: UserContext = Depends(get_user_context),  # Dashboard accessible to all authenticated users
     db: Session = Depends(get_db)
 ):
@@ -35,15 +36,24 @@ async def get_dashboard_stats(
     - active_listings: Number of active/completed listing jobs
     - recent_activity: Recent changes summary
     """
+    # Parse shop_ids for multi-shop support
+    parsed_shop_ids = []
+    if shop_ids:
+        parsed_shop_ids = [int(x) for x in shop_ids.split(',') if x.strip().isdigit()]
+        for sid in parsed_shop_ids:
+            ensure_shop_access(sid, context, db)
+    elif shop_id:
+        ensure_shop_access(shop_id, context, db)
+        parsed_shop_ids = [shop_id]
+
     # Count total products (filtered by tenant)
     products_query = filter_by_tenant(
         db.query(Product),
         context.tenant_id,
         Product.tenant_id
     )
-    if shop_id:
-        ensure_shop_access(shop_id, context, db)
-        products_query = products_query.filter(Product.shop_id == shop_id)
+    if parsed_shop_ids:
+        products_query = products_query.filter(Product.shop_id.in_(parsed_shop_ids))
     total_products = products_query.count()
 
     # Count active/completed listings (filtered by tenant)
@@ -54,8 +64,8 @@ async def get_dashboard_stats(
     ).filter(
         ListingJob.status.in_(['completed', 'processing', 'pending']) if hasattr(ListingJob, 'status') else ListingJob.state.in_(['done', 'processing', 'queued'])
     )
-    if shop_id:
-        listings_query = listings_query.filter(ListingJob.shop_id == shop_id)
+    if parsed_shop_ids:
+        listings_query = listings_query.filter(ListingJob.shop_id.in_(parsed_shop_ids))
     active_listings = listings_query.count()
 
     # Count total orders (filtered by tenant)
@@ -64,8 +74,8 @@ async def get_dashboard_stats(
         context.tenant_id,
         Order.tenant_id
     )
-    if shop_id:
-        orders_query = orders_query.filter(Order.shop_id == shop_id)
+    if parsed_shop_ids:
+        orders_query = orders_query.filter(Order.shop_id.in_(parsed_shop_ids))
     if context.role.lower() == "supplier":
         orders_query = orders_query.filter(Order.supplier_user_id == context.user_id)
     total_orders = orders_query.count()
@@ -77,8 +87,8 @@ async def get_dashboard_stats(
         Order.tenant_id == context.tenant_id,
         Order.buyer_email.isnot(None)
     )
-    if shop_id:
-        customers_query = customers_query.filter(Order.shop_id == shop_id)
+    if parsed_shop_ids:
+        customers_query = customers_query.filter(Order.shop_id.in_(parsed_shop_ids))
     if context.role.lower() == "supplier":
         customers_query = customers_query.filter(Order.supplier_user_id == context.user_id)
     total_customers = customers_query.scalar() or 0
@@ -127,12 +137,14 @@ async def get_dashboard_stats(
 async def get_recent_orders(
     limit: int = 5,
     shop_id: int | None = None,
+    shop_ids: str | None = None,
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
     """
     Get recent orders for dashboard
     Requires: READ_ORDER permission (all roles)
+    Supports: shop_id (single) or shop_ids (comma-separated) for multi-shop filtering
 
     Args:
         limit: Number of orders to return (default 5)
@@ -146,7 +158,13 @@ async def get_recent_orders(
         context.tenant_id,
         Order.tenant_id
     )
-    if shop_id:
+    if shop_ids:
+        parsed_ids = [int(x) for x in shop_ids.split(',') if x.strip().isdigit()]
+        for sid in parsed_ids:
+            ensure_shop_access(sid, context, db)
+        if parsed_ids:
+            orders_query = orders_query.filter(Order.shop_id.in_(parsed_ids))
+    elif shop_id:
         ensure_shop_access(shop_id, context, db)
         orders_query = orders_query.filter(Order.shop_id == shop_id)
     if context.role.lower() == "supplier":
@@ -182,6 +200,7 @@ async def get_recent_orders(
             "item_title": item_title,  # First item in the order
             "date": order_date.strftime("%Y-%m-%d") if order_date else "N/A",
             "amount": "--" if is_supplier else f"${float(order.total_price or 0) / 100:.2f}",
+            "total_price": None if is_supplier else float(order.total_price or 0) / 100,
             "status": derive_lifecycle_status(order),
             "payment_status": order.payment_status or derive_payment_status(order)
         })

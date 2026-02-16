@@ -311,12 +311,14 @@ async def list_products(
     limit: int = 50,
     batch_id: Optional[str] = None,
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = None,
     context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     List all products for current tenant
     Requires: READ_PRODUCT permission (all roles)
+    Supports: shop_id (single) or shop_ids (comma-separated) for multi-shop filtering
     """
     # Automatically filter by tenant
     query = filter_by_tenant(
@@ -328,7 +330,13 @@ async def list_products(
     if batch_id:
         query = query.filter(Product.ingest_batch_id == batch_id)
 
-    if shop_id:
+    if shop_ids:
+        ids = [int(x) for x in shop_ids.split(',') if x.strip().isdigit()]
+        for sid in ids:
+            ensure_shop_access(sid, context, db)
+        if ids:
+            query = query.filter(Product.shop_id.in_(ids))
+    elif shop_id:
         ensure_shop_access(shop_id, context, db)
         query = query.filter(Product.shop_id == shop_id)
     

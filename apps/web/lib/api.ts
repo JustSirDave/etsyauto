@@ -280,6 +280,12 @@ export const shopsApi = {
     });
   },
 
+  deletePermanently: async (shopId: number): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/shops/${shopId}/permanent`, {
+      method: 'DELETE',
+    });
+  },
+
   updateDisplayName: async (shopId: number, displayName: string): Promise<Shop> => {
     return apiRequest<Shop>(`/api/shops/${shopId}`, {
       method: 'PATCH',
@@ -326,9 +332,7 @@ export const productsApi = {
     if (batchId) {
       params.append('batch_id', batchId);
     }
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
+    _appendShopParams(params, options);
 
     return apiRequest<{
       products: Product[];
@@ -389,8 +393,8 @@ export const productsApi = {
     });
   },
 
-  syncFromEtsy: async (shopId: number): Promise<{ message: string; shop_id: number }> => {
-    return apiRequest<{ message: string; shop_id: number }>(`/api/products/sync/etsy?shop_id=${shopId}`, {
+  syncFromEtsy: async (shopId: number): Promise<{ message: string; shop_id: number; task_id?: string }> => {
+    return apiRequest<{ message: string; shop_id: number; task_id?: string }>(`/api/products/sync/etsy?shop_id=${shopId}`, {
       method: 'POST',
     });
   },
@@ -507,14 +511,21 @@ export interface OrderSyncOptions {
 
 export interface ShopQueryOptions {
   shopId?: number | null;
+  shopIds?: number[];
+}
+
+function _appendShopParams(params: URLSearchParams, options: ShopQueryOptions) {
+  if (options.shopIds && options.shopIds.length > 0) {
+    params.append('shop_ids', options.shopIds.join(','));
+  } else if (options.shopId) {
+    params.append('shop_id', String(options.shopId));
+  }
 }
 
 export const ordersApi = {
-  getStats: async (options: OrderQueryOptions = {}): Promise<OrderStats> => {
+  getStats: async (options: ShopQueryOptions = {}): Promise<OrderStats> => {
     const params = new URLSearchParams();
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
+    _appendShopParams(params, options);
     const url = params.toString() ? `/api/orders/stats?${params.toString()}` : '/api/orders/stats';
     return apiRequest<OrderStats>(url);
   },
@@ -524,7 +535,7 @@ export const ordersApi = {
     limit: number = 20,
     status?: string,
     paymentStatus?: string,
-    options: OrderQueryOptions = {}
+    options: ShopQueryOptions = {}
   ) => {
     const params = new URLSearchParams({
       skip: String((page - 1) * limit),
@@ -537,9 +548,7 @@ export const ordersApi = {
     if (paymentStatus) {
       params.append('payment_status', paymentStatus);
     }
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
+    _appendShopParams(params, options);
 
     return apiRequest<{
       orders: Order[];
@@ -591,14 +600,12 @@ export const ordersApi = {
     });
   },
 
-  sync: async (options: OrderSyncOptions & OrderQueryOptions = {}) => {
+  sync: async (options: OrderSyncOptions & ShopQueryOptions = {}) => {
     const params = new URLSearchParams();
     if (options.forceFullSync) {
       params.append('force_full_sync', 'true');
     }
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
+    _appendShopParams(params, options);
 
     const url = params.toString() ? `/api/orders/sync?${params.toString()}` : '/api/orders/sync';
     return apiRequest<any>(url, {
@@ -609,6 +616,40 @@ export const ordersApi = {
     return apiRequest<{ message: string }>('/api/orders/mark-viewed', {
       method: 'POST',
     });
+  },
+};
+
+/**
+ * Tasks API - Celery task status polling
+ */
+export interface TaskStatus {
+  task_id: string;
+  state: string;
+  ready: boolean;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  result?: Record<string, any>;
+  progress?: Record<string, any>;
+  error?: string;
+}
+
+export const tasksApi = {
+  getStatus: async (taskId: string): Promise<TaskStatus> => {
+    return apiRequest<TaskStatus>(`/api/tasks/${taskId}/status`);
+  },
+
+  pollUntilComplete: async (
+    taskId: string,
+    onProgress?: (status: TaskStatus) => void,
+    intervalMs: number = 2000,
+    maxAttempts: number = 60
+  ): Promise<TaskStatus> => {
+    for (let i = 0; i < maxAttempts; i++) {
+      const status = await tasksApi.getStatus(taskId);
+      if (onProgress) onProgress(status);
+      if (status.ready) return status;
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    return { task_id: taskId, state: 'TIMEOUT', ready: true, status: 'failed', error: 'Task polling timed out' };
   },
 };
 
@@ -916,18 +957,14 @@ export interface DashboardOrder {
 export const dashboardApi = {
   getStats: async (options: ShopQueryOptions = {}): Promise<DashboardStats> => {
     const params = new URLSearchParams();
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
+    _appendShopParams(params, options);
     const query = params.toString() ? `?${params.toString()}` : '';
     return apiRequest<DashboardStats>(`/api/dashboard/stats${query}`);
   },
 
   getRecentOrders: async (limit: number = 5, options: ShopQueryOptions = {}): Promise<{ orders: DashboardOrder[]; total: number }> => {
     const params = new URLSearchParams({ limit: String(limit) });
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
+    _appendShopParams(params, options);
     return apiRequest<{ orders: DashboardOrder[]; total: number }>(`/api/dashboard/recent-orders?${params.toString()}`);
   },
 };
@@ -1188,6 +1225,16 @@ export const analyticsApi = {
       method: 'POST',
     });
   },
+
+  getComparison: async (shopIds: number[], forceRefresh?: boolean): Promise<{
+    shops: Record<string, { overview: OverviewAnalytics; orders: OrderAnalytics }>;
+    shop_ids: number[];
+  }> => {
+    const params = new URLSearchParams();
+    params.append('shop_ids', shopIds.join(','));
+    if (forceRefresh) params.append('force_refresh', 'true');
+    return apiRequest(`/api/analytics/comparison?${params.toString()}`);
+  },
 };
 
 /* ================================================================== */
@@ -1398,6 +1445,17 @@ export const financialsApi = {
     const params = new URLSearchParams();
     if (shopId) params.append('shop_id', String(shopId));
     return apiRequest(`/api/financials/sync?${params.toString()}`, { method: 'POST' });
+  },
+
+  getComparison: async (shopIds: number[], startDate?: string, endDate?: string): Promise<{
+    shops: Record<string, FinancialSummary>;
+    shop_ids: number[];
+  }> => {
+    const params = new URLSearchParams();
+    params.append('shop_ids', shopIds.join(','));
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    return apiRequest(`/api/financials/comparison?${params.toString()}`);
   },
 };
 
