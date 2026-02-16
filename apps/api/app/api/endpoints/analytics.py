@@ -1,9 +1,10 @@
 """
 Analytics API Endpoints
-Owner/Admin-only analytics with cached aggregations
+Owner/Admin-only analytics with cached aggregations.
+Supports multi-store filtering via shop_ids parameter.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
@@ -17,122 +18,99 @@ from app.services.analytics_service import AnalyticsService
 router = APIRouter()
 
 
+def _parse_analytics_shop_ids(
+    shop_ids_str: Optional[str],
+    shop_id: Optional[int],
+    context: "UserContext",
+    db: "Session",
+) -> Optional[list]:
+    """Parse comma-separated shop_ids, verify access for each, return list or None."""
+    if not shop_ids_str:
+        if shop_id:
+            ensure_shop_access(shop_id, context, db)
+        return None
+    try:
+        ids = [int(s.strip()) for s in shop_ids_str.split(",") if s.strip()]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="shop_ids must be comma-separated integers")
+    for sid in ids:
+        ensure_shop_access(sid, context, db)
+    return ids
+
+
 @router.get("/overview", tags=["Analytics"])
 async def get_overview_analytics(
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """
-    Get overview analytics: total orders, revenue, trends
-    Requires: VIEW_ANALYTICS permission (Owner, Admin, Viewer only)
-    Cached for 5 minutes unless force_refresh=True
-    
-    Args:
-        shop_id: Optional shop filter
-        force_refresh: Force cache refresh if True
-        
-    Returns:
-        Overview analytics with 7-day and 30-day trends
-    """
-    if shop_id:
-        ensure_shop_access(shop_id, context, db)
+    """Get overview analytics with multi-store support."""
+    parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_overview_analytics(
         tenant_id=context.tenant_id,
-        shop_id=shop_id,
-        force_refresh=force_refresh
+        shop_id=shop_id if not parsed else None,
+        force_refresh=force_refresh,
+        shop_ids=parsed,
     )
 
 
 @router.get("/orders", tags=["Analytics"])
 async def get_order_analytics(
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """
-    Get order analytics: status breakdown, payment breakdown
-    Requires: VIEW_ANALYTICS permission (Owner, Admin, Viewer only)
-    Cached for 5 minutes unless force_refresh=True
-    
-    Args:
-        shop_id: Optional shop filter
-        force_refresh: Force cache refresh if True
-        
-    Returns:
-        Order analytics with status and payment breakdowns
-    """
-    if shop_id:
-        ensure_shop_access(shop_id, context, db)
+    """Get order analytics with multi-store support."""
+    parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_order_analytics(
         tenant_id=context.tenant_id,
-        shop_id=shop_id,
-        force_refresh=force_refresh
+        shop_id=shop_id if not parsed else None,
+        force_refresh=force_refresh,
+        shop_ids=parsed,
     )
 
 
 @router.get("/products", tags=["Analytics"])
 async def get_product_analytics(
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """
-    Get product analytics: listing performance, publish stats
-    Requires: VIEW_ANALYTICS permission (Owner, Admin, Viewer only)
-    Cached for 5 minutes unless force_refresh=True
-    
-    Args:
-        shop_id: Optional shop filter
-        force_refresh: Force cache refresh if True
-        
-    Returns:
-        Product and listing job analytics
-    """
-    if shop_id:
-        ensure_shop_access(shop_id, context, db)
+    """Get product analytics with multi-store support."""
+    parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_product_analytics(
         tenant_id=context.tenant_id,
-        shop_id=shop_id,
-        force_refresh=force_refresh
+        shop_id=shop_id if not parsed else None,
+        force_refresh=force_refresh,
+        shop_ids=parsed,
     )
 
 
 @router.get("/fulfillment", tags=["Analytics"])
 async def get_fulfillment_analytics(
     shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """
-    Get fulfillment analytics: shipment timing, delivery rates
-    Requires: VIEW_ANALYTICS permission (Owner, Admin, Viewer only)
-    Cached for 5 minutes unless force_refresh=True
-    
-    Note: Supplier performance data is included but should only be
-    displayed to owners in the frontend
-    
-    Args:
-        shop_id: Optional shop filter
-        force_refresh: Force cache refresh if True
-        
-    Returns:
-        Fulfillment analytics with shipment states and timing
-    """
-    if shop_id:
-        ensure_shop_access(shop_id, context, db)
+    """Get fulfillment analytics with multi-store support."""
+    parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
     analytics = AnalyticsService(db)
     return analytics.get_fulfillment_analytics(
         tenant_id=context.tenant_id,
-        shop_id=shop_id,
-        force_refresh=force_refresh
+        shop_id=shop_id if not parsed else None,
+        force_refresh=force_refresh,
+        shop_ids=parsed,
     )
 
 
@@ -142,16 +120,7 @@ async def invalidate_analytics_cache(
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """
-    Force invalidate analytics cache for tenant
-    Requires: VIEW_ANALYTICS permission (Owner, Admin, Viewer only)
-    
-    Args:
-        shop_id: Optional shop filter
-        
-    Returns:
-        Success message
-    """
+    """Force invalidate analytics cache for tenant."""
     if shop_id:
         ensure_shop_access(shop_id, context, db)
     analytics = AnalyticsService(db)

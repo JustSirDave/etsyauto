@@ -13,7 +13,7 @@ import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
-  Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, XCircle,
+  Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, CheckCircle2, XCircle,
   AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -75,9 +75,21 @@ function SettingsContent() {
     finally { setIsLoading(false); }
   };
 
+  const [linkCopied, setLinkCopied] = useState(false);
+
   const handleConnectEtsy = async () => {
-    try { setConnectingEtsy(true); setError(null); const { authorization_url } = await shopsApi.getEtsyConnectUrl(shopNameInput || undefined); window.location.href = authorization_url; }
-    catch (err) { setError((err as ApiError).detail || 'Failed'); setConnectingEtsy(false); }
+    try {
+      setConnectingEtsy(true);
+      setError(null);
+      const { connect_url } = await shopsApi.createConnectLink(shopNameInput || undefined);
+      await navigator.clipboard.writeText(connect_url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 4000);
+    } catch (err) {
+      setError((err as ApiError).detail || 'Failed to generate connection link');
+    } finally {
+      setConnectingEtsy(false);
+    }
   };
 
   const handleStartRename = (shopId: number, currentName: string) => {
@@ -524,7 +536,7 @@ function SettingsContent() {
                         className="flex-1 px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
                       />
                       <button onClick={handleConnectEtsy} disabled={connectingEtsy} className="flex items-center gap-2 px-5 py-2.5 bg-[var(--warning)] text-white rounded-lg hover:opacity-90 disabled:opacity-50">
-                        {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Connecting...</> : <><LinkIcon className="w-4 h-4" />Connect Etsy</>}
+                        {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />Generating...</> : linkCopied ? <><CheckCircle2 className="w-4 h-4" />Link Copied!</> : <><LinkIcon className="w-4 h-4" />Copy Connection Link</>}
                       </button>
                     </div>
                   </>

@@ -22,6 +22,7 @@ celery_app = Celery(
         "app.worker.tasks.scheduled_publishing",
         "app.worker.tasks.audit_cleanup",
         "app.worker.tasks.product_sync_tasks",
+        "app.worker.tasks.financial_tasks",
     ]
 )
 
@@ -89,5 +90,13 @@ celery_app.conf.beat_schedule = {
     "reconcile-orders-hourly": {
         "task": "app.worker.tasks.order_tasks.reconcile_orders",
         "schedule": 3600.0,  # Every hour
+    },
+    "sync-ledger-entries-every-6-hours": {
+        "task": "app.worker.tasks.financial_tasks.sync_ledger_entries",
+        "schedule": 21600.0,  # Every 6 hours
+    },
+    "sync-payment-details-every-3-hours": {
+        "task": "app.worker.tasks.financial_tasks.sync_payment_details",
+        "schedule": 10800.0,  # Every 3 hours
     },
 }

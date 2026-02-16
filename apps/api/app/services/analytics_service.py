@@ -25,10 +25,21 @@ class AnalyticsService:
         self.db = db
         self.redis = get_redis_client()
     
-    def _cache_key(self, tenant_id: int, shop_id: Optional[int], metric: str) -> str:
+    def _cache_key(self, tenant_id: int, shop_id: Optional[int], metric: str, shop_ids: Optional[List[int]] = None) -> str:
         """Generate Redis cache key for a metric"""
+        if shop_ids:
+            ids_str = ",".join(str(s) for s in sorted(shop_ids))
+            return f"analytics:tenant_{tenant_id}:shops_{ids_str}:{metric}"
         shop_suffix = f":shop_{shop_id}" if shop_id else ""
         return f"analytics:tenant_{tenant_id}{shop_suffix}:{metric}"
+
+    @staticmethod
+    def _apply_shop_filter(filters: list, model_col, shop_id: Optional[int], shop_ids: Optional[List[int]] = None):
+        """Append a shop filter — single id, multi ids, or none (tenant-wide)."""
+        if shop_ids:
+            filters.append(model_col.in_(shop_ids))
+        elif shop_id:
+            filters.append(model_col == shop_id)
     
     def _get_cached(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """Get cached analytics data"""
@@ -67,13 +78,14 @@ class AnalyticsService:
         self,
         tenant_id: int,
         shop_id: Optional[int] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        shop_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         Get overview analytics: sales, orders, revenue trends
         Cached for 5 minutes unless force_refresh=True
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "overview")
+        cache_key = self._cache_key(tenant_id, shop_id, "overview", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -89,7 +101,9 @@ class AnalyticsService:
         
         # Base query
         base_query = self.db.query(Order).filter(Order.tenant_id == tenant_id)
-        if shop_id:
+        if shop_ids:
+            base_query = base_query.filter(Order.shop_id.in_(shop_ids))
+        elif shop_id:
             base_query = base_query.filter(Order.shop_id == shop_id)
         
         # Total orders
@@ -110,15 +124,15 @@ class AnalyticsService:
         ).count()
         
         # Revenue (in cents, convert to dollars)
+        rev_filters = [Order.tenant_id == tenant_id]
+        self._apply_shop_filter(rev_filters, Order.shop_id, shop_id, shop_ids)
         total_revenue_cents = self.db.query(func.sum(Order.total_price)).filter(
-            Order.tenant_id == tenant_id,
-            Order.shop_id == shop_id if shop_id else True,
+            *rev_filters
         ).scalar() or 0
         total_revenue = float(total_revenue_cents) / 100
         
         revenue_7d_cents = self.db.query(func.sum(Order.total_price)).filter(
-            Order.tenant_id == tenant_id,
-            Order.shop_id == shop_id if shop_id else True,
+            *rev_filters,
             Order.created_at >= last_7_days
         ).scalar() or 0
         revenue_7d = float(revenue_7d_cents) / 100
@@ -177,12 +191,13 @@ class AnalyticsService:
         self,
         tenant_id: int,
         shop_id: Optional[int] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        shop_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         Get order analytics: status breakdown, volume trends
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "orders")
+        cache_key = self._cache_key(tenant_id, shop_id, "orders", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -191,7 +206,9 @@ class AnalyticsService:
         
         # Base query
         base_query = self.db.query(Order).filter(Order.tenant_id == tenant_id)
-        if shop_id:
+        if shop_ids:
+            base_query = base_query.filter(Order.shop_id.in_(shop_ids))
+        elif shop_id:
             base_query = base_query.filter(Order.shop_id == shop_id)
         
         # Order status breakdown
@@ -280,12 +297,13 @@ class AnalyticsService:
         self,
         tenant_id: int,
         shop_id: Optional[int] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        shop_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         Get product analytics: listing performance, publish stats
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "products")
+        cache_key = self._cache_key(tenant_id, shop_id, "products", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -294,7 +312,9 @@ class AnalyticsService:
         
         # Product counts
         product_query = self.db.query(Product).filter(Product.tenant_id == tenant_id)
-        if shop_id:
+        if shop_ids:
+            product_query = product_query.filter(Product.shop_id.in_(shop_ids))
+        elif shop_id:
             product_query = product_query.filter(Product.shop_id == shop_id)
         
         total_products = product_query.count()
@@ -303,7 +323,9 @@ class AnalyticsService:
         
         # Listing job stats
         job_query = self.db.query(ListingJob).filter(ListingJob.tenant_id == tenant_id)
-        if shop_id:
+        if shop_ids:
+            job_query = job_query.filter(ListingJob.shop_id.in_(shop_ids))
+        elif shop_id:
             job_query = job_query.filter(ListingJob.shop_id == shop_id)
         
         total_jobs = job_query.count()
@@ -331,12 +353,13 @@ class AnalyticsService:
         self,
         tenant_id: int,
         shop_id: Optional[int] = None,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        shop_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
         Get fulfillment analytics: shipment timing, delivery rates, supplier performance
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "fulfillment")
+        cache_key = self._cache_key(tenant_id, shop_id, "fulfillment", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -345,7 +368,9 @@ class AnalyticsService:
         
         # Shipment events
         event_query = self.db.query(ShipmentEvent).filter(ShipmentEvent.tenant_id == tenant_id)
-        if shop_id:
+        if shop_ids:
+            event_query = event_query.filter(ShipmentEvent.shop_id.in_(shop_ids))
+        elif shop_id:
             event_query = event_query.filter(ShipmentEvent.shop_id == shop_id)
         
         # State counts

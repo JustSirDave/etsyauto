@@ -21,12 +21,15 @@ import {
   BookOpen,
   Globe,
   Bell,
+  Store,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 
 export function TopBar() {
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
-  const { shops, selectedShopId, setSelectedShopId, isLoading: shopsLoading } = useShop();
+  const { shops, selectedShopIds, toggleShopId, selectAllShops, clearAllShops, isLoading: shopsLoading } = useShop();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -97,7 +100,7 @@ export function TopBar() {
 
         {/* Right Side */}
         <div className="flex items-center gap-2">
-          {/* Shop Selector */}
+          {/* Multi-Store Selector */}
           <div className="relative">
             <button
               onClick={() => setShowShopMenu(!showShopMenu)}
@@ -105,40 +108,68 @@ export function TopBar() {
               title={t('topbar.selectShop')}
               disabled={shopsLoading}
             >
+              <Store className="w-4 h-4 flex-shrink-0" />
               <span className="text-sm font-medium flex-1 text-left truncate">
-                {shopsLoading ? 'Loading...' : shops.length === 0 ? 'No shop connected' : shops.find(s => s.id === selectedShopId)?.display_name || `Shop ${selectedShopId}`}
+                {shopsLoading
+                  ? 'Loading...'
+                  : shops.length === 0
+                    ? 'No shop connected'
+                    : selectedShopIds.length === shops.length
+                      ? 'All shops'
+                      : selectedShopIds.length === 1
+                        ? (shops.find((s) => s.id === selectedShopIds[0])?.display_name || `Shop ${selectedShopIds[0]}`)
+                        : `${selectedShopIds.length} shops`}
               </span>
               <ChevronDown className={`w-4 h-4 transition-transform ${showShopMenu ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Shop Dropdown */}
             {showShopMenu && shops.length > 0 && (
               <>
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setShowShopMenu(false)}
                 />
-                <div className="absolute right-0 mt-2 w-56 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
-                  <div className="py-2">
-                    {shops.map((shop) => (
-                      <button
-                        key={shop.id}
-                        onClick={() => {
-                          setSelectedShopId(shop.id);
-                          setShowShopMenu(false);
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                          selectedShopId === shop.id
-                            ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
-                        }`}
-                      >
-                        <span className="font-medium truncate">{shop.display_name || `Shop ${shop.id}`}</span>
-                        {selectedShopId === shop.id && (
-                          <span className="ml-auto text-[var(--primary)]">✓</span>
-                        )}
-                      </button>
-                    ))}
+                <div className="absolute right-0 mt-2 w-64 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
+                  {/* Quick actions */}
+                  <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border-color)]">
+                    <button
+                      onClick={selectAllShops}
+                      className="text-xs px-2 py-1 rounded bg-[var(--background)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      onClick={clearAllShops}
+                      className="text-xs px-2 py-1 rounded bg-[var(--background)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <span className="ml-auto text-xs text-[var(--text-muted)]">
+                      {selectedShopIds.length}/{shops.length}
+                    </span>
+                  </div>
+                  <div className="py-1 max-h-60 overflow-y-auto">
+                    {shops.map((shop) => {
+                      const isSelected = selectedShopIds.includes(shop.id);
+                      return (
+                        <button
+                          key={shop.id}
+                          onClick={() => toggleShopId(shop.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                            isSelected
+                              ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
+                              : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 flex-shrink-0" />
+                          ) : (
+                            <Square className="w-4 h-4 flex-shrink-0" />
+                          )}
+                          <span className="font-medium truncate">{shop.display_name || `Shop ${shop.id}`}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </>

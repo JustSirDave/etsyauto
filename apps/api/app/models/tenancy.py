@@ -185,6 +185,20 @@ class Shop(Base):
     # orders = relationship("Order", back_populates="shop")
 
 
+class ConnectLink(Base):
+    """One-time expiring links for Etsy shop connection"""
+    __tablename__ = "connect_links"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    created_by_user_id = Column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    token = Column(String(128), unique=True, nullable=False, index=True)
+    shop_name = Column(Text, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
+
+
 class OAuthToken(Base):
     """Encrypted OAuth tokens for external services"""
     __tablename__ = "oauth_tokens"

@@ -141,9 +141,13 @@ async function apiRequest<T>(
       // Retry the original request with the fresh access_token cookie
       response = await doFetch();
     } else {
-      // Refresh also failed — redirect to login
+      // Refresh also failed — redirect to login (but not if already on a public page)
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/accept-invitation', '/'];
+        const isPublicPage = publicPaths.includes(window.location.pathname);
+        if (!isPublicPage) {
+          window.location.href = '/login';
+        }
       }
       const error: ApiError = { detail: 'Session expired', status: 401 };
       throw error;
@@ -254,6 +258,13 @@ export const shopsApi = {
   getEtsyConnectUrl: async (shopName?: string): Promise<{ authorization_url: string }> => {
     const params = shopName ? `?shop_name=${encodeURIComponent(shopName)}` : '';
     return apiRequest<{ authorization_url: string }>(`/api/shops/etsy/connect${params}`);
+  },
+
+  createConnectLink: async (shopName?: string): Promise<{ connect_url: string; expires_in_minutes: number }> => {
+    return apiRequest<{ connect_url: string; expires_in_minutes: number }>('/api/shops/connect-link', {
+      method: 'POST',
+      body: JSON.stringify({ shop_name: shopName || null }),
+    });
   },
 
   connectEtsy: async (code: string, state: string): Promise<Shop> => {
@@ -1142,70 +1153,335 @@ export interface FulfillmentAnalytics {
   computed_at: string;
 }
 
+function _analyticsParams(shopId?: number, forceRefresh?: boolean, shopIds?: number[]): URLSearchParams {
+  const params = new URLSearchParams();
+  if (shopIds && shopIds.length > 0) {
+    params.append('shop_ids', shopIds.join(','));
+  } else if (shopId) {
+    params.append('shop_id', String(shopId));
+  }
+  if (forceRefresh) params.append('force_refresh', 'true');
+  return params;
+}
+
 export const analyticsApi = {
-  /**
-   * Get overview analytics (owner/admin/viewer only)
-   * @param shopId Optional shop filter
-   * @param forceRefresh Force cache refresh
-   */
-  getOverview: async (shopId?: number, forceRefresh?: boolean): Promise<OverviewAnalytics> => {
-    const params = new URLSearchParams();
-    if (shopId) params.append('shop_id', String(shopId));
-    if (forceRefresh) params.append('force_refresh', 'true');
-    
-    return apiRequest<OverviewAnalytics>(`/api/analytics/overview?${params.toString()}`);
+  getOverview: async (shopId?: number, forceRefresh?: boolean, shopIds?: number[]): Promise<OverviewAnalytics> => {
+    return apiRequest<OverviewAnalytics>(`/api/analytics/overview?${_analyticsParams(shopId, forceRefresh, shopIds).toString()}`);
   },
 
-  /**
-   * Get order analytics (owner/admin/viewer only)
-   * @param shopId Optional shop filter
-   * @param forceRefresh Force cache refresh
-   */
-  getOrders: async (shopId?: number, forceRefresh?: boolean): Promise<OrderAnalytics> => {
-    const params = new URLSearchParams();
-    if (shopId) params.append('shop_id', String(shopId));
-    if (forceRefresh) params.append('force_refresh', 'true');
-    
-    return apiRequest<OrderAnalytics>(`/api/analytics/orders?${params.toString()}`);
+  getOrders: async (shopId?: number, forceRefresh?: boolean, shopIds?: number[]): Promise<OrderAnalytics> => {
+    return apiRequest<OrderAnalytics>(`/api/analytics/orders?${_analyticsParams(shopId, forceRefresh, shopIds).toString()}`);
   },
 
-  /**
-   * Get product analytics (owner/admin/viewer only)
-   * @param shopId Optional shop filter
-   * @param forceRefresh Force cache refresh
-   */
-  getProducts: async (shopId?: number, forceRefresh?: boolean): Promise<ProductAnalytics> => {
-    const params = new URLSearchParams();
-    if (shopId) params.append('shop_id', String(shopId));
-    if (forceRefresh) params.append('force_refresh', 'true');
-    
-    return apiRequest<ProductAnalytics>(`/api/analytics/products?${params.toString()}`);
+  getProducts: async (shopId?: number, forceRefresh?: boolean, shopIds?: number[]): Promise<ProductAnalytics> => {
+    return apiRequest<ProductAnalytics>(`/api/analytics/products?${_analyticsParams(shopId, forceRefresh, shopIds).toString()}`);
   },
 
-  /**
-   * Get fulfillment analytics (owner/admin/viewer only)
-   * Note: supplier_performance field should only be displayed to owners
-   * @param shopId Optional shop filter
-   * @param forceRefresh Force cache refresh
-   */
-  getFulfillment: async (shopId?: number, forceRefresh?: boolean): Promise<FulfillmentAnalytics> => {
-    const params = new URLSearchParams();
-    if (shopId) params.append('shop_id', String(shopId));
-    if (forceRefresh) params.append('force_refresh', 'true');
-    
-    return apiRequest<FulfillmentAnalytics>(`/api/analytics/fulfillment?${params.toString()}`);
+  getFulfillment: async (shopId?: number, forceRefresh?: boolean, shopIds?: number[]): Promise<FulfillmentAnalytics> => {
+    return apiRequest<FulfillmentAnalytics>(`/api/analytics/fulfillment?${_analyticsParams(shopId, forceRefresh, shopIds).toString()}`);
   },
 
-  /**
-   * Invalidate analytics cache (owner/admin/viewer only)
-   * @param shopId Optional shop filter
-   */
   invalidateCache: async (shopId?: number): Promise<{ message: string }> => {
     const params = new URLSearchParams();
     if (shopId) params.append('shop_id', String(shopId));
-    
     return apiRequest<{ message: string }>(`/api/analytics/invalidate?${params.toString()}`, {
       method: 'POST',
     });
+  },
+};
+
+/* ================================================================== */
+/*  Financial Analytics API                                            */
+/* ================================================================== */
+
+export interface ProfitAndLoss {
+  total_revenue: number;
+  total_fees: number;
+  total_refunds: number;
+  total_shipping_labels: number;
+  total_advertising: number;
+  total_tax: number;
+  net_profit: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+}
+
+export interface PayoutEstimate {
+  current_balance: number;
+  reserve_held: number;
+  available_for_payout: number;
+  currency: string;
+  recent_payouts: { amount: number; date: string | null }[];
+  as_of: string;
+}
+
+export interface FeeBreakdown {
+  total_fees: number;
+  categories: { category: string; amount: number; count: number }[];
+  currency: string;
+  period_start: string;
+  period_end: string;
+}
+
+export interface OrderProfitability {
+  orders: {
+    payment_id: number;
+    etsy_receipt_id: string;
+    buyer_name: string | null;
+    order_total: number | null;
+    amount_gross: number;
+    amount_fees: number;
+    amount_net: number;
+    adjusted_net: number | null;
+    final_net: number;
+    currency: string;
+    posted_at: string | null;
+  }[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TimelinePoint {
+  date: string;
+  revenue: number;
+  expenses: number;
+  net: number;
+}
+
+export interface RevenueTimeline {
+  timeline: TimelinePoint[];
+  granularity: string;
+  period_start: string;
+  period_end: string;
+}
+
+export interface LedgerEntryData {
+  id: number;
+  entry_type: string;
+  description: string;
+  amount: number;
+  balance: number;
+  currency: string;
+  etsy_receipt_id: string | null;
+  entry_created_at: string;
+}
+
+export interface LedgerResponse {
+  entries: LedgerEntryData[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
+export interface BillingScopeStatus {
+  has_billing_scope: boolean;
+  reconnect_url: string | null;
+}
+
+export interface FinancialSummary {
+  revenue: number;
+  etsy_fees: number;
+  advertising_expenses: number;
+  product_costs: number;
+  invoice_expenses: number;
+  shipping_labels: number;
+  refunds: number;
+  total_expenses: number;
+  net_profit: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+}
+
+function _financialParams(shopIds?: number[], shopId?: number): URLSearchParams {
+  const params = new URLSearchParams();
+  if (shopIds && shopIds.length > 0) {
+    params.append('shop_ids', shopIds.join(','));
+  } else if (shopId) {
+    params.append('shop_id', String(shopId));
+  }
+  return params;
+}
+
+export const financialsApi = {
+  getScopeStatus: async (shopId?: number): Promise<BillingScopeStatus> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    return apiRequest<BillingScopeStatus>(`/api/financials/scope-status?${params.toString()}`);
+  },
+
+  getSummary: async (
+    opts: { shopIds?: number[]; shopId?: number; startDate?: string; endDate?: string } = {},
+  ): Promise<FinancialSummary> => {
+    const params = _financialParams(opts.shopIds, opts.shopId);
+    if (opts.startDate) params.append('start_date', opts.startDate);
+    if (opts.endDate) params.append('end_date', opts.endDate);
+    return apiRequest<FinancialSummary>(`/api/financials/summary?${params.toString()}`);
+  },
+
+  getProfitAndLoss: async (
+    shopId?: number,
+    startDate?: string,
+    endDate?: string,
+    shopIds?: number[],
+  ): Promise<ProfitAndLoss> => {
+    const params = _financialParams(shopIds, shopId);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    return apiRequest<ProfitAndLoss>(`/api/financials/profit-and-loss?${params.toString()}`);
+  },
+
+  getPayoutEstimate: async (shopId?: number, shopIds?: number[]): Promise<PayoutEstimate> => {
+    const params = _financialParams(shopIds, shopId);
+    return apiRequest<PayoutEstimate>(`/api/financials/payout-estimate?${params.toString()}`);
+  },
+
+  getFeeBreakdown: async (
+    shopId?: number,
+    startDate?: string,
+    endDate?: string,
+    shopIds?: number[],
+  ): Promise<FeeBreakdown> => {
+    const params = _financialParams(shopIds, shopId);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    return apiRequest<FeeBreakdown>(`/api/financials/fee-breakdown?${params.toString()}`);
+  },
+
+  getOrderProfitability: async (
+    shopId?: number,
+    limit?: number,
+    offset?: number,
+    shopIds?: number[],
+  ): Promise<OrderProfitability> => {
+    const params = _financialParams(shopIds, shopId);
+    if (limit) params.append('limit', String(limit));
+    if (offset) params.append('offset', String(offset));
+    return apiRequest<OrderProfitability>(`/api/financials/order-profitability?${params.toString()}`);
+  },
+
+  getTimeline: async (
+    shopId?: number,
+    startDate?: string,
+    endDate?: string,
+    granularity?: string,
+    shopIds?: number[],
+  ): Promise<RevenueTimeline> => {
+    const params = _financialParams(shopIds, shopId);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (granularity) params.append('granularity', granularity);
+    return apiRequest<RevenueTimeline>(`/api/financials/timeline?${params.toString()}`);
+  },
+
+  getLedger: async (
+    shopId?: number,
+    entryType?: string,
+    startDate?: string,
+    endDate?: string,
+    limit?: number,
+    offset?: number,
+    shopIds?: number[],
+  ): Promise<LedgerResponse> => {
+    const params = _financialParams(shopIds, shopId);
+    if (entryType) params.append('entry_type', entryType);
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    if (limit) params.append('limit', String(limit));
+    if (offset) params.append('offset', String(offset));
+    return apiRequest<LedgerResponse>(`/api/financials/ledger?${params.toString()}`);
+  },
+
+  triggerSync: async (shopId?: number): Promise<{ status: string; shop_id: number | null }> => {
+    const params = new URLSearchParams();
+    if (shopId) params.append('shop_id', String(shopId));
+    return apiRequest(`/api/financials/sync?${params.toString()}`, { method: 'POST' });
+  },
+};
+
+
+/* ================================================================== */
+/*  Invoice API                                                        */
+/* ================================================================== */
+
+export interface InvoiceLineItem {
+  id: number;
+  description: string | null;
+  amount: number;
+  category: string | null;
+  quantity: number;
+}
+
+export interface Invoice {
+  id: number;
+  tenant_id: number;
+  shop_id: number | null;
+  uploaded_by_user_id: number;
+  file_name: string;
+  file_type: string;
+  file_size_bytes: number | null;
+  vendor_name: string | null;
+  invoice_date: string | null;
+  total_amount: number | null;
+  currency: string;
+  category: string | null;
+  notes: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  parsed_at: string | null;
+  created_at: string | null;
+  line_items: InvoiceLineItem[];
+}
+
+export interface InvoiceListResponse {
+  invoices: Invoice[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
+export const invoicesApi = {
+  upload: async (file: File, metadata: Record<string, string>): Promise<{ message: string; invoice: Invoice }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    for (const [key, value] of Object.entries(metadata)) {
+      if (value) formData.append(key, value);
+    }
+    return apiRequest<{ message: string; invoice: Invoice }>('/api/financials/invoices/upload', {
+      method: 'POST',
+      body: formData,
+      headers: {},
+    });
+  },
+
+  list: async (opts: {
+    shopId?: number;
+    shopIds?: number[];
+    status?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<InvoiceListResponse> => {
+    const params = new URLSearchParams();
+    if (opts.shopIds && opts.shopIds.length > 0) {
+      params.append('shop_ids', opts.shopIds.join(','));
+    } else if (opts.shopId) {
+      params.append('shop_id', String(opts.shopId));
+    }
+    if (opts.status) params.append('status', opts.status);
+    if (opts.limit) params.append('limit', String(opts.limit));
+    if (opts.offset) params.append('offset', String(opts.offset));
+    return apiRequest<InvoiceListResponse>(`/api/financials/invoices/?${params.toString()}`);
+  },
+
+  update: async (invoiceId: number, data: Partial<Invoice>): Promise<{ message: string; invoice: Invoice }> => {
+    return apiRequest<{ message: string; invoice: Invoice }>(`/api/financials/invoices/${invoiceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (invoiceId: number): Promise<{ message: string }> => {
+    return apiRequest<{ message: string }>(`/api/financials/invoices/${invoiceId}`, { method: 'DELETE' });
   },
 };

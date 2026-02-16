@@ -20,7 +20,7 @@ class EtsyOAuthService:
     AUTH_URL = "https://www.etsy.com/oauth/connect"
     TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token"
     
-    # Standard Etsy OAuth 2.0 scopes for listings
+    # Standard Etsy OAuth 2.0 scopes
     SCOPES = [
         "listings_r",      # Read listings
         "listings_w",      # Write/create listings
@@ -29,6 +29,7 @@ class EtsyOAuthService:
         "transactions_w",  # Update orders/fulfillment
         "shops_r",         # Read shop information
         "profile_r",       # Read user profile
+        "billing_r",       # Read billing/fees data for financial analytics
     ]
     
     def __init__(self):

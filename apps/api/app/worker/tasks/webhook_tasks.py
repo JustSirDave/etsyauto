@@ -169,6 +169,15 @@ def _handle_order_event(db, shop: Shop, payload: Dict[str, Any]) -> Dict[str, An
     from app.worker.tasks.order_tasks import sync_order_by_id
     sync_order_by_id.delay(shop.id, receipt_id)
     
+    # When an order is shipped/refunded, trigger payment detail sync
+    # so the financial dashboard picks up the fee breakdown quickly
+    if event_type in ("receipt.shipped", "receipt.refunded"):
+        from app.worker.tasks.financial_tasks import sync_payment_details
+        sync_payment_details.apply_async(
+            kwargs={"shop_id": shop.id, "tenant_id": shop.tenant_id},
+            countdown=60,  # Delay 60s to let Etsy finalize the payment record
+        )
+    
     return {
         "action": "order_sync_triggered",
         "receipt_id": receipt_id,

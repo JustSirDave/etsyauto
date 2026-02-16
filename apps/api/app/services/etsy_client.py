@@ -501,3 +501,116 @@ class EtsyClient:
             f"/application/shops/{etsy_shop_id}/receipts/{receipt_id}/tracking",
             json=payload,
         )
+
+    # ==================== Financial / Ledger Methods ====================
+
+    async def get_shop_ledger_entries(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+        limit: int = 100,
+        offset: int = 0,
+        min_created: Optional[int] = None,
+        max_created: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get shop payment account ledger entries (chronological debits/credits).
+
+        Each entry includes an amount (positive = credit, negative = debit)
+        and a running balance.  Required scope: ``billing_r``.
+
+        Args:
+            shop_id: Internal shop ID (for rate-limiter / circuit-breaker)
+            etsy_shop_id: Etsy shop ID
+            limit: Results per page (max 100)
+            offset: Pagination offset
+            min_created: Minimum created timestamp (Unix epoch)
+            max_created: Maximum created timestamp (Unix epoch)
+
+        Returns:
+            dict with ``results`` array and ``count``
+        """
+        params: Dict[str, Any] = {
+            "limit": min(limit, 100),
+            "offset": offset,
+        }
+        if min_created is not None:
+            params["min_created"] = min_created
+        if max_created is not None:
+            params["max_created"] = max_created
+
+        return await self._make_request(
+            shop_id,
+            "GET",
+            f"/application/shops/{etsy_shop_id}/payment-account/ledger-entries",
+            params=params,
+        )
+
+    async def get_shop_payments(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+        limit: int = 25,
+        offset: int = 0,
+        min_created: Optional[int] = None,
+        max_created: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get payment records for a shop.
+
+        Payment records are finalized after the order is shipped and contain
+        the full fee breakdown (gross, processing fees, net, adjustments).
+        Required scope: ``transactions_r``.
+
+        Args:
+            shop_id: Internal shop ID
+            etsy_shop_id: Etsy shop ID
+            limit: Results per page (max 25 per Etsy docs)
+            offset: Pagination offset
+            min_created: Minimum created timestamp (Unix epoch)
+            max_created: Maximum created timestamp (Unix epoch)
+
+        Returns:
+            dict with ``results`` array and ``count``
+        """
+        params: Dict[str, Any] = {
+            "limit": min(limit, 25),
+            "offset": offset,
+        }
+        if min_created is not None:
+            params["min_created"] = min_created
+        if max_created is not None:
+            params["max_created"] = max_created
+
+        return await self._make_request(
+            shop_id,
+            "GET",
+            f"/application/shops/{etsy_shop_id}/payments",
+            params=params,
+        )
+
+    async def get_payment_by_receipt(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+        receipt_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Get payment details for a specific receipt/order.
+
+        Returns the payment breakdown for a single order including
+        gross, fees, net, posted, and adjusted amounts.
+
+        Args:
+            shop_id: Internal shop ID
+            etsy_shop_id: Etsy shop ID
+            receipt_id: Etsy receipt ID
+
+        Returns:
+            dict with payment detail fields
+        """
+        return await self._make_request(
+            shop_id,
+            "GET",
+            f"/application/shops/{etsy_shop_id}/receipts/{receipt_id}/payments",
+        )

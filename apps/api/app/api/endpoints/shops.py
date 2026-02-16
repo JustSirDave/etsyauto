@@ -21,12 +21,13 @@ from app.api.dependencies import (
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access
-from app.models.tenancy import Shop, OAuthToken, Membership
+from app.models.tenancy import Shop, OAuthToken, Membership, ConnectLink
 from app.services.etsy_oauth import etsy_oauth, EtsyOAuthService
 from app.services.encryption import token_encryptor
 from app.services.token_manager import TokenManager
 from app.core.config import settings
 from app.core.security import check_rate_limit, rate_limit_key, SecurityHeaders
+import secrets
 
 # Redis client for PKCE state storage and token management
 redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -45,6 +46,112 @@ class OAuthCallbackRequest(BaseModel):
 
 class UpdateShopRequest(BaseModel):
     display_name: str
+
+
+class CreateConnectLinkRequest(BaseModel):
+    shop_name: str | None = None
+
+
+@router.post("/connect-link", tags=["Shops"])
+async def create_connect_link(
+    request: CreateConnectLinkRequest = CreateConnectLinkRequest(),
+    context: UserContext = Depends(require_permission(Permission.CONNECT_SHOP)),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate a one-time expiring connection link.
+    The link is valid for 30 minutes and can only be used once.
+    The user copies this link and opens it in their browser to start the OAuth flow.
+    """
+    rl_key = rate_limit_key(context.tenant_id, 0, "connect_link")
+    if not check_rate_limit(redis_client, rl_key, max_attempts=20, window_seconds=3600):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many link generation attempts. Please try again later.",
+        )
+
+    token = secrets.token_urlsafe(48)
+    link = ConnectLink(
+        tenant_id=context.tenant_id,
+        created_by_user_id=context.user_id,
+        token=token,
+        shop_name=request.shop_name.strip() if request.shop_name else None,
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+    )
+    db.add(link)
+    db.commit()
+
+    frontend_url = settings.FRONTEND_URL.rstrip("/")
+    connect_url = f"{frontend_url}/oauth/etsy/start?link_token={token}"
+
+    return {"connect_url": connect_url, "expires_in_minutes": 30}
+
+
+@router.get("/connect-link/{token}/validate", tags=["Shops"])
+async def validate_connect_link(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Validate a one-time connect link token (no auth required).
+    Returns the tenant context needed to start the OAuth flow.
+    """
+    link = db.query(ConnectLink).filter(ConnectLink.token == token).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Invalid or expired connection link.")
+    if link.used_at is not None:
+        raise HTTPException(status_code=410, detail="This connection link has already been used.")
+    if link.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="This connection link has expired.")
+    return {
+        "valid": True,
+        "shop_name": link.shop_name,
+        "tenant_id": link.tenant_id,
+        "expires_at": link.expires_at.isoformat(),
+    }
+
+
+@router.post("/connect-link/{token}/start", tags=["Shops"])
+async def start_oauth_from_connect_link(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Consume a one-time connect link and initiate the Etsy OAuth flow.
+    Marks the link as used and returns the authorization URL.
+    """
+    link = db.query(ConnectLink).filter(ConnectLink.token == token).first()
+    if not link:
+        raise HTTPException(status_code=404, detail="Invalid connection link.")
+    if link.used_at is not None:
+        raise HTTPException(status_code=410, detail="This connection link has already been used.")
+    if link.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="This connection link has expired.")
+
+    if not settings.ETSY_CLIENT_ID or not settings.ETSY_REDIRECT_URI:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Etsy OAuth is not configured.",
+        )
+
+    # Mark as used
+    link.used_at = datetime.now(timezone.utc)
+    db.commit()
+
+    auth_data = etsy_oauth.get_authorization_url()
+    redis_client.setex(
+        f"etsy_oauth_state:{auth_data['state']}",
+        600,
+        json.dumps({
+            "code_verifier": auth_data["code_verifier"],
+            "user_id": link.created_by_user_id,
+            "tenant_id": link.tenant_id,
+            "shop_name": link.shop_name,
+            "from_connect_link": True,
+        }),
+    )
+
+    return {"authorization_url": auth_data["auth_url"]}
 
 
 @router.get("/etsy/connect", response_model=ConnectShopResponse, tags=["Shops"])

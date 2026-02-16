@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle, XCircle } from 'lucide-react'
+import { CheckCircle, XCircle, Copy, CheckCircle2, Loader2 } from 'lucide-react'
+import { shopsApi } from '@/lib/api'
 
 interface ConnectionStatusProps {
   title: string
@@ -12,10 +14,21 @@ interface ConnectionStatusProps {
 export function ConnectionStatus({ title, status, shopName }: ConnectionStatusProps) {
   const router = useRouter()
   const isConnected = status === 'connected'
+  const [copying, setCopying] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  const handleConnect = () => {
-    // Navigate to settings page for connections
-    router.push('/settings')
+  const handleCopyLink = async () => {
+    try {
+      setCopying(true)
+      const { connect_url } = await shopsApi.createConnectLink()
+      await navigator.clipboard.writeText(connect_url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 4000)
+    } catch {
+      router.push('/settings')
+    } finally {
+      setCopying(false)
+    }
   }
 
   return (
@@ -42,10 +55,12 @@ export function ConnectionStatus({ title, status, shopName }: ConnectionStatusPr
 
         {!isConnected && (
           <button 
-            onClick={handleConnect}
-            className="px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors"
+            onClick={handleCopyLink}
+            disabled={copying}
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
           >
-            Connect
+            {copying ? <Loader2 className="w-3 h-3 animate-spin" /> : copied ? <CheckCircle2 className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied ? 'Copied!' : 'Copy Link'}
           </button>
         )}
       </div>

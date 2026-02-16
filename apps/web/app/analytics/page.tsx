@@ -722,7 +722,7 @@ function EmptyState({ message }: { message: string }) {
 
 function AnalyticsContent() {
   const { user } = useAuth();
-  const { selectedShop } = useShop();
+  const { selectedShop, selectedShopIds } = useShop();
   const { showToast } = useToast();
 
   const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
@@ -734,32 +734,33 @@ function AnalyticsContent() {
   const [detailView, setDetailView] = useState<DetailView>(null);
 
   const isOwner = user?.role?.toLowerCase() === 'owner';
+  const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
+  const shopId = !shopIds ? selectedShop?.id : undefined;
 
   const loadAnalytics = useCallback(async (forceRefresh = false) => {
     try {
       if (forceRefresh) setRefreshing(true);
       else setLoading(true);
 
-      const shopId = selectedShop?.id;
-
       const [overviewData, ordersData, productsData, fulfillmentData] = await Promise.all([
-        analyticsApi.getOverview(shopId, forceRefresh),
-        analyticsApi.getOrders(shopId, forceRefresh),
-        analyticsApi.getProducts(shopId, forceRefresh),
-        analyticsApi.getFulfillment(shopId, forceRefresh),
+        analyticsApi.getOverview(shopId, forceRefresh, shopIds),
+        analyticsApi.getOrders(shopId, forceRefresh, shopIds),
+        analyticsApi.getProducts(shopId, forceRefresh, shopIds),
+        analyticsApi.getFulfillment(shopId, forceRefresh, shopIds),
       ]);
 
       setOverview(overviewData);
       setOrders(ordersData);
       setProducts(productsData);
       setFulfillment(fulfillmentData);
-    } catch (err: any) {
-      showToast(err?.detail || 'Failed to load analytics', 'error');
+    } catch (err: unknown) {
+      const error = err as { detail?: string };
+      showToast(error?.detail || 'Failed to load analytics', 'error');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedShop, showToast]);
+  }, [shopId, shopIds, showToast]);
 
   useEffect(() => {
     loadAnalytics();
@@ -793,7 +794,7 @@ function AnalyticsContent() {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)]">Analytics</h1>
           <p className="text-[var(--text-muted)] mt-1">
-            Performance overview{selectedShop ? ` for ${selectedShop.display_name}` : ''}
+            Performance overview{shopIds && shopIds.length > 1 ? ` for ${shopIds.length} shops` : selectedShop ? ` for ${selectedShop.display_name}` : ''}
             <span className="ml-2 text-xs">— click any card for details</span>
           </p>
         </div>
@@ -1081,7 +1082,7 @@ function AnalyticsContent() {
           orders={orders}
           products={products}
           fulfillment={fulfillment}
-          shopId={selectedShop?.id}
+          shopId={shopId}
           isOwner={isOwner}
         />
       )}

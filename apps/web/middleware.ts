@@ -10,6 +10,7 @@ import type { NextRequest } from 'next/server';
 /** Routes that do NOT require authentication */
 const PUBLIC_PATHS = new Set([
   '/',
+  '/landing',
   '/login',
   '/register',
   '/forgot-password',

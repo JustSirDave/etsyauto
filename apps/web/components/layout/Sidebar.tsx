@@ -24,6 +24,7 @@ import {
   Users,
   TruckIcon,
   BarChart3,
+  Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/language-context';
@@ -51,6 +52,7 @@ const ownerNavigation: NavSection[] = [
     title: 'nav.analytics',
     items: [
       { name: 'nav.analytics', href: '/analytics', icon: BarChart3 },
+      { name: 'nav.financials', href: '/financials', icon: Wallet },
     ],
   },
   {
@@ -96,6 +98,7 @@ const adminNavigation: NavSection[] = [
     title: 'nav.analytics',
     items: [
       { name: 'nav.analytics', href: '/analytics', icon: BarChart3 },
+      { name: 'nav.financials', href: '/financials', icon: Wallet },
     ],
   },
   {
@@ -154,6 +157,7 @@ const viewerNavigation: NavSection[] = [
     title: 'nav.analytics',
     items: [
       { name: 'nav.analytics', href: '/analytics', icon: BarChart3 },
+      { name: 'nav.financials', href: '/financials', icon: Wallet },
       { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
     ],
   },
