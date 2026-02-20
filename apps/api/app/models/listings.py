@@ -458,8 +458,19 @@ class AuditLog(Base):
         return sanitized
 
 
+class LedgerEntryTypeRegistry(Base):
+    """Discovery engine for ledger entry types. Manual mapping of entry_type -> category."""
+    __tablename__ = "ledger_entry_type_registry"
+
+    entry_type = Column(Text, primary_key=True)
+    category = Column(Text, nullable=True)  # sales, fees, marketing, refunds, adjustments, other
+    first_seen_at = Column(DateTime(timezone=True), nullable=True)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True)
+    mapped = Column(Boolean, default=False, nullable=False)
+
+
 class LedgerEntry(Base):
-    """Etsy Shop Ledger entries — chronological debits and credits affecting the shop balance"""
+    """Etsy Shop Ledger entries — raw storage, category from registry join"""
     __tablename__ = "ledger_entries"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
@@ -469,8 +480,9 @@ class LedgerEntry(Base):
     etsy_entry_id = Column(BigInteger, unique=True, nullable=False, index=True)
     etsy_ledger_id = Column(BigInteger, nullable=False)
 
-    # Categorization (derived from description: sale, fee, refund, reserve, payout, listing_renewal, advertising, shipping_label)
-    entry_type = Column(String(50), nullable=True, index=True)
+    # Raw Etsy value (ledger_type or description); category comes from registry join
+    entry_type = Column(String(255), nullable=True, index=True)
+    category = Column(Text, nullable=True)  # Denormalized from registry; nullable at insert
     description = Column(Text, nullable=True)
 
     # All monetary values in cents (positive = credit, negative = debit)
@@ -482,6 +494,8 @@ class LedgerEntry(Base):
     etsy_receipt_id = Column(String(50), nullable=True, index=True)
 
     entry_created_at = Column(DateTime(timezone=True), nullable=False)
+    created_timestamp = Column(BigInteger, nullable=True)  # Unix epoch for date-range queries
+    raw_payload = Column(JSONB, nullable=True)  # Full Etsy API response
     synced_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 
@@ -571,6 +585,29 @@ class ExpenseLineItem(Base):
 
     __table_args__ = (
         Index("idx_expense_line_items_invoice", "invoice_id"),
+    )
+
+
+class FinancialSyncStatus(Base):
+    """Tracks last sync timestamps for ledger and payment data per shop.
+    Enables sync status API and 'last updated' UI without querying large tables."""
+    __tablename__ = "financial_sync_status"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    shop_id = Column(BigInteger, ForeignKey("shops.id", ondelete="CASCADE"), nullable=False)
+
+    ledger_last_sync_at = Column(DateTime(timezone=True), nullable=True)
+    payment_last_sync_at = Column(DateTime(timezone=True), nullable=True)
+    ledger_last_error = Column(Text, nullable=True)
+    payment_last_error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("shop_id", name="uq_financial_sync_status_shop_id"),
+        Index("idx_financial_sync_status_tenant_shop", "tenant_id", "shop_id"),
     )
 
 

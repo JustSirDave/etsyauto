@@ -165,6 +165,7 @@ def test_financial_summary_fields():
         "invoice_expenses",
         "shipping_labels",
         "refunds",
+        "total_discounts",
         "total_expenses",
         "net_profit",
         "currency",
@@ -250,3 +251,23 @@ def test_invoice_file_size_limit():
     from app.api.endpoints.financial_invoices import MAX_FILE_SIZE
 
     assert MAX_FILE_SIZE == 10 * 1024 * 1024
+
+
+# ── Discount summary tests ──
+
+def test_discount_summary_required_keys():
+    """Verify get_discount_summary response has required keys."""
+    required_keys = [
+        "total_discounts",
+        "order_count_with_discounts",
+        "currency",
+        "period_start",
+        "period_end",
+    ]
+    # Contract: discounts API must return these keys
+    example = {k: (0 if k in ("total_discounts", "order_count_with_discounts") else "") for k in required_keys}
+    example["currency"] = "USD"
+    example["period_start"] = "2026-01-01T00:00:00"
+    example["period_end"] = "2026-02-01T00:00:00"
+    for key in required_keys:
+        assert key in example

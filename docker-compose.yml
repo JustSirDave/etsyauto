@@ -46,6 +46,7 @@ services:
     container_name: etsy-api
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
+      TEST_DATABASE_URL: ${TEST_DATABASE_URL:-postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -135,6 +136,7 @@ services:
         condition: service_healthy
     volumes:
       - ./apps/api:/app
+      - ../.cursor:/debug-logs
     command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
     networks:
       - etsy-network

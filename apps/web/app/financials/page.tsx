@@ -8,7 +8,7 @@
  * Owner / Admin / Viewer only (via require_revenue_access on backend).
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
@@ -28,6 +28,8 @@ import {
   type FinancialSummary,
   type Invoice,
   type InvoiceListResponse,
+  type SyncStatusResponse,
+  type DiscountSummary,
 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
@@ -57,6 +59,8 @@ import {
   RotateCcw,
   Package,
   FileUp,
+  Percent,
+  Clock,
 } from 'lucide-react';
 
 /* ================================================================== */
@@ -87,6 +91,21 @@ function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString();
+}
+
+/** Human-readable "X minutes ago" from ISO timestamp */
+function timeAgo(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hr ago`;
+  return `${diffDays} days ago`;
 }
 
 /** Pretty entry type label (fallback for non-translated contexts) */
@@ -378,6 +397,7 @@ export default function FinancialsPage() {
   const [period, setPeriod] = useState<Period>('30d');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [showSyncMenu, setShowSyncMenu] = useState(false);
   const [scopeStatus, setScopeStatus] = useState<BillingScopeStatus | null>(null);
   const [comparisonData, setComparisonData] = useState<Record<string, FinancialSummary> | null>(null);
   const [showComparison, setShowComparison] = useState(false);
@@ -395,10 +415,12 @@ export default function FinancialsPage() {
   const [invoices, setInvoices] = useState<InvoiceListResponse | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
+  const [discounts, setDiscounts] = useState<DiscountSummary | null>(null);
 
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
   const shopId = !shopIds ? selectedShop?.id : undefined;
-  const { start, end } = periodToDates(period);
+  const { start, end } = useMemo(() => periodToDates(period), [period]);
 
   /** Translate entry type using the translation function */
   const translateEntryType = (type: string): string => {
@@ -412,17 +434,19 @@ export default function FinancialsPage() {
   }, [shopId]);
 
   // ── Fetch all data ──
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const [summaryData, pnlData, payoutData, feeData, timelineData, ledgerData, invoiceData] = await Promise.all([
-        financialsApi.getSummary({ shopIds, shopId, startDate: start, endDate: end }),
+      const [summaryData, pnlData, payoutData, feeData, timelineData, ledgerData, invoiceData, syncStatusData, discountsData] = await Promise.all([
+        financialsApi.getSummary({ shopIds, shopId, startDate: start, endDate: end, forceRefresh }),
         financialsApi.getProfitAndLoss(shopId, start, end, shopIds),
         financialsApi.getPayoutEstimate(shopId, shopIds),
         financialsApi.getFeeBreakdown(shopId, start, end, shopIds),
         financialsApi.getTimeline(shopId, start, end, periodToGranularity(period), shopIds),
         financialsApi.getLedger(shopId, ledgerFilter || undefined, start, end, 15, ledgerPage * 15, shopIds),
         invoicesApi.list({ shopIds, shopId, limit: 10 }),
+        financialsApi.getSyncStatus(shopId, shopIds),
+        financialsApi.getDiscounts({ shopIds, shopId, startDate: start, endDate: end }),
       ]);
       setSummary(summaryData);
       setPnl(pnlData);
@@ -431,6 +455,8 @@ export default function FinancialsPage() {
       setTimeline(timelineData);
       setLedger(ledgerData);
       setInvoices(invoiceData);
+      setSyncStatus(syncStatusData);
+      setDiscounts(discountsData);
     } catch (err: unknown) {
       const error = err as { message?: string; status?: number };
       if (error?.message?.includes('403') || error?.status === 403) {
@@ -441,19 +467,19 @@ export default function FinancialsPage() {
     } finally {
       setLoading(false);
     }
-  }, [shopId, shopIds, start, end, period, ledgerPage, ledgerFilter, showToast, t]);
+  }, [shopId, shopIds, start, end, period, ledgerPage, ledgerFilter]);
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
   // ── Sync trigger ──
-  const handleSync = async () => {
+  const handleSync = async (forceFull = false) => {
     setSyncing(true);
     try {
-      await financialsApi.triggerSync(shopId);
+      await financialsApi.triggerSync(shopId, forceFull);
       showToast(t('financials.syncStarted'), 'success');
-      setTimeout(fetchAll, 5000);
+      setTimeout(() => fetchAll(true), forceFull ? 90000 : 5000);
     } catch {
       showToast(t('financials.syncFailed'), 'error');
     } finally {
@@ -519,6 +545,26 @@ export default function FinancialsPage() {
     );
   }
 
+  // ── Fetch failed: show retry ──
+  if (!loading && !summary) {
+    return (
+      <DashboardLayout>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-8 text-center">
+          <ShieldAlert className="w-12 h-12 text-amber-600 dark:text-amber-400 mx-auto mb-4" />
+          <p className="text-lg font-medium text-amber-800 dark:text-amber-300">{t('financials.loadFailed')}</p>
+          <p className="text-sm text-amber-700 dark:text-amber-400 mt-2 mb-4">Check that you have a connected shop and billing scope.</p>
+          <button
+            onClick={() => fetchAll(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {t('common.retry') || 'Retry'}
+          </button>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   // Compute helpers
   const maxFee = fees ? Math.max(...fees.categories.map((c) => c.amount), 1) : 1;
 
@@ -578,19 +624,114 @@ export default function FinancialsPage() {
               </button>
             )}
 
+            {/* Sync status and last updated */}
+            {syncStatus && Object.keys(syncStatus.shops).length > 0 && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" />
+                {(() => {
+                  const timestamps = Object.values(syncStatus.shops).flatMap((s) => [
+                    s.ledger_last_sync_at ? new Date(s.ledger_last_sync_at).getTime() : 0,
+                    s.payment_last_sync_at ? new Date(s.payment_last_sync_at).getTime() : 0,
+                  ]).filter((t) => t > 0);
+                  const latest = timestamps.length > 0 ? Math.max(...timestamps) : 0;
+                  const hasError = Object.values(syncStatus.shops).some(
+                    (s) => s.ledger_last_error || s.payment_last_error
+                  );
+                  return latest > 0 ? (
+                    <span className={hasError ? 'text-amber-600 dark:text-amber-400' : ''}>
+                      {t('financials.lastSynced')} {timeAgo(new Date(latest).toISOString())}
+                    </span>
+                  ) : null;
+                })()}
+              </span>
+            )}
+
             {/* Sync */}
             {user?.role && ['owner', 'admin'].includes(user.role.toLowerCase()) && (
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
-                {t('financials.sync')}
-              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowSyncMenu(!showSyncMenu)}
+                  disabled={syncing}
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                >
+                  <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+                  {t('financials.sync')}
+                  <ChevronDown className={cn('w-4 h-4', showSyncMenu && 'rotate-180')} />
+                </button>
+                {showSyncMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      aria-hidden="true"
+                      onClick={() => setShowSyncMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 z-20 min-w-[140px] rounded-lg border bg-white dark:bg-gray-900 shadow-lg py-1">
+                      <button
+                        onClick={() => { handleSync(false); setShowSyncMenu(false); }}
+                        disabled={syncing}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
+                      >
+                        {t('financials.sync')}
+                      </button>
+                      <button
+                        onClick={() => { handleSync(true); setShowSyncMenu(false); }}
+                        disabled={syncing}
+                        title={t('financials.fullSyncTooltip')}
+                        className="w-full px-3 py-2 text-left text-sm text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
+                      >
+                        {t('financials.fullSync')}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
+
+        {/* ── Unmapped ledger types warning ── */}
+        {(syncStatus?.unmapped_ledger_types || summary?.warning) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                {t('financials.unmappedLedgerTypes')}
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                {t('financials.unmappedLedgerTypesMessage')}
+                {(syncStatus?.unmapped_types?.length || summary?.unmapped_types?.length) ? (
+                  <span className="block mt-1 font-mono text-xs">
+                    {((syncStatus?.unmapped_types || summary?.unmapped_types) ?? []).slice(0, 5).join(', ')}
+                    {((syncStatus?.unmapped_count ?? summary?.unmapped_count ?? 0) > 5) && ' ...'}
+                  </span>
+                ) : null}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── Sync error banner ── */}
+        {syncStatus && Object.values(syncStatus.shops).some((s) => s.ledger_last_error || s.payment_last_error) && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                {t('financials.syncError')}
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                {Object.entries(syncStatus.shops)
+                  .filter(([, s]) => s.ledger_last_error || s.payment_last_error)
+                  .map(([sid, s]) => (
+                    <span key={sid} className="block">
+                      {[s.ledger_last_error && `Ledger: ${s.ledger_last_error}`, s.payment_last_error && `Payments: ${s.payment_last_error}`]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  ))}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Scope warning banner ── */}
         {scopeStatus && !scopeStatus.has_billing_scope && (
@@ -631,6 +772,30 @@ export default function FinancialsPage() {
               onClose={() => { setShowComparison(false); setComparisonData(null); }}
             />
           ) : null
+        )}
+
+        {/* ── Upcoming Payout (prominent card) ── */}
+        {payout && payout.available_for_payout !== undefined && (
+          <div className="rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                  <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    {t('financials.upcomingPayout')}
+                  </p>
+                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
+                    {formatCents(payout.available_for_payout, payout.currency)}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t('financials.availableForPayout')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* ── Activity Summary (Etsy-style) ── */}
@@ -731,6 +896,26 @@ export default function FinancialsPage() {
                   </div>
                 </div>
               </ExpandableCard>
+
+              {/* Discounts (derived from Order.discount_amt) */}
+              {discounts && (discounts.total_discounts > 0 || discounts.order_count_with_discounts > 0) && (
+                <ExpandableCard
+                  title={t('financials.discounts')}
+                  totalValue={`-${formatCents(discounts.total_discounts, discounts.currency)}`}
+                  totalPositive={false}
+                  icon={Percent}
+                >
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">{t('financials.discountsDescription')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">{t('financials.ordersWithDiscounts')}</span>
+                      <span className="font-medium">{discounts.order_count_with_discounts}</span>
+                    </div>
+                  </div>
+                </ExpandableCard>
+              )}
             </div>
           )}
         </div>

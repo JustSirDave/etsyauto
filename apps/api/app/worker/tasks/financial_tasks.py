@@ -3,13 +3,14 @@ Celery Tasks for Financial Data Synchronization
 Handles syncing ledger entries and payment details from Etsy
 """
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import LedgerEntry, PaymentDetail, Order
+from app.models.listings import LedgerEntry, LedgerEntryTypeRegistry, PaymentDetail, Order, FinancialSyncStatus
 from app.models.tenancy import Shop, OAuthToken
 from app.services.etsy_client import EtsyClient, EtsyAPIError
 from app.services.rate_limiter import get_rate_limiter
@@ -17,36 +18,47 @@ from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
 
-# --- Ledger entry type classification ---
-
-_TYPE_KEYWORDS = {
-    "sale": ["sale", "payment for order"],
-    "refund": ["refund"],
-    "reserve": ["reserve"],
-    "payout": ["deposit", "payout", "withdrawal"],
-    "listing_renewal": ["listing renewal", "listing fee", "renewal"],
-    "transaction_fee": ["transaction fee"],
-    "processing_fee": ["processing fee", "payment processing"],
-    "advertising": ["etsy ads", "offsite ads", "advertising"],
-    "shipping_label": ["shipping label", "postage"],
-    "subscription": ["etsy plus", "subscription"],
-    "tax": ["sales tax", "vat", "tax remittance"],
-}
+# --- Ledger sync helpers (no classification during sync; registry handles mapping) ---
 
 
-def _classify_entry(description: str) -> str:
-    """Derive an entry_type from the ledger entry description."""
-    if not description:
-        return "other"
-    desc_lower = description.lower()
-    for entry_type, keywords in _TYPE_KEYWORDS.items():
-        if any(kw in desc_lower for kw in keywords):
-            return entry_type
-    return "other"
+def _serialize_raw_payload(raw: dict) -> dict:
+    """Ensure raw payload is JSON-serializable for JSONB storage."""
+    try:
+        return json.loads(json.dumps(raw, default=str))
+    except (TypeError, ValueError):
+        return {k: str(v) for k, v in raw.items()}
 
 
-def _has_billing_scope(db, shop: Shop) -> bool:
-    """Check whether the shop's OAuth token includes the billing_r scope."""
+def _extract_entry_type(raw: dict) -> str:
+    """Extract raw entry_type from Etsy: ledger_type if present, else description (truncated)."""
+    ledger_type = raw.get("ledger_type")
+    if ledger_type:
+        return str(ledger_type)[:255]
+    desc = raw.get("description", "") or ""
+    return (str(desc)[:255]) or "unknown"
+
+
+def _upsert_registry(db, entry_type: str, now: datetime) -> None:
+    """Register or update entry_type in ledger_entry_type_registry."""
+    reg = db.query(LedgerEntryTypeRegistry).filter(
+        LedgerEntryTypeRegistry.entry_type == entry_type
+    ).first()
+    if reg:
+        reg.last_seen_at = now
+    else:
+        reg = LedgerEntryTypeRegistry(
+            entry_type=entry_type,
+            category=None,
+            first_seen_at=now,
+            last_seen_at=now,
+            mapped=False,
+        )
+        db.add(reg)
+
+
+def _has_financial_scope(db, shop: Shop) -> bool:
+    """Check whether the shop's OAuth token includes billing_r or transactions_r.
+    Ledger endpoint may use either; payments require transactions_r."""
     token = (
         db.query(OAuthToken)
         .filter(OAuthToken.shop_id == shop.id, OAuthToken.provider == "etsy")
@@ -54,7 +66,45 @@ def _has_billing_scope(db, shop: Shop) -> bool:
     )
     if not token or not token.scopes:
         return False
-    return "billing_r" in token.scopes
+    return "billing_r" in token.scopes or "transactions_r" in token.scopes
+
+
+def _upsert_ledger_sync_status(db, shop: Shop, success: bool, error_msg: Optional[str] = None) -> None:
+    """Update FinancialSyncStatus with ledger sync result."""
+    now = datetime.now(timezone.utc)
+    st = db.query(FinancialSyncStatus).filter(FinancialSyncStatus.shop_id == shop.id).first()
+    if st:
+        st.ledger_last_sync_at = now if success else st.ledger_last_sync_at
+        st.ledger_last_error = None if success else (error_msg or st.ledger_last_error)
+        st.updated_at = now
+    else:
+        st = FinancialSyncStatus(
+            tenant_id=shop.tenant_id,
+            shop_id=shop.id,
+            ledger_last_sync_at=now if success else None,
+            ledger_last_error=None if success else error_msg,
+        )
+        db.add(st)
+    db.commit()
+
+
+def _upsert_payment_sync_status(db, shop: Shop, success: bool, error_msg: Optional[str] = None) -> None:
+    """Update FinancialSyncStatus with payment sync result."""
+    now = datetime.now(timezone.utc)
+    st = db.query(FinancialSyncStatus).filter(FinancialSyncStatus.shop_id == shop.id).first()
+    if st:
+        st.payment_last_sync_at = now if success else st.payment_last_sync_at
+        st.payment_last_error = None if success else (error_msg or st.payment_last_error)
+        st.updated_at = now
+    else:
+        st = FinancialSyncStatus(
+            tenant_id=shop.tenant_id,
+            shop_id=shop.id,
+            payment_last_sync_at=now if success else None,
+            payment_last_error=None if success else error_msg,
+        )
+        db.add(st)
+    db.commit()
 
 
 # ============================================================
@@ -71,7 +121,7 @@ def sync_ledger_entries(
     Sync shop payment-account ledger entries from Etsy.
 
     Incremental by default — fetches entries newer than the most recent
-    synced entry (minus 5 min buffer).  Requires ``billing_r`` scope.
+    synced entry (minus 5 min buffer).  Requires ``billing_r`` or ``transactions_r`` scope.
     """
     db = SessionLocal()
     try:
@@ -89,7 +139,8 @@ def sync_ledger_entries(
         etsy_client = EtsyClient(db, rate_limiter)
 
         for shop in shops:
-            if not _has_billing_scope(db, shop):
+            has_scope = _has_financial_scope(db, shop)
+            if not has_scope:
                 results["skipped_no_scope"] += 1
                 continue
 
@@ -100,9 +151,20 @@ def sync_ledger_entries(
                 results["entries_created"] += created
                 results["entries_updated"] += updated
                 results["shops_processed"] += 1
+                _upsert_ledger_sync_status(db, shop, success=True)
             except Exception as exc:
                 logger.exception(f"Ledger sync failed for shop {shop.id}")
                 results["errors"].append({"shop_id": shop.id, "error": str(exc)})
+                _upsert_ledger_sync_status(db, shop, success=False, error_msg=str(exc))
+
+        # Invalidate financial cache so UI shows fresh data after sync
+        if redis_client and results["shops_processed"] > 0:
+            try:
+                keys = redis_client.keys("financials:*")
+                if keys:
+                    redis_client.delete(*keys)
+            except Exception:
+                pass
 
         return results
     finally:
@@ -123,66 +185,104 @@ async def _sync_shop_ledger(
         )
         if latest and latest[0]:
             min_created = int((latest[0] - timedelta(minutes=5)).timestamp())
+    # Etsy API requires both min_created and max_created; time window must be <= 31 days
+    WINDOW_SECONDS = 30 * 24 * 3600  # 30 days
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    if min_created is None:
+        min_created = int((datetime.now(timezone.utc) - timedelta(days=365)).timestamp())
+    range_end = now_ts
 
     created = updated = 0
-    offset = 0
-    while True:
-        data = await etsy_client.get_shop_ledger_entries(
-            shop_id=shop.id,
-            etsy_shop_id=shop.etsy_shop_id,
-            limit=100,
-            offset=offset,
-            min_created=min_created,
-        )
-        entries = data.get("results", [])
-        if not entries:
-            break
-
-        for raw in entries:
-            etsy_id = raw.get("entry_id")
-            if not etsy_id:
-                continue
-
-            existing = (
-                db.query(LedgerEntry)
-                .filter(LedgerEntry.etsy_entry_id == etsy_id)
-                .first()
+    chunk_start = min_created
+    while chunk_start < range_end:
+        chunk_end = min(chunk_start + WINDOW_SECONDS, range_end)
+        offset = 0
+        while True:
+            data = await etsy_client.get_shop_ledger_entries(
+                shop_id=shop.id,
+                etsy_shop_id=shop.etsy_shop_id,
+                limit=100,
+                offset=offset,
+                min_created=chunk_start,
+                max_created=chunk_end,
             )
-            description = raw.get("description", "")
-            amount_obj = raw.get("amount", {})
-            balance_obj = raw.get("balance", {})
-            amount_cents = amount_obj.get("amount", 0)
-            balance_cents = balance_obj.get("amount", 0)
-            currency = amount_obj.get("currency_code", "USD")
-            ts = raw.get("create_timestamp")
-            entry_dt = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else datetime.now(timezone.utc)
+            entries = data.get("results", [])
+            if not entries:
+                break
 
-            if existing:
-                existing.balance = balance_cents
-                existing.synced_at = datetime.now(timezone.utc)
-                updated += 1
-            else:
-                entry = LedgerEntry(
-                    tenant_id=shop.tenant_id,
-                    shop_id=shop.id,
-                    etsy_entry_id=etsy_id,
-                    etsy_ledger_id=raw.get("ledger_id", 0),
-                    entry_type=_classify_entry(description),
-                    description=description,
-                    amount=amount_cents,
-                    balance=balance_cents,
-                    currency=currency,
-                    entry_created_at=entry_dt,
-                    synced_at=datetime.now(timezone.utc),
+            now_utc = datetime.now(timezone.utc)
+            for raw in entries:
+                etsy_id = raw.get("entry_id")
+                if not etsy_id:
+                    continue
+
+                entry_type_raw = _extract_entry_type(raw)
+                _upsert_registry(db, entry_type_raw, now_utc)
+
+                existing = (
+                    db.query(LedgerEntry)
+                    .filter(LedgerEntry.etsy_entry_id == etsy_id)
+                    .first()
                 )
-                db.add(entry)
-                created += 1
+                description = raw.get("description", "")
+                amount_obj = raw.get("amount")
+                balance_obj = raw.get("balance")
+                # Etsy may return amount/balance as dict {"amount": N, "currency_code": "USD"} or as int (cents)
+                if isinstance(amount_obj, dict):
+                    amount_cents = amount_obj.get("amount", 0)
+                    currency = amount_obj.get("currency_code", "USD")
+                elif isinstance(amount_obj, (int, float)):
+                    amount_cents = int(amount_obj)
+                    currency = "USD"
+                else:
+                    amount_cents = 0
+                    currency = "USD"
+                if isinstance(balance_obj, dict):
+                    balance_cents = balance_obj.get("amount", 0)
+                elif isinstance(balance_obj, (int, float)):
+                    balance_cents = int(balance_obj)
+                else:
+                    balance_cents = 0
+                ts = raw.get("create_timestamp")
+                created_ts = int(ts) if ts is not None else None
+                entry_dt = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else now_utc
 
-        db.commit()
+                if existing:
+                    existing.amount = amount_cents
+                    existing.description = description
+                    existing.entry_type = entry_type_raw
+                    existing.balance = balance_cents
+                    existing.created_timestamp = created_ts
+                    existing.raw_payload = _serialize_raw_payload(raw)
+                    existing.synced_at = now_utc
+                    updated += 1
+                else:
+                    entry = LedgerEntry(
+                        tenant_id=shop.tenant_id,
+                        shop_id=shop.id,
+                        etsy_entry_id=etsy_id,
+                        etsy_ledger_id=raw.get("ledger_id", 0),
+                        entry_type=entry_type_raw,
+                        category=None,
+                        description=description,
+                        amount=amount_cents,
+                        balance=balance_cents,
+                        currency=currency,
+                        entry_created_at=entry_dt,
+                        created_timestamp=created_ts,
+                        raw_payload=_serialize_raw_payload(raw),
+                        synced_at=now_utc,
+                    )
+                    db.add(entry)
+                    created += 1
 
-        if len(entries) < 100:
-            break
-        offset += 100
+            db.commit()
+
+            if len(entries) < 100:
+                break
+            offset += 100
+
+        chunk_start = chunk_end
 
     return created, updated
 
@@ -220,9 +320,11 @@ def sync_payment_details(
                 )
                 results["payments_created"] += count
                 results["shops_processed"] += 1
+                _upsert_payment_sync_status(db, shop, success=True)
             except Exception as exc:
                 logger.exception(f"Payment sync failed for shop {shop.id}")
                 results["errors"].append({"shop_id": shop.id, "error": str(exc)})
+                _upsert_payment_sync_status(db, shop, success=False, error_msg=str(exc))
 
         return results
     finally:

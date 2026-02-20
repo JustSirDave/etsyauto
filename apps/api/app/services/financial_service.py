@@ -12,7 +12,14 @@ from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, case, extract
 
-from app.models.listings import LedgerEntry, PaymentDetail, Order, Product, ExpenseInvoice
+from app.models.listings import (
+    LedgerEntry,
+    LedgerEntryTypeRegistry,
+    PaymentDetail,
+    Order,
+    Product,
+    ExpenseInvoice,
+)
 from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -76,6 +83,16 @@ class FinancialService:
         elif shop_id:
             filters.append(model_col == shop_id)
 
+    def _get_unmapped_ledger_types(self) -> tuple[int, List[str]]:
+        """Return (count, list of unmapped entry_type values)."""
+        rows = (
+            self.db.query(LedgerEntryTypeRegistry.entry_type)
+            .filter(LedgerEntryTypeRegistry.mapped == False)
+            .all()
+        )
+        types = [r[0] for r in rows if r[0]]
+        return len(types), types
+
     def get_profit_and_loss(
         self,
         tenant_id: int,
@@ -85,13 +102,8 @@ class FinancialService:
         shop_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
-        Aggregate P&L from ledger entries.
-
-        Returns
-        -------
-        dict with keys: total_revenue, total_fees, total_refunds,
-        total_shipping_labels, total_advertising, net_profit, currency,
-        period_start, period_end.
+        Aggregate P&L from ledger entries by category (registry join).
+        Net Profit = sales + fees + marketing + refunds (fees/marketing already negative).
         """
         ck = self._cache_key(tenant_id, shop_id, f"pnl:{start_date}:{end_date}", shop_ids)
         cached = self._get_cached(ck)
@@ -110,45 +122,51 @@ class FinancialService:
         ]
         self._apply_shop_filter(filters, LedgerEntry.shop_id, shop_id, shop_ids)
 
-        rows = (
+        # Category-based aggregation via registry join
+        cat_col = LedgerEntryTypeRegistry.category
+        row = (
             self.db.query(
-                LedgerEntry.entry_type,
-                func.sum(LedgerEntry.amount).label("total"),
+                func.sum(case((cat_col == "sales", LedgerEntry.amount), else_=0)).label("sales"),
+                func.sum(case((cat_col == "fees", LedgerEntry.amount), else_=0)).label("fees"),
+                func.sum(case((cat_col == "marketing", LedgerEntry.amount), else_=0)).label("marketing"),
+                func.sum(case((cat_col == "refunds", LedgerEntry.amount), else_=0)).label("refunds"),
+                func.sum(case((cat_col == "adjustments", LedgerEntry.amount), else_=0)).label("adjustments"),
+                func.sum(case((cat_col == "other", LedgerEntry.amount), else_=0)).label("other"),
+                func.sum(case((cat_col.is_(None), LedgerEntry.amount), else_=0)).label("unmapped"),
             )
+            .outerjoin(LedgerEntryTypeRegistry, LedgerEntry.entry_type == LedgerEntryTypeRegistry.entry_type)
             .filter(and_(*filters))
-            .group_by(LedgerEntry.entry_type)
-            .all()
+            .first()
         )
 
-        sums: Dict[str, int] = {}
-        for entry_type, total in rows:
-            sums[entry_type] = total or 0
+        sales = row[0] or 0
+        fees = row[1] or 0
+        marketing = row[2] or 0
+        refunds = row[3] or 0
+        adjustments = row[4] or 0
+        other = row[5] or 0
+        unmapped_sum = row[6] or 0
 
-        revenue = sums.get("sale", 0)
-        fees = (
-            abs(sums.get("transaction_fee", 0))
-            + abs(sums.get("processing_fee", 0))
-            + abs(sums.get("listing_renewal", 0))
-            + abs(sums.get("subscription", 0))
-        )
-        refunds = abs(sums.get("refund", 0))
-        shipping_labels = abs(sums.get("shipping_label", 0))
-        advertising = abs(sums.get("advertising", 0))
-        tax = abs(sums.get("tax", 0))
-        net_profit = revenue - fees - refunds - shipping_labels - advertising
+        # Net = sales + fees + marketing + refunds (fees/marketing already negative)
+        net_profit = sales + fees + marketing + refunds
 
+        unmapped_count, unmapped_types = self._get_unmapped_ledger_types()
         result = {
-            "total_revenue": revenue,
-            "total_fees": fees,
-            "total_refunds": refunds,
-            "total_shipping_labels": shipping_labels,
-            "total_advertising": advertising,
-            "total_tax": tax,
+            "total_revenue": sales,
+            "total_fees": abs(fees),
+            "total_refunds": abs(refunds),
+            "total_shipping_labels": 0,  # Included in marketing category
+            "total_advertising": abs(marketing),
+            "total_tax": abs(adjustments),
             "net_profit": net_profit,
             "currency": "USD",
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
         }
+        if unmapped_count > 0:
+            result["warning"] = "Unmapped ledger types detected. Profit may not match Etsy."
+            result["unmapped_count"] = unmapped_count
+            result["unmapped_types"] = unmapped_types
         self._set_cached(ck, result)
         return result
 
@@ -409,12 +427,13 @@ class FinancialService:
         else:
             date_trunc = func.date_trunc("day", LedgerEntry.entry_created_at)
 
+        cat_col = LedgerEntryTypeRegistry.category
         rows = (
             self.db.query(
                 date_trunc.label("bucket"),
                 func.sum(
                     case(
-                        (LedgerEntry.entry_type == "sale", LedgerEntry.amount),
+                        (cat_col == "sales", LedgerEntry.amount),
                         else_=0,
                     )
                 ).label("revenue"),
@@ -425,6 +444,7 @@ class FinancialService:
                     )
                 ).label("expenses"),
             )
+            .outerjoin(LedgerEntryTypeRegistry, LedgerEntry.entry_type == LedgerEntryTypeRegistry.entry_type)
             .filter(and_(*filters))
             .group_by("bucket")
             .order_by("bucket")
@@ -579,6 +599,89 @@ class FinancialService:
             return 0
 
     # ------------------------------------------------------------------
+    #  Helper: discount aggregation from Order.discount_amt
+    # ------------------------------------------------------------------
+
+    def _calc_total_discounts(
+        self,
+        tenant_id: int,
+        shop_id: Optional[int],
+        shop_ids: Optional[List[int]],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> int:
+        """Sum Order.discount_amt for orders in the period (derived from Etsy receipts)."""
+        order_date_col = func.coalesce(Order.etsy_created_at, Order.created_at)
+        filters = [
+            Order.tenant_id == tenant_id,
+            order_date_col >= start_date,
+            order_date_col <= end_date,
+            Order.discount_amt > 0,
+        ]
+        self._apply_shop_filter(filters, Order.shop_id, shop_id, shop_ids)
+        total = (
+            self.db.query(func.sum(Order.discount_amt))
+            .filter(and_(*filters))
+            .scalar()
+        ) or 0
+        return total
+
+    def get_discount_summary(
+        self,
+        tenant_id: int,
+        shop_id: Optional[int] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        shop_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Aggregate discounts from Order.discount_amt (derived from Etsy receipts).
+        Etsy does not expose coupon/promotion list via API; this is the available source.
+        """
+        ck = self._cache_key(
+            tenant_id, shop_id,
+            f"discounts:{start_date}:{end_date}",
+            shop_ids,
+        )
+        cached = self._get_cached(ck)
+        if cached:
+            return cached
+
+        if not start_date:
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
+        if not end_date:
+            end_date = datetime.now(timezone.utc)
+
+        total_discounts = self._calc_total_discounts(
+            tenant_id, shop_id, shop_ids, start_date, end_date
+        )
+
+        # Count orders with discounts
+        order_date_col = func.coalesce(Order.etsy_created_at, Order.created_at)
+        filters = [
+            Order.tenant_id == tenant_id,
+            order_date_col >= start_date,
+            order_date_col <= end_date,
+            Order.discount_amt > 0,
+        ]
+        self._apply_shop_filter(filters, Order.shop_id, shop_id, shop_ids)
+        order_count = (
+            self.db.query(func.count(Order.id))
+            .filter(and_(*filters))
+            .scalar()
+        ) or 0
+
+        result = {
+            "total_discounts": total_discounts,
+            "order_count_with_discounts": order_count,
+            "currency": "USD",
+            "period_start": start_date.isoformat(),
+            "period_end": end_date.isoformat(),
+        }
+        self._set_cached(ck, result)
+        return result
+
+    # ------------------------------------------------------------------
     #  7. Full financial summary (ordered blocks)
     # ------------------------------------------------------------------
 
@@ -589,6 +692,7 @@ class FinancialService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         shop_ids: Optional[List[int]] = None,
+        force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """
         Return the complete financial summary in the user-requested order:
@@ -606,16 +710,17 @@ class FinancialService:
             f"full_summary:{start_date}:{end_date}",
             shop_ids,
         )
-        cached = self._get_cached(ck)
-        if cached:
-            return cached
+        if not force_refresh:
+            cached = self._get_cached(ck)
+            if cached:
+                return cached
 
         if not start_date:
             start_date = datetime.now(timezone.utc) - timedelta(days=30)
         if not end_date:
             end_date = datetime.now(timezone.utc)
 
-        # ── Ledger aggregation ──
+        # ── Ledger aggregation by category (registry join) ──
         ledger_filters = [
             LedgerEntry.tenant_id == tenant_id,
             LedgerEntry.entry_created_at >= start_date,
@@ -623,29 +728,27 @@ class FinancialService:
         ]
         self._apply_shop_filter(ledger_filters, LedgerEntry.shop_id, shop_id, shop_ids)
 
-        rows = (
+        cat_col = LedgerEntryTypeRegistry.category
+        row = (
             self.db.query(
-                LedgerEntry.entry_type,
-                func.sum(LedgerEntry.amount).label("total"),
+                func.sum(case((cat_col == "sales", LedgerEntry.amount), else_=0)).label("sales"),
+                func.sum(case((cat_col == "fees", LedgerEntry.amount), else_=0)).label("fees"),
+                func.sum(case((cat_col == "marketing", LedgerEntry.amount), else_=0)).label("marketing"),
+                func.sum(case((cat_col == "refunds", LedgerEntry.amount), else_=0)).label("refunds"),
+                func.sum(case((cat_col == "adjustments", LedgerEntry.amount), else_=0)).label("adjustments"),
+                func.sum(case((cat_col == "other", LedgerEntry.amount), else_=0)).label("other"),
+                func.sum(case((cat_col.is_(None), LedgerEntry.amount), else_=0)).label("unmapped"),
             )
+            .outerjoin(LedgerEntryTypeRegistry, LedgerEntry.entry_type == LedgerEntryTypeRegistry.entry_type)
             .filter(and_(*ledger_filters))
-            .group_by(LedgerEntry.entry_type)
-            .all()
+            .first()
         )
-        sums: Dict[str, int] = {}
-        for entry_type, total in rows:
-            sums[entry_type] = total or 0
 
-        revenue = sums.get("sale", 0)
-        etsy_fees = (
-            abs(sums.get("transaction_fee", 0))
-            + abs(sums.get("processing_fee", 0))
-            + abs(sums.get("listing_renewal", 0))
-            + abs(sums.get("subscription", 0))
-        )
-        advertising = abs(sums.get("advertising", 0))
-        refunds = abs(sums.get("refund", 0))
-        shipping_labels = abs(sums.get("shipping_label", 0))
+        revenue = row[0] or 0
+        etsy_fees = abs(row[1] or 0)
+        advertising = abs(row[2] or 0)
+        refunds = abs(row[3] or 0)
+        shipping_labels = 0  # Included in marketing category
 
         # ── Product costs ──
         # Products have cost_usd_cents; orders store line_items as JSONB.
@@ -672,9 +775,17 @@ class FinancialService:
             .scalar()
         ) or 0
 
-        total_expenses = etsy_fees + advertising + product_cost_total + invoice_expense_total + shipping_labels
-        net_profit = revenue - total_expenses - refunds
+        # ── Discounts (from Order.discount_amt) ──
+        total_discounts = self._calc_total_discounts(
+            tenant_id, shop_id, shop_ids, start_date, end_date
+        )
 
+        # Net from ledger: sales + fees + marketing + refunds (fees/marketing already negative)
+        ledger_net = revenue + (row[1] or 0) + (row[2] or 0) + (row[3] or 0)
+        total_expenses = etsy_fees + advertising + product_cost_total + invoice_expense_total + shipping_labels
+        net_profit = ledger_net - product_cost_total - invoice_expense_total
+
+        unmapped_count, unmapped_types = self._get_unmapped_ledger_types()
         result = {
             "revenue": revenue,
             "etsy_fees": etsy_fees,
@@ -683,11 +794,16 @@ class FinancialService:
             "invoice_expenses": invoice_expense_total,
             "shipping_labels": shipping_labels,
             "refunds": refunds,
+            "total_discounts": total_discounts,
             "total_expenses": total_expenses,
             "net_profit": net_profit,
             "currency": "USD",
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
         }
+        if unmapped_count > 0:
+            result["warning"] = "Unmapped ledger types detected. Profit may not match Etsy."
+            result["unmapped_count"] = unmapped_count
+            result["unmapped_types"] = unmapped_types
         self._set_cached(ck, result)
         return result

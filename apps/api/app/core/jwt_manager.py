@@ -3,6 +3,7 @@ JWT Manager with RS256 and Proper Security
 Implements secure JWT handling with key rotation support
 """
 from jose import jwt
+from jose.exceptions import JWTError, ExpiredSignatureError
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from enum import Enum
@@ -39,9 +40,14 @@ class JWTManager:
     REFRESH_TOKEN_LIFETIME = timedelta(days=7)
     API_KEY_LIFETIME = timedelta(days=90)
     
-    # JWT claims
-    ISSUER = "etsy-automation-api"
-    AUDIENCE = "etsy-automation-platform"
+    # JWT claims (use config for consistency with decode_token)
+    @property
+    def ISSUER(self) -> str:
+        return settings.JWT_ISSUER or "etsy-automation-api"
+
+    @property
+    def AUDIENCE(self) -> str:
+        return settings.JWT_AUDIENCE or "etsy-automation-platform"
     
     def __init__(self):
         self.secrets_manager = get_secrets_manager()
@@ -259,16 +265,10 @@ class JWTManager:
             
             return payload
             
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             logger.warning("Token expired")
             raise
-        except jwt.InvalidIssuerError:
-            logger.error("Invalid token issuer")
-            raise
-        except jwt.InvalidAudienceError:
-            logger.error("Invalid token audience")
-            raise
-        except jwt.InvalidTokenError as e:
+        except JWTError as e:
             logger.error(f"Invalid token: {e}")
             raise
     

@@ -121,6 +121,35 @@ class TestAuditLogsAPI:
         assert "page" in data
 
 
+class TestFinancialsAPI:
+    """Contract tests for financial endpoints"""
+
+    def test_financials_sync_status_contract(self, client: TestClient, access_token: str):
+        """Test GET /api/financials/sync-status contract"""
+        response = client.get(
+            "/api/financials/sync-status",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "shops" in data
+        assert isinstance(data["shops"], dict)
+
+    def test_financials_discounts_contract(self, client: TestClient, access_token: str):
+        """Test GET /api/financials/discounts contract"""
+        response = client.get(
+            "/api/financials/discounts",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "total_discounts" in data
+        assert "order_count_with_discounts" in data
+        assert "currency" in data
+        assert "period_start" in data
+        assert "period_end" in data
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 

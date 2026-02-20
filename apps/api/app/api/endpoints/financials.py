@@ -15,7 +15,8 @@ from app.api.dependencies import get_user_context, UserContext, require_revenue_
 from app.core.database import get_db
 from app.core.query_helpers import ensure_shop_access
 from app.services.financial_service import FinancialService
-from app.models.tenancy import OAuthToken
+from app.models.tenancy import OAuthToken, Shop
+from app.models.listings import FinancialSyncStatus, LedgerEntryTypeRegistry
 from app.worker.tasks.financial_tasks import sync_ledger_entries, sync_payment_details
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ async def get_billing_scope_status(
     if shop_id:
         ensure_shop_access(shop_id, context, db)
 
-    # Find the shop's Etsy OAuth token
+    # Find the shop's Etsy OAuth token (billing_r or transactions_r for financial data)
     query = db.query(OAuthToken).filter(
         OAuthToken.provider == "etsy",
     )
@@ -49,7 +50,6 @@ async def get_billing_scope_status(
         query = query.filter(OAuthToken.shop_id == shop_id)
     else:
         # Get any token for the tenant
-        from app.models.tenancy import Shop
         shop_ids = [
             s.id for s in db.query(Shop.id).filter(Shop.tenant_id == context.tenant_id).all()
         ]
@@ -58,7 +58,7 @@ async def get_billing_scope_status(
     token = query.first()
     has_scope = False
     if token and token.scopes:
-        has_scope = "billing_r" in token.scopes
+        has_scope = "billing_r" in token.scopes or "transactions_r" in token.scopes
 
     return {
         "has_billing_scope": has_scope,
@@ -109,6 +109,7 @@ async def get_financial_summary(
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     start_date: Optional[str] = Query(None, description="ISO start date"),
     end_date: Optional[str] = Query(None, description="ISO end date"),
+    force_refresh: bool = Query(False, description="Bypass cache and fetch fresh data"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -126,6 +127,7 @@ async def get_financial_summary(
         start_date=_parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)),
         end_date=_parse_date(end_date, datetime.now(timezone.utc)),
         shop_ids=parsed_shop_ids,
+        force_refresh=force_refresh,
     )
 
 
@@ -295,7 +297,148 @@ async def get_ledger_entries(
     )
 
 
-# ── 7. Manual sync trigger ──
+# ── 7. Entry type registry (discovery + manual mapping) ──
+
+@router.get("/entry-types", tags=["Financials"])
+async def get_entry_types(
+    context: UserContext = Depends(require_revenue_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    List all ledger entry types in the registry with mapped status.
+    Unmapped types trigger the dashboard warning.
+    """
+    rows = (
+        db.query(LedgerEntryTypeRegistry)
+        .order_by(LedgerEntryTypeRegistry.entry_type)
+        .all()
+    )
+    unmapped_count = sum(1 for r in rows if not r.mapped)
+    return {
+        "entry_types": [
+            {
+                "entry_type": r.entry_type,
+                "category": r.category,
+                "mapped": r.mapped,
+                "first_seen_at": r.first_seen_at.isoformat() if r.first_seen_at else None,
+                "last_seen_at": r.last_seen_at.isoformat() if r.last_seen_at else None,
+            }
+            for r in rows
+        ],
+        "unmapped_count": unmapped_count,
+        "unmapped_types": [r.entry_type for r in rows if not r.mapped],
+    }
+
+
+@router.patch("/entry-types/map", tags=["Financials"])
+async def update_entry_type_mapping(
+    entry_type: str = Query(..., description="Entry type to map (URL-encoded if needed)"),
+    category: str = Query(..., pattern="^(sales|fees|marketing|refunds|adjustments|other)$"),
+    context: UserContext = Depends(require_revenue_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Set category and mark entry_type as mapped.
+    Requires Owner/Admin role.
+    """
+    if context.role.lower() not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Only owners and admins can update entry type mappings")
+
+    reg = db.query(LedgerEntryTypeRegistry).filter(
+        LedgerEntryTypeRegistry.entry_type == entry_type
+    ).first()
+    if not reg:
+        raise HTTPException(status_code=404, detail=f"Entry type '{entry_type}' not found in registry")
+
+    reg.category = category
+    reg.mapped = True
+    db.commit()
+    return {
+        "entry_type": entry_type,
+        "category": category,
+        "mapped": True,
+    }
+
+
+# ── 8. Sync status ──
+
+@router.get("/sync-status", tags=["Financials"])
+async def get_sync_status(
+    shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    context: UserContext = Depends(require_revenue_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Get last sync timestamps for ledger and payment data per shop.
+    Returns ledger_last_sync_at, payment_last_sync_at, and any last errors.
+    """
+    parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
+    if parsed_shop_ids:
+        target_shops = parsed_shop_ids
+    elif shop_id:
+        target_shops = [shop_id]
+    else:
+        target_shops = [
+            s.id for s in db.query(Shop.id).filter(Shop.tenant_id == context.tenant_id).all()
+        ]
+
+    query = db.query(FinancialSyncStatus).filter(FinancialSyncStatus.tenant_id == context.tenant_id)
+    if target_shops:
+        query = query.filter(FinancialSyncStatus.shop_id.in_(target_shops))
+    statuses = query.all()
+
+    unmapped = (
+        db.query(LedgerEntryTypeRegistry.entry_type)
+        .filter(LedgerEntryTypeRegistry.mapped == False)
+        .all()
+    )
+    unmapped_types = [r[0] for r in unmapped if r[0]]
+
+    result = {}
+    for st in statuses:
+        result[str(st.shop_id)] = {
+            "ledger_last_sync_at": st.ledger_last_sync_at.isoformat() if st.ledger_last_sync_at else None,
+            "payment_last_sync_at": st.payment_last_sync_at.isoformat() if st.payment_last_sync_at else None,
+            "ledger_last_error": st.ledger_last_error,
+            "payment_last_error": st.payment_last_error,
+        }
+    return {
+        "shops": result,
+        "unmapped_ledger_types": len(unmapped_types) > 0,
+        "unmapped_count": len(unmapped_types),
+        "unmapped_types": unmapped_types,
+    }
+
+
+# ── 8. Discounts (derived from Order.discount_amt) ──
+
+@router.get("/discounts", tags=["Financials"])
+async def get_discounts(
+    shop_id: Optional[int] = None,
+    shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    start_date: Optional[str] = Query(None, description="ISO start date"),
+    end_date: Optional[str] = Query(None, description="ISO end date"),
+    context: UserContext = Depends(require_revenue_access()),
+    db: Session = Depends(get_db),
+):
+    """
+    Get aggregated discounts from orders (Order.discount_amt from Etsy receipts).
+    Etsy does not expose coupon/promotion list via API; this is the available source.
+    """
+    parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
+
+    svc = FinancialService(db)
+    return svc.get_discount_summary(
+        tenant_id=context.tenant_id,
+        shop_id=shop_id if not parsed_shop_ids else None,
+        start_date=_parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)),
+        end_date=_parse_date(end_date, datetime.now(timezone.utc)),
+        shop_ids=parsed_shop_ids,
+    )
+
+
+# ── 9. Manual sync trigger ──
 
 @router.get("/comparison", tags=["Financials"])
 async def get_financial_comparison(
@@ -314,13 +457,15 @@ async def get_financial_comparison(
         raise HTTPException(status_code=400, detail="At least one shop_id is required")
 
     svc = FinancialService(db)
+    start_dt = _parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)) if start_date else datetime.now(timezone.utc) - timedelta(days=30)
+    end_dt = _parse_date(end_date, datetime.now(timezone.utc)) if end_date else datetime.now(timezone.utc)
     per_shop = {}
     for sid in parsed:
         summary = svc.get_financial_summary(
             tenant_id=context.tenant_id,
             shop_ids=[sid],
-            start_date=start_date,
-            end_date=end_date,
+            start_date=start_dt,
+            end_date=end_dt,
         )
         per_shop[str(sid)] = summary
 
@@ -333,6 +478,7 @@ async def get_financial_comparison(
 @router.post("/sync", tags=["Financials"])
 async def trigger_financial_sync(
     shop_id: Optional[int] = None,
+    force_full_sync: bool = False,
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -340,6 +486,7 @@ async def trigger_financial_sync(
     Trigger an immediate financial data sync.
     Dispatches Celery tasks for ledger and payment sync.
     Requires Owner/Admin role.
+    force_full_sync: If true, re-fetches all ledger entries (fixes misclassified data).
     """
     if context.role.lower() not in ("owner", "admin"):
         raise HTTPException(status_code=403, detail="Only owners and admins can trigger syncs")
@@ -347,7 +494,11 @@ async def trigger_financial_sync(
     if shop_id:
         ensure_shop_access(shop_id, context, db)
 
-    sync_ledger_entries.delay(shop_id=shop_id, tenant_id=context.tenant_id)
+    sync_ledger_entries.delay(
+        shop_id=shop_id,
+        tenant_id=context.tenant_id,
+        force_full_sync=force_full_sync,
+    )
     sync_payment_details.delay(shop_id=shop_id, tenant_id=context.tenant_id)
 
     return {"status": "sync_triggered", "shop_id": shop_id}

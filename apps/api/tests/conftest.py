@@ -10,11 +10,9 @@ from datetime import datetime, timedelta
 import os
 
 from app.core.database import Base, get_db
-from app.models.tenancy import Tenant, User, TenantMember, Shop
-from app.models.products import Product, ProductVariant, ProductImage
-from app.models.listings import ListingJob, Schedule, AIGeneration
-from app.models.oauth import OAuthToken
-from app.core.encryption_manager import get_encryption_manager
+from app.models.tenancy import Tenant, User, Membership, Shop, OAuthToken
+from app.models.listings import Product, ListingJob, Schedule, AIGeneration
+from app.services.encryption import token_encryptor
 from app.core.jwt_manager import get_jwt_manager
 from main import app
 
@@ -77,8 +75,7 @@ def tenant(db: Session) -> Tenant:
     tenant = Tenant(
         name="Test Tenant",
         status="active",
-        subscription_tier="premium",
-        created_at=datetime.utcnow()
+        billing_tier="pro",
     )
     db.add(tenant)
     db.commit()
@@ -92,8 +89,7 @@ def tenant_free(db: Session) -> Tenant:
     tenant = Tenant(
         name="Free Tenant",
         status="active",
-        subscription_tier="free",
-        created_at=datetime.utcnow()
+        billing_tier="starter",
     )
     db.add(tenant)
     db.commit()
@@ -108,21 +104,18 @@ def owner_user(db: Session, tenant: Tenant) -> User:
     """Create an owner user"""
     user = User(
         email="owner@test.com",
-        hashed_password="hashed_password_here",
-        is_active=True,
-        created_at=datetime.utcnow()
+        password_hash="hashed_password_here",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
     # Create membership
-    membership = TenantMember(
+    membership = Membership(
         tenant_id=tenant.id,
         user_id=user.id,
         role="owner",
-        status="active",
-        joined_at=datetime.utcnow()
+        invitation_status="accepted"
     )
     db.add(membership)
     db.commit()
@@ -135,20 +128,17 @@ def admin_user(db: Session, tenant: Tenant) -> User:
     """Create an admin user"""
     user = User(
         email="admin@test.com",
-        hashed_password="hashed_password_here",
-        is_active=True,
-        created_at=datetime.utcnow()
+        password_hash="hashed_password_here",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
-    membership = TenantMember(
+    membership = Membership(
         tenant_id=tenant.id,
         user_id=user.id,
         role="admin",
-        status="active",
-        joined_at=datetime.utcnow()
+        invitation_status="accepted"
     )
     db.add(membership)
     db.commit()
@@ -161,20 +151,17 @@ def creator_user(db: Session, tenant: Tenant) -> User:
     """Create a creator user"""
     user = User(
         email="creator@test.com",
-        hashed_password="hashed_password_here",
-        is_active=True,
-        created_at=datetime.utcnow()
+        password_hash="hashed_password_here",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
-    membership = TenantMember(
+    membership = Membership(
         tenant_id=tenant.id,
         user_id=user.id,
         role="creator",
-        status="active",
-        joined_at=datetime.utcnow()
+        invitation_status="accepted"
     )
     db.add(membership)
     db.commit()
@@ -187,20 +174,17 @@ def viewer_user(db: Session, tenant: Tenant) -> User:
     """Create a viewer user"""
     user = User(
         email="viewer@test.com",
-        hashed_password="hashed_password_here",
-        is_active=True,
-        created_at=datetime.utcnow()
+        password_hash="hashed_password_here",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
-    membership = TenantMember(
+    membership = Membership(
         tenant_id=tenant.id,
         user_id=user.id,
         role="viewer",
-        status="active",
-        joined_at=datetime.utcnow()
+        invitation_status="accepted"
     )
     db.add(membership)
     db.commit()
@@ -215,10 +199,9 @@ def shop(db: Session, tenant: Tenant) -> Shop:
     """Create a test shop"""
     shop = Shop(
         tenant_id=tenant.id,
-        shop_name="Test Shop",
+        display_name="Test Shop",
         etsy_shop_id="12345678",
-        status="active",
-        created_at=datetime.utcnow()
+        status="connected",
     )
     db.add(shop)
     db.commit()
@@ -229,21 +212,18 @@ def shop(db: Session, tenant: Tenant) -> Shop:
 @pytest.fixture
 def shop_with_oauth(db: Session, tenant: Tenant, shop: Shop) -> Shop:
     """Create a shop with OAuth tokens"""
-    enc = get_encryption_manager()
-    
     oauth_token = OAuthToken(
         tenant_id=tenant.id,
         shop_id=shop.id,
-        access_token=enc.encrypt("test_access_token"),
-        refresh_token=enc.encrypt("test_refresh_token"),
+        provider="etsy",
+        access_token=token_encryptor.encrypt("test_access_token"),
+        refresh_token=token_encryptor.encrypt("test_refresh_token"),
         expires_at=datetime.utcnow() + timedelta(hours=1),
-        token_type="Bearer",
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        scopes="billing_r transactions_r",
     )
     db.add(oauth_token)
     db.commit()
-    
+
     return shop
 
 
@@ -254,10 +234,9 @@ def multiple_shops(db: Session, tenant: Tenant) -> list[Shop]:
     for i in range(10):
         shop = Shop(
             tenant_id=tenant.id,
-            shop_name=f"Test Shop {i+1}",
+            display_name=f"Test Shop {i+1}",
             etsy_shop_id=f"1234567{i}",
-            status="active",
-            created_at=datetime.utcnow()
+            status="connected",
         )
         db.add(shop)
         shops.append(shop)
@@ -280,10 +259,8 @@ def product(db: Session, tenant: Tenant, shop: Shop) -> Product:
         sku="TEST-SKU-001",
         title_raw="Test Product",
         description_raw="Test product description with handmade content",
-        price=29.99,
+        price=2999,  # cents
         quantity=100,
-        status="draft",
-        created_at=datetime.utcnow()
     )
     db.add(product)
     db.commit()
@@ -300,27 +277,11 @@ def product_with_variants(db: Session, tenant: Tenant, shop: Shop) -> Product:
         sku="TEST-SKU-VAR-001",
         title_raw="Product with Variants",
         description_raw="Handmade product with size variants",
-        price=39.99,
+        price=3999,  # cents
         quantity=50,
-        status="draft",
-        created_at=datetime.utcnow()
+        variants=[{"option_name": "Size", "values": ["S", "M", "L"]}],
     )
     db.add(product)
-    db.flush()
-    
-    # Add variants
-    for size in ["S", "M", "L"]:
-        variant = ProductVariant(
-            product_id=product.id,
-            sku=f"TEST-SKU-VAR-001-{size}",
-            option_name="Size",
-            option_value=size,
-            price=39.99,
-            quantity=20,
-            created_at=datetime.utcnow()
-        )
-        db.add(variant)
-    
     db.commit()
     db.refresh(product)
     return product
@@ -337,10 +298,8 @@ def bulk_products(db: Session, tenant: Tenant, shop: Shop, count: int = 100) -> 
             sku=f"BULK-SKU-{i:04d}",
             title_raw=f"Bulk Product {i+1}",
             description_raw=f"Handmade bulk product {i+1} description",
-            price=19.99 + (i % 50),
+            price=1999 + (i % 50) * 100,  # cents
             quantity=10 + (i % 100),
-            status="draft",
-            created_at=datetime.utcnow()
         )
         db.add(product)
         products.append(product)

@@ -1269,6 +1269,9 @@ export interface ProfitAndLoss {
   currency: string;
   period_start: string;
   period_end: string;
+  warning?: string;
+  unmapped_count?: number;
+  unmapped_types?: string[];
 }
 
 export interface PayoutEstimate {
@@ -1352,8 +1355,35 @@ export interface FinancialSummary {
   invoice_expenses: number;
   shipping_labels: number;
   refunds: number;
+  total_discounts?: number;
   total_expenses: number;
   net_profit: number;
+  currency: string;
+  period_start: string;
+  period_end: string;
+  /** When unmapped ledger types exist, profit may not match Etsy */
+  warning?: string;
+  unmapped_count?: number;
+  unmapped_types?: string[];
+}
+
+export interface SyncStatusPerShop {
+  ledger_last_sync_at: string | null;
+  payment_last_sync_at: string | null;
+  ledger_last_error: string | null;
+  payment_last_error: string | null;
+}
+
+export interface SyncStatusResponse {
+  shops: Record<string, SyncStatusPerShop>;
+  unmapped_ledger_types?: boolean;
+  unmapped_count?: number;
+  unmapped_types?: string[];
+}
+
+export interface DiscountSummary {
+  total_discounts: number;
+  order_count_with_discounts: number;
   currency: string;
   period_start: string;
   period_end: string;
@@ -1377,11 +1407,12 @@ export const financialsApi = {
   },
 
   getSummary: async (
-    opts: { shopIds?: number[]; shopId?: number; startDate?: string; endDate?: string } = {},
+    opts: { shopIds?: number[]; shopId?: number; startDate?: string; endDate?: string; forceRefresh?: boolean } = {},
   ): Promise<FinancialSummary> => {
     const params = _financialParams(opts.shopIds, opts.shopId);
     if (opts.startDate) params.append('start_date', opts.startDate);
     if (opts.endDate) params.append('end_date', opts.endDate);
+    if (opts.forceRefresh) params.append('force_refresh', 'true');
     return apiRequest<FinancialSummary>(`/api/financials/summary?${params.toString()}`);
   },
 
@@ -1458,9 +1489,10 @@ export const financialsApi = {
     return apiRequest<LedgerResponse>(`/api/financials/ledger?${params.toString()}`);
   },
 
-  triggerSync: async (shopId?: number): Promise<{ status: string; shop_id: number | null }> => {
+  triggerSync: async (shopId?: number, forceFullSync?: boolean): Promise<{ status: string; shop_id: number | null }> => {
     const params = new URLSearchParams();
     if (shopId) params.append('shop_id', String(shopId));
+    if (forceFullSync) params.append('force_full_sync', 'true');
     return apiRequest(`/api/financials/sync?${params.toString()}`, { method: 'POST' });
   },
 
@@ -1473,6 +1505,35 @@ export const financialsApi = {
     if (startDate) params.append('start_date', startDate);
     if (endDate) params.append('end_date', endDate);
     return apiRequest(`/api/financials/comparison?${params.toString()}`);
+  },
+
+  getSyncStatus: async (shopId?: number, shopIds?: number[]): Promise<SyncStatusResponse> => {
+    const params = _financialParams(shopIds, shopId);
+    return apiRequest<SyncStatusResponse>(`/api/financials/sync-status?${params.toString()}`);
+  },
+
+  getEntryTypes: async (): Promise<{
+    entry_types: Array<{ entry_type: string; category: string | null; mapped: boolean; first_seen_at: string | null; last_seen_at: string | null }>;
+    unmapped_count: number;
+    unmapped_types: string[];
+  }> => {
+    return apiRequest(`/api/financials/entry-types`);
+  },
+
+  updateEntryTypeMapping: async (entryType: string, category: string): Promise<{ entry_type: string; category: string; mapped: boolean }> => {
+    const params = new URLSearchParams();
+    params.append('entry_type', entryType);
+    params.append('category', category);
+    return apiRequest(`/api/financials/entry-types/map?${params.toString()}`, { method: 'PATCH' });
+  },
+
+  getDiscounts: async (
+    opts: { shopIds?: number[]; shopId?: number; startDate?: string; endDate?: string } = {},
+  ): Promise<DiscountSummary> => {
+    const params = _financialParams(opts.shopIds, opts.shopId);
+    if (opts.startDate) params.append('start_date', opts.startDate);
+    if (opts.endDate) params.append('end_date', opts.endDate);
+    return apiRequest<DiscountSummary>(`/api/financials/discounts?${params.toString()}`);
   },
 };
 

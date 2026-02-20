@@ -25,7 +25,7 @@ from app.core.config import settings
 from app.core.password_validator import validate_password as validate_password_strength
 from app.models.tenancy import User, Tenant, Membership
 from app.models.oauth import OAuthProvider
-from jose import jwt as jose_jwt
+from jose.exceptions import JWTError, ExpiredSignatureError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -415,9 +415,9 @@ async def refresh_token(request: Request, db: Session = Depends(get_db)):
 
     try:
         payload = decode_token(token)
-    except jose_jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired")
-    except jose_jwt.InvalidTokenError:
+    except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     # Must be a refresh-type token
