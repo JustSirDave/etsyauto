@@ -45,6 +45,9 @@ async def get_dashboard_stats(
     elif shop_id:
         ensure_shop_access(shop_id, context, db)
         parsed_shop_ids = [shop_id]
+    elif context.role.lower() == "supplier" and context.allowed_shop_ids:
+        # Suppliers: default to their assigned shops when no filter passed
+        parsed_shop_ids = context.allowed_shop_ids
 
     # Count total products (filtered by tenant)
     products_query = filter_by_tenant(
@@ -113,10 +116,6 @@ async def get_dashboard_stats(
         ).count()
     else:
         new_orders_unread = orders_query.count()
-
-    if context.role.lower() == "supplier":
-        total_products = 0
-        active_listings = 0
 
     return {
         "total_products": total_products,

@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { listingsApi } from '@/lib/api';
 import { useShop } from '@/lib/shop-context';
+import { useLanguage } from '@/lib/language-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { Clock, CheckCircle, XCircle, RefreshCw, Loader } from 'lucide-react';
@@ -52,6 +53,7 @@ function ListingsContent() {
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [retrying, setRetrying] = useState<Set<number>>(new Set());
   const { selectedShopId } = useShop();
+  const { t } = useLanguage();
   const limit = 20;
 
   useEffect(() => {
@@ -79,19 +81,19 @@ function ListingsContent() {
       await listingsApi.retry(jobId);
       await loadJobs();
     } catch (error: any) {
-      alert(`Retry failed: ${error.detail || error.message}`);
+      alert(`${t('listings.retryFailed')} ${error.detail || error.message}`);
     } finally {
       setRetrying(prev => { const next = new Set(prev); next.delete(jobId); return next; });
     }
   };
 
   const handleCancel = async (jobId: number) => {
-    if (!confirm('Cancel this job?')) return;
+    if (!confirm(t('listings.cancelJob'))) return;
     try {
       await listingsApi.cancel(jobId);
       await loadJobs();
     } catch (error: any) {
-      alert(`Cancel failed: ${error.detail || error.message}`);
+      alert(`${t('listings.cancelFailed')} ${error.detail || error.message}`);
     }
   };
 
@@ -108,30 +110,30 @@ function ListingsContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Listing Jobs</h1>
-          <p className="text-[var(--text-muted)] mt-1">Monitor your Etsy listing publication queue</p>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('listings.title')}</h1>
+          <p className="text-[var(--text-muted)] mt-1">{t('listings.subtitle')}</p>
         </div>
         <button onClick={loadJobs} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--card-bg-hover)] transition-colors">
-          <RefreshCw className="w-4 h-4" />Refresh
+          <RefreshCw className="w-4 h-4" />{t('listings.refresh')}
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-          <p className="text-[var(--text-muted)] text-sm">Pending</p>
+          <p className="text-[var(--text-muted)] text-sm">{t('listings.pending')}</p>
           <p className="text-3xl font-bold text-[var(--text-primary)] mt-1">{stats.pending}</p>
         </div>
         <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-          <p className="text-[var(--text-muted)] text-sm">Processing</p>
+          <p className="text-[var(--text-muted)] text-sm">{t('listings.processing')}</p>
           <p className="text-3xl font-bold text-[var(--warning)] mt-1">{stats.processing}</p>
         </div>
         <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-          <p className="text-[var(--text-muted)] text-sm">Completed</p>
+          <p className="text-[var(--text-muted)] text-sm">{t('listings.completed')}</p>
           <p className="text-3xl font-bold text-[var(--success)] mt-1">{stats.completed}</p>
         </div>
         <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-5">
-          <p className="text-[var(--text-muted)] text-sm">Failed</p>
+          <p className="text-[var(--text-muted)] text-sm">{t('listings.failed')}</p>
           <p className="text-3xl font-bold text-[var(--danger)] mt-1">{stats.failed}</p>
         </div>
       </div>
@@ -140,7 +142,7 @@ function ListingsContent() {
       <div className="flex gap-2">
         {[undefined, 'pending', 'processing', 'completed', 'failed'].map((status, i) => (
           <button key={i} onClick={() => setFilterStatus(status)} className={cn('px-4 py-2 rounded-lg transition-colors capitalize', filterStatus === status ? 'gradient-primary text-white shadow-lg shadow-[var(--primary)]/25' : 'bg-[var(--card-bg)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--card-bg-hover)]')}>
-            {status || 'All'}
+            {status ? t('listings.' + status) : t('listings.all')}
           </button>
         ))}
       </div>
@@ -151,20 +153,20 @@ function ListingsContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--border-color)]">
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Job ID</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Product</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Etsy ID</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Retries</th>
-                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Created</th>
-                <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.jobId')}</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.product')}</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.status')}</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.etsyId')}</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.retries')}</th>
+                <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.created')}</th>
+                <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('listings.actions')}</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">Loading...</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">{t('common.loading')}</td></tr>
               ) : jobs.length === 0 ? (
-                <tr><td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">No listing jobs found.</td></tr>
+                <tr><td colSpan={7} className="p-8 text-center text-[var(--text-muted)]">{t('listings.noJobs')}</td></tr>
               ) : (
                 jobs.map(job => {
                   const StatusIcon = statusIcons[job.status as keyof typeof statusIcons] || Clock;
@@ -208,10 +210,10 @@ function ListingsContent() {
         </div>
         {totalPages > 1 && (
           <div className="border-t border-[var(--border-color)] p-4 flex items-center justify-between">
-            <p className="text-sm text-[var(--text-muted)]">Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total}</p>
+            <p className="text-sm text-[var(--text-muted)]">{t('listings.showing')} {(page - 1) * limit + 1}-{Math.min(page * limit, total)} / {total}</p>
             <div className="flex gap-2">
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg disabled:opacity-50 transition-colors">Previous</button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg disabled:opacity-50 transition-colors">Next</button>
+              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg disabled:opacity-50 transition-colors">{t('common.previous')}</button>
+              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-4 py-2 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg disabled:opacity-50 transition-colors">{t('common.next')}</button>
             </div>
           </div>
         )}

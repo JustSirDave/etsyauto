@@ -31,6 +31,7 @@ class Product(Base):
     
     price = Column(Integer)
     compare_at_price = Column(Integer)
+    cost_usd_cents = Column(Integer, default=0)  # Supplier/wholesale unit cost (USD cents) for COGS
     quantity = Column(Integer, nullable=True)  # Available quantity
     
     # Etsy-specific fields
@@ -58,7 +59,7 @@ class Product(Base):
     # Import tracking
     source = Column(String(50), CheckConstraint("source IN ('csv','json','api','manual','etsy')"), default='manual')
     ingest_batch_id = Column(String(255))
-    
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -24,6 +24,7 @@ export function AddProductModal({ isOpen, onClose, onProductAdded }: AddProductM
     description: '',
     price: '',
     quantity: '',
+    cost: '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -47,6 +48,8 @@ export function AddProductModal({ isOpen, onClose, onProductAdded }: AddProductM
 
       // Convert price to cents (backend expects price in cents)
       const priceInCents = formData.price ? Math.round(parseFloat(formData.price) * 100) : null;
+      // Convert cost to cents (backend expects cost_usd_cents)
+      const costInCents = formData.cost ? Math.round(parseFloat(formData.cost) * 100) : 0;
 
       // Prepare data for backend
       const productData = {
@@ -59,6 +62,9 @@ export function AddProductModal({ isOpen, onClose, onProductAdded }: AddProductM
               quantity: parseInt(formData.quantity) || 0,
             }
           : null,
+        price: priceInCents,
+        quantity: formData.quantity ? parseInt(formData.quantity) || null : null,
+        cost_usd_cents: costInCents >= 0 ? costInCents : 0,
       };
 
       // Note: Backend ProductImportRequest doesn't have price field directly
@@ -84,6 +90,7 @@ export function AddProductModal({ isOpen, onClose, onProductAdded }: AddProductM
       description: '',
       price: '',
       quantity: '',
+      cost: '',
     });
     setSubmitting(false);
     onClose();
@@ -164,8 +171,8 @@ export function AddProductModal({ isOpen, onClose, onProductAdded }: AddProductM
                 />
               </div>
 
-              {/* Price and Quantity */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Price, Cost, and Quantity */}
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                     Price (USD) <span className="text-[var(--text-muted)]">(Optional)</span>
@@ -182,6 +189,27 @@ export function AddProductModal({ isOpen, onClose, onProductAdded }: AddProductM
                       step="0.01"
                       min="0"
                       placeholder="29.99"
+                      className="w-full pl-8 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+                    Cost (USD) <span className="text-[var(--text-muted)]">(Optional, for COGS)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
+                      $
+                    </span>
+                    <input
+                      type="number"
+                      name="cost"
+                      value={formData.cost}
+                      onChange={handleChange}
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
                       className="w-full pl-8 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
                     />
                   </div>

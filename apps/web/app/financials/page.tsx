@@ -13,6 +13,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useToast } from '@/lib/toast-context';
+import { useLanguage } from '@/lib/language-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import {
   financialsApi,
@@ -39,6 +40,8 @@ import {
   ArrowDownRight,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Download,
   Filter,
   Calendar,
@@ -86,7 +89,7 @@ function daysAgo(n: number): string {
   return d.toISOString();
 }
 
-/** Pretty entry type label */
+/** Pretty entry type label (fallback for non-translated contexts) */
 function entryTypeLabel(t: string): string {
   const map: Record<string, string> = {
     sale: 'Sale',
@@ -104,6 +107,22 @@ function entryTypeLabel(t: string): string {
   };
   return map[t] || t;
 }
+
+/** Translation key map for entry types */
+const ENTRY_TYPE_TRANSLATION_KEYS: Record<string, string> = {
+  sale: 'financials.entryTypes.sale',
+  refund: 'financials.entryTypes.refund',
+  reserve: 'financials.entryTypes.reserve',
+  payout: 'financials.entryTypes.payout',
+  listing_renewal: 'financials.entryTypes.listingRenewal',
+  transaction_fee: 'financials.entryTypes.transactionFee',
+  processing_fee: 'financials.entryTypes.processingFee',
+  advertising: 'financials.entryTypes.advertising',
+  shipping_label: 'financials.entryTypes.shippingLabel',
+  subscription: 'financials.entryTypes.subscription',
+  tax: 'financials.entryTypes.tax',
+  other: 'financials.entryTypes.other',
+};
 
 /** Icon for fee category */
 function feeIcon(category: string) {
@@ -142,10 +161,28 @@ function entryTypeBadgeClasses(t: string): string {
 
 type Period = '7d' | '30d' | '90d' | '12m';
 
+const PERIOD_OPTIONS: Period[] = ['7d', '30d', '90d', '12m'];
+
 function periodToDates(p: Period): { start: string; end: string } {
   const end = new Date().toISOString();
   const days: Record<Period, number> = { '7d': 7, '30d': 30, '90d': 90, '12m': 365 };
   return { start: daysAgo(days[p]), end };
+}
+
+/** Human-readable period label e.g. "Last 3 months: November 2025 - January 2026" */
+function periodToLabel(p: Period): string {
+  const { start, end } = periodToDates(p);
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const labels: Record<Period, string> = {
+    '7d': `Last 7 days: ${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
+    '30d': `Last 30 days: ${fmt(startDate)} – ${fmt(endDate)}`,
+    '90d': `Last 3 months: ${fmt(startDate)} – ${fmt(endDate)}`,
+    '12m': `Last 12 months: ${fmt(startDate)} – ${fmt(endDate)}`,
+  };
+  return labels[p];
 }
 
 function periodToGranularity(p: Period): string {
@@ -153,6 +190,64 @@ function periodToGranularity(p: Period): string {
   if (p === '30d') return 'daily';
   if (p === '90d') return 'weekly';
   return 'monthly';
+}
+
+/* ================================================================== */
+/*  Expandable category card (Etsy-style)                              */
+/* ================================================================== */
+
+function ExpandableCard({
+  title,
+  totalValue,
+  totalPositive,
+  icon: Icon,
+  children,
+  defaultExpanded = false,
+}: {
+  title: string;
+  totalValue: string;
+  totalPositive: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  return (
+    <div className="rounded-xl border bg-white dark:bg-gray-900 overflow-hidden shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-5 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <Icon className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+          </div>
+          <span className="font-medium text-gray-900 dark:text-gray-100">{title}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              'text-lg font-semibold',
+              totalPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+            )}
+          >
+            {totalValue}
+          </span>
+          {expanded ? (
+            <ChevronUp className="w-5 h-5 text-gray-400" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-gray-400" />
+          )}
+        </div>
+      </button>
+      {expanded && (
+        <div className="border-t dark:border-gray-800 px-5 py-4 bg-gray-50/50 dark:bg-gray-800/30">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ================================================================== */
@@ -221,13 +316,14 @@ function FinancialComparisonPanel({
   shops: { id: number; display_name: string }[];
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const entries = Object.entries(comparisonData);
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Financial Comparison</h3>
+        <h3 className="text-lg font-semibold">{t('financials.comparison')}</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-sm">
-          Close
+          {t('common.close')}
         </button>
       </div>
       <div className={`grid gap-4 ${entries.length === 2 ? 'grid-cols-2' : entries.length >= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
@@ -241,23 +337,23 @@ function FinancialComparisonPanel({
               </h4>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-gray-500 text-xs">Revenue</p>
+                  <p className="text-gray-500 text-xs">{t('financials.revenue')}</p>
                   <p className="font-semibold text-green-600">${(summary.revenue / 100).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">Total Expenses</p>
+                  <p className="text-gray-500 text-xs">{t('financials.totalExpenses')}</p>
                   <p className="font-semibold text-red-500">${(summary.total_expenses / 100).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">Net Profit</p>
+                  <p className="text-gray-500 text-xs">{t('financials.netProfit')}</p>
                   <p className="font-semibold text-blue-600">${(summary.net_profit / 100).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">Etsy Fees</p>
+                  <p className="text-gray-500 text-xs">{t('financials.etsyFees')}</p>
                   <p className="font-semibold">${(summary.etsy_fees / 100).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-gray-500 text-xs">Advertising</p>
+                  <p className="text-gray-500 text-xs">{t('financials.advertising')}</p>
                   <p className="font-semibold">${(summary.advertising_expenses / 100).toFixed(2)}</p>
                 </div>
                 <div>
@@ -277,6 +373,7 @@ export default function FinancialsPage() {
   const { user } = useAuth();
   const { selectedShop, selectedShopIds, selectedShops } = useShop();
   const { showToast } = useToast();
+  const { t } = useLanguage();
 
   const [period, setPeriod] = useState<Period>('30d');
   const [loading, setLoading] = useState(true);
@@ -302,6 +399,12 @@ export default function FinancialsPage() {
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
   const shopId = !shopIds ? selectedShop?.id : undefined;
   const { start, end } = periodToDates(period);
+
+  /** Translate entry type using the translation function */
+  const translateEntryType = (type: string): string => {
+    const key = ENTRY_TYPE_TRANSLATION_KEYS[type];
+    return key ? t(key) : type;
+  };
 
   // ── Check scope status ──
   useEffect(() => {
@@ -331,14 +434,14 @@ export default function FinancialsPage() {
     } catch (err: unknown) {
       const error = err as { message?: string; status?: number };
       if (error?.message?.includes('403') || error?.status === 403) {
-        showToast('You do not have permission to view financial data.', 'error');
+        showToast(t('financials.noPermission'), 'error');
       } else {
-        showToast('Failed to load financial data.', 'error');
+        showToast(t('financials.loadFailed'), 'error');
       }
     } finally {
       setLoading(false);
     }
-  }, [shopId, shopIds, start, end, period, ledgerPage, ledgerFilter, showToast]);
+  }, [shopId, shopIds, start, end, period, ledgerPage, ledgerFilter, showToast, t]);
 
   useEffect(() => {
     fetchAll();
@@ -349,10 +452,10 @@ export default function FinancialsPage() {
     setSyncing(true);
     try {
       await financialsApi.triggerSync(shopId);
-      showToast('Financial sync started. Data will refresh shortly.', 'success');
+      showToast(t('financials.syncStarted'), 'success');
       setTimeout(fetchAll, 5000);
     } catch {
-      showToast('Failed to trigger sync.', 'error');
+      showToast(t('financials.syncFailed'), 'error');
     } finally {
       setSyncing(false);
     }
@@ -367,11 +470,11 @@ export default function FinancialsPage() {
       const metadata: Record<string, string> = {};
       if (shopId) metadata.shop_id = String(shopId);
       await invoicesApi.upload(file, metadata);
-      showToast('Invoice uploaded successfully.', 'success');
+      showToast(t('financials.invoiceUploaded'), 'success');
       setShowInvoiceUpload(false);
       fetchAll();
     } catch {
-      showToast('Failed to upload invoice.', 'error');
+      showToast(t('financials.invoiceUploadFailed'), 'error');
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -381,20 +484,20 @@ export default function FinancialsPage() {
   const handleInvoiceAction = async (invoiceId: number, action: 'approved' | 'rejected') => {
     try {
       await invoicesApi.update(invoiceId, { status: action });
-      showToast(`Invoice ${action}.`, 'success');
+      showToast(t('financials.invoiceActioned').replace('{action}', action), 'success');
       fetchAll();
     } catch {
-      showToast(`Failed to ${action} invoice.`, 'error');
+      showToast(t('financials.invoiceActionFailed').replace('{action}', action), 'error');
     }
   };
 
   const handleInvoiceDelete = async (invoiceId: number) => {
     try {
       await invoicesApi.delete(invoiceId);
-      showToast('Invoice deleted.', 'success');
+      showToast(t('financials.invoiceDeleted'), 'success');
       fetchAll();
     } catch {
-      showToast('Failed to delete invoice.', 'error');
+      showToast(t('financials.invoiceDeleteFailed'), 'error');
     }
   };
 
@@ -431,31 +534,26 @@ export default function FinancialsPage() {
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Financial Analytics</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('financials.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              Revenue, expenses, payouts, and ledger for{' '}
-              {shopIds && shopIds.length > 1 ? `${shopIds.length} selected shops` : selectedShop?.display_name || 'all shops'}
+              {t('financials.subtitle')}{' '}
+              {shopIds && shopIds.length > 1 ? `${shopIds.length} ${t('financials.selectedShops')}` : selectedShop?.display_name || t('financials.allShops')}
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Period selector */}
-            <div className="flex rounded-lg border dark:border-gray-700 overflow-hidden text-sm">
-              {(['7d', '30d', '90d', '12m'] as Period[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={cn(
-                    'px-3 py-1.5 transition-colors',
-                    period === p
-                      ? 'bg-gray-900 text-white dark:bg-white dark:text-gray-900'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                  )}
-                >
-                  {p === '12m' ? '1Y' : p.toUpperCase()}
-                </button>
+            {/* Period dropdown (Etsy-style) */}
+            <select
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as Period)}
+              className="rounded-lg border dark:border-gray-700 px-4 py-2 text-sm bg-white dark:bg-gray-800 min-w-[240px]"
+            >
+              {PERIOD_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {periodToLabel(p)}
+                </option>
               ))}
-            </div>
+            </select>
 
             {/* Compare button (visible when multiple shops selected) */}
             {shopIds && shopIds.length > 1 && (
@@ -476,7 +574,7 @@ export default function FinancialsPage() {
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
-                {showComparison ? 'Hide Comparison' : 'Compare Shops'}
+                {showComparison ? t('financials.hideComparison') : t('financials.compareShops')}
               </button>
             )}
 
@@ -488,7 +586,7 @@ export default function FinancialsPage() {
                 className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
               >
                 <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
-                Sync
+                {t('financials.sync')}
               </button>
             )}
           </div>
@@ -500,19 +598,19 @@ export default function FinancialsPage() {
             <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                Billing scope not granted
+                {t('financials.billingScopeNotGranted')}
               </p>
               <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
-                Your shop&apos;s Etsy connection doesn&apos;t include the <code className="font-mono text-xs bg-amber-100 dark:bg-amber-800/50 px-1 rounded">billing_r</code> permission.
-                Ledger and fee data won&apos;t sync until the scope is authorized.
-                Order-based analytics still work normally.
+                {t('financials.billingScopeMessage')}{' '}
+                <code className="font-mono text-xs bg-amber-100 dark:bg-amber-800/50 px-1 rounded">{t('financials.billingScopeCode')}</code>{' '}
+                {t('financials.billingScopeEnd')}
               </p>
               {scopeStatus.reconnect_url && (
                 <a
                   href={scopeStatus.reconnect_url}
                   className="inline-flex items-center gap-1 mt-2 text-sm font-medium text-amber-800 dark:text-amber-300 hover:underline"
                 >
-                  Reconnect Etsy to grant permission
+                  {t('financials.reconnectEtsy')}
                   <ArrowUpRight className="w-3 h-3" />
                 </a>
               )}
@@ -535,90 +633,158 @@ export default function FinancialsPage() {
           ) : null
         )}
 
-        {/* ── Financial Summary: Revenue → Fees → Ads → Product Costs → Invoices → Net Profit ── */}
-        {summary && (
-          <>
-            {/* Top KPI Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                title="Revenue"
-                value={formatCents(summary.revenue, summary.currency)}
-                icon={DollarSign}
-                subtitle={`${shortDate(summary.period_start)} – ${shortDate(summary.period_end)}`}
-              />
-              <StatCard
-                title="Etsy Fees"
-                value={formatCents(summary.etsy_fees, summary.currency)}
-                icon={Receipt}
-                positive={false}
-                subtitle="Transaction + processing + renewal"
-              />
-              <StatCard
-                title="Advertising"
-                value={formatCents(summary.advertising_expenses, summary.currency)}
-                icon={Megaphone}
-                positive={false}
-                subtitle="Etsy Ads spend"
-              />
-              <StatCard
-                title="Refunds"
-                value={formatCents(summary.refunds, summary.currency)}
-                icon={RotateCcw}
-                positive={summary.refunds === 0 ? true : false}
-                subtitle={summary.refunds === 0 ? 'No refunds' : 'Refunded'}
-              />
-            </div>
+        {/* ── Activity Summary (Etsy-style) ── */}
+        <div className="rounded-xl border bg-white dark:bg-gray-900 p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            {t('financials.activitySummary')}
+          </h2>
 
-            {/* Cost + Summary Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatCard
-                title="Product Costs"
-                value={formatCents(summary.product_costs, summary.currency)}
-                icon={Package}
-                positive={false}
-                subtitle="From product cost data"
-              />
-              <StatCard
-                title="Invoice Expenses"
-                value={formatCents(summary.invoice_expenses, summary.currency)}
-                icon={FileUp}
-                positive={false}
-                subtitle="Approved uploaded invoices"
-              />
-              <StatCard
-                title="Total Expenses"
-                value={formatCents(summary.total_expenses, summary.currency)}
-                icon={TrendingDown}
-                positive={false}
-                subtitle="Fees + ads + costs + invoices"
-              />
-              <StatCard
-                title="Net Profit"
-                value={formatCents(summary.net_profit, summary.currency)}
-                icon={TrendingUp}
-                positive={summary.net_profit >= 0}
-                subtitle={summary.net_profit >= 0 ? 'Profitable' : 'Loss'}
+          {/* Current Etsy Wallet Balance */}
+          {payout && (
+            <p className="text-base text-gray-700 dark:text-gray-300 mb-4">
+              {t('financials.yourCurrentBalance')}{' '}
+              <strong className="text-gray-900 dark:text-gray-100">
+                {formatCents(payout.current_balance, payout.currency)}
+              </strong>
+              .
+            </p>
+          )}
+
+          {/* Net Profit for selected period */}
+          {summary && (
+            <p className="text-base text-gray-700 dark:text-gray-300 mb-6">
+              {t('financials.yourNetProfit')}{' '}
+              <strong
                 className={cn(
-                  summary.net_profit >= 0
-                    ? 'border-emerald-200 dark:border-emerald-800'
-                    : 'border-red-200 dark:border-red-800'
+                  summary.net_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                 )}
-              />
+              >
+                {formatCents(summary.net_profit, summary.currency)}
+              </strong>
+              .
+            </p>
+          )}
+
+          {/* Sales and Fees - Expandable cards */}
+          {summary && fees && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <ExpandableCard
+                title={t('financials.sales')}
+                totalValue={formatCents(summary.revenue, summary.currency)}
+                totalPositive
+                icon={Receipt}
+                defaultExpanded
+              >
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">{t('financials.totalSales')}</span>
+                    <span className="font-medium">{formatCents(summary.revenue, summary.currency)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">{t('financials.refunds')}</span>
+                    <span className="font-medium text-red-600">
+                      {summary.refunds > 0 ? `-${formatCents(summary.refunds, summary.currency)}` : '—'}
+                    </span>
+                  </div>
+                </div>
+              </ExpandableCard>
+
+              <ExpandableCard
+                title={t('financials.fees')}
+                totalValue={`-${formatCents(summary.etsy_fees, summary.currency)}`}
+                totalPositive={false}
+                icon={CreditCard}
+                defaultExpanded
+              >
+                <div className="space-y-2 text-sm">
+                  {fees.categories
+                    .filter((c) =>
+                      ['transaction_fee', 'processing_fee', 'listing_renewal', 'subscription'].includes(c.category)
+                    )
+                    .map((cat) => (
+                      <div key={cat.category} className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">{translateEntryType(cat.category)}</span>
+                        <span className="font-medium text-red-600">-{formatCents(cat.amount, fees.currency)}</span>
+                      </div>
+                    ))}
+                  {fees.categories.filter((c) =>
+                    ['transaction_fee', 'processing_fee', 'listing_renewal', 'subscription'].includes(c.category)
+                  ).length === 0 && (
+                    <p className="text-gray-400 text-sm">{t('financials.noFeeData')}</p>
+                  )}
+                </div>
+              </ExpandableCard>
+
+              <ExpandableCard
+                title={t('financials.marketing')}
+                totalValue={`-${formatCents(summary.advertising_expenses, summary.currency)}`}
+                totalPositive={false}
+                icon={Megaphone}
+                defaultExpanded
+              >
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">{t('financials.advertising')}</span>
+                    <span className="font-medium text-red-600">
+                      -{formatCents(summary.advertising_expenses, summary.currency)}
+                    </span>
+                  </div>
+                </div>
+              </ExpandableCard>
             </div>
-          </>
+          )}
+        </div>
+
+        {/* ── Additional stats (Product costs, Invoices, etc.) ── */}
+        {summary && user?.role && ['owner', 'admin'].includes(user.role.toLowerCase()) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title={t('financials.productCosts')}
+              value={formatCents(summary.product_costs, summary.currency)}
+              icon={Package}
+              positive={false}
+              subtitle={t('financials.productCostsDescription')}
+            />
+            <StatCard
+              title={t('financials.invoiceExpenses')}
+              value={formatCents(summary.invoice_expenses, summary.currency)}
+              icon={FileUp}
+              positive={false}
+              subtitle={t('financials.invoiceExpensesDescription')}
+            />
+            <StatCard
+              title={t('financials.totalExpenses')}
+              value={formatCents(summary.total_expenses, summary.currency)}
+              icon={TrendingDown}
+              positive={false}
+              subtitle={t('financials.totalExpensesDescription')}
+            />
+            <StatCard
+              title={t('financials.netProfit')}
+              value={formatCents(summary.net_profit, summary.currency)}
+              icon={TrendingUp}
+              positive={summary.net_profit >= 0}
+              subtitle={summary.net_profit >= 0 ? t('financials.profitable') : t('financials.loss')}
+              className={cn(
+                summary.net_profit >= 0
+                  ? 'border-emerald-200 dark:border-emerald-800'
+                  : 'border-red-200 dark:border-red-800'
+              )}
+            />
+          </div>
         )}
 
         {/* ── Invoice Expenses Section ── */}
         {user?.role && ['owner', 'admin'].includes(user.role.toLowerCase()) && (
           <div className="rounded-xl border bg-white dark:bg-gray-900 p-5 shadow-sm">
-            <SectionHeader title="Expense Invoices">
+            <SectionHeader title={t('financials.expenseInvoices')}>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">
-                  {invoices?.total_count ?? 0} invoices
+                  {invoices?.total_count ?? 0} {t('financials.invoicesCount')}
                 </span>
                 <label className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
                   <FileUp className="w-4 h-4" />
-                  {uploading ? 'Uploading...' : 'Upload Invoice'}
+                  {uploading ? t('financials.uploading') : t('financials.uploadInvoice')}
                   <input
                     type="file"
                     className="hidden"
@@ -635,12 +801,12 @@ export default function FinancialsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 dark:bg-gray-800/50 text-left">
-                      <th className="px-4 py-2 font-medium text-gray-500">File</th>
-                      <th className="px-4 py-2 font-medium text-gray-500">Vendor</th>
-                      <th className="px-4 py-2 font-medium text-gray-500">Date</th>
-                      <th className="px-4 py-2 font-medium text-gray-500 text-right">Amount</th>
-                      <th className="px-4 py-2 font-medium text-gray-500">Status</th>
-                      <th className="px-4 py-2 font-medium text-gray-500">Actions</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">{t('financials.table.file')}</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">{t('financials.table.vendor')}</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">{t('financials.table.date')}</th>
+                      <th className="px-4 py-2 font-medium text-gray-500 text-right">{t('financials.table.amount')}</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">{t('financials.table.status')}</th>
+                      <th className="px-4 py-2 font-medium text-gray-500">{t('financials.table.actions')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y dark:divide-gray-800">
@@ -668,7 +834,7 @@ export default function FinancialsPage() {
                             inv.status === 'rejected' && 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
                             inv.status === 'pending' && 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
                           )}>
-                            {inv.status}
+                            {inv.status === 'approved' ? t('financials.status.approved') : inv.status === 'rejected' ? t('financials.status.rejected') : t('financials.status.pending')}
                           </span>
                         </td>
                         <td className="px-4 py-2">
@@ -679,13 +845,13 @@ export default function FinancialsPage() {
                                   onClick={() => handleInvoiceAction(inv.id, 'approved')}
                                   className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300"
                                 >
-                                  Approve
+                                  {t('common.approve')}
                                 </button>
                                 <button
                                   onClick={() => handleInvoiceAction(inv.id, 'rejected')}
                                   className="text-xs px-2 py-1 rounded bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/40 dark:text-red-300"
                                 >
-                                  Reject
+                                  {t('common.reject')}
                                 </button>
                               </>
                             )}
@@ -693,7 +859,7 @@ export default function FinancialsPage() {
                               onClick={() => handleInvoiceDelete(inv.id)}
                               className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400"
                             >
-                              Delete
+                              {t('common.delete')}
                             </button>
                           </div>
                         </td>
@@ -704,7 +870,7 @@ export default function FinancialsPage() {
               </div>
             ) : (
               <p className="text-sm text-gray-400 text-center py-8">
-                No invoices uploaded yet. Upload invoices to track product costs and expenses.
+                {t('financials.noInvoices')}
               </p>
             )}
           </div>
@@ -713,27 +879,27 @@ export default function FinancialsPage() {
         {/* ── Payout bar ── */}
         {payout && (
           <div className="rounded-xl border bg-white dark:bg-gray-900 p-5 shadow-sm">
-            <SectionHeader title="Payout Estimate">
+            <SectionHeader title={t('financials.payoutEstimate')}>
               <span className="text-xs text-gray-400">
-                As of {shortDate(payout.as_of)}
+                {t('financials.asOf')} {shortDate(payout.as_of)}
               </span>
             </SectionHeader>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div>
-                <p className="text-sm text-gray-500">Current Balance</p>
+                <p className="text-sm text-gray-500">{t('financials.currentBalance')}</p>
                 <p className="text-xl font-bold mt-1">
                   {formatCents(payout.current_balance, payout.currency)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Reserve Held</p>
+                <p className="text-sm text-gray-500">{t('financials.reserveHeld')}</p>
                 <p className="text-xl font-bold mt-1 text-amber-600">
                   {formatCents(payout.reserve_held, payout.currency)}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">Available for Payout</p>
+                <p className="text-sm text-gray-500">{t('financials.availableForPayout')}</p>
                 <p className="text-xl font-bold mt-1 text-emerald-600">
                   {formatCents(payout.available_for_payout, payout.currency)}
                 </p>
@@ -743,7 +909,7 @@ export default function FinancialsPage() {
             {/* Recent payouts */}
             {payout.recent_payouts.length > 0 && (
               <div className="mt-4 pt-4 border-t dark:border-gray-800">
-                <p className="text-xs font-medium text-gray-500 mb-2">Recent Payouts</p>
+                <p className="text-xs font-medium text-gray-500 mb-2">{t('financials.recentPayouts')}</p>
                 <div className="flex flex-wrap gap-2">
                   {payout.recent_payouts.map((p, i) => (
                     <span
@@ -765,7 +931,7 @@ export default function FinancialsPage() {
           {/* Fee breakdown */}
           {fees && (
             <div className="rounded-xl border bg-white dark:bg-gray-900 p-5 shadow-sm">
-              <SectionHeader title="Fee Breakdown">
+              <SectionHeader title={t('financials.feeBreakdown')}>
                 <span className="text-sm font-semibold text-gray-500">
                   {formatCents(fees.total_fees)}
                 </span>
@@ -779,7 +945,7 @@ export default function FinancialsPage() {
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                           {feeIcon(cat.category)}
-                          {entryTypeLabel(cat.category)}
+                          {translateEntryType(cat.category)}
                         </span>
                         <span className="font-medium">{formatCents(cat.amount)}</span>
                       </div>
@@ -790,14 +956,14 @@ export default function FinancialsPage() {
                         />
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {cat.count} entries &middot; {pct.toFixed(1)}%
+                        {cat.count} {t('financials.entries')} &middot; {pct.toFixed(1)}%
                       </p>
                     </div>
                   );
                 })}
                 {fees.categories.length === 0 && (
                   <p className="text-sm text-gray-400 text-center py-8">
-                    No fee data for this period
+                    {t('financials.noFeeData')}
                   </p>
                 )}
               </div>
@@ -807,7 +973,7 @@ export default function FinancialsPage() {
           {/* Revenue timeline (simple bar chart) */}
           {timeline && (
             <div className="rounded-xl border bg-white dark:bg-gray-900 p-5 shadow-sm">
-              <SectionHeader title="Revenue Timeline">
+              <SectionHeader title={t('financials.revenueTimeline')}>
                 <span className="text-xs text-gray-400 capitalize">{timeline.granularity}</span>
               </SectionHeader>
 
@@ -824,9 +990,9 @@ export default function FinancialsPage() {
                         {/* Tooltip */}
                         <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
                           <p>{shortDate(point.date)}</p>
-                          <p className="text-emerald-400">Rev: {formatCents(point.revenue)}</p>
-                          <p className="text-red-400">Exp: {formatCents(point.expenses)}</p>
-                          <p className="text-blue-400">Net: {formatCents(point.net)}</p>
+                          <p className="text-emerald-400">{t('financials.rev')} {formatCents(point.revenue)}</p>
+                          <p className="text-red-400">{t('financials.exp')} {formatCents(point.expenses)}</p>
+                          <p className="text-blue-400">{t('financials.net')} {formatCents(point.net)}</p>
                         </div>
                         <div
                           className="w-full bg-emerald-400 dark:bg-emerald-500 rounded-t transition-all duration-300"
@@ -842,27 +1008,27 @@ export default function FinancialsPage() {
                 </div>
               ) : (
                 <p className="text-sm text-gray-400 text-center py-16">
-                  No timeline data for this period
+                  {t('financials.noTimelineData')}
                 </p>
               )}
 
               <div className="flex items-center justify-center gap-6 mt-3 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 rounded bg-emerald-400 inline-block" /> Revenue
+                  <span className="w-3 h-3 rounded bg-emerald-400 inline-block" /> {t('financials.revenue')}
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 rounded bg-red-300 inline-block" /> Expenses
+                  <span className="w-3 h-3 rounded bg-red-300 inline-block" /> {t('financials.expenses')}
                 </span>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Ledger Table ── */}
+        {/* ── Recent activities (Ledger) ── */}
         {ledger && (
           <div className="rounded-xl border bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
             <div className="p-5 border-b dark:border-gray-800">
-              <SectionHeader title="Ledger Entries">
+              <SectionHeader title={t('financials.recentActivities')}>
                 <div className="flex items-center gap-2">
                   <select
                     className="text-sm rounded-lg border dark:border-gray-700 px-2 py-1 bg-white dark:bg-gray-800"
@@ -872,18 +1038,18 @@ export default function FinancialsPage() {
                       setLedgerPage(0);
                     }}
                   >
-                    <option value="">All Types</option>
-                    <option value="sale">Sales</option>
-                    <option value="transaction_fee">Transaction Fees</option>
-                    <option value="processing_fee">Processing Fees</option>
-                    <option value="refund">Refunds</option>
-                    <option value="payout">Payouts</option>
-                    <option value="listing_renewal">Listing Renewals</option>
-                    <option value="advertising">Advertising</option>
-                    <option value="shipping_label">Shipping Labels</option>
-                    <option value="reserve">Reserves</option>
+                    <option value="">{t('financials.allTypes')}</option>
+                    <option value="sale">{t('financials.types.sales')}</option>
+                    <option value="transaction_fee">{t('financials.types.transactionFees')}</option>
+                    <option value="processing_fee">{t('financials.types.processingFees')}</option>
+                    <option value="refund">{t('financials.types.refunds')}</option>
+                    <option value="payout">{t('financials.types.payouts')}</option>
+                    <option value="listing_renewal">{t('financials.types.listingRenewals')}</option>
+                    <option value="advertising">{t('financials.types.advertising')}</option>
+                    <option value="shipping_label">{t('financials.types.shippingLabels')}</option>
+                    <option value="reserve">{t('financials.types.reserves')}</option>
                   </select>
-                  <span className="text-xs text-gray-400">{ledger.total_count} total</span>
+                  <span className="text-xs text-gray-400">{ledger.total_count} {t('common.total')}</span>
                 </div>
               </SectionHeader>
             </div>
@@ -892,11 +1058,11 @@ export default function FinancialsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 dark:bg-gray-800/50 text-left">
-                    <th className="px-5 py-3 font-medium text-gray-500">Date</th>
-                    <th className="px-5 py-3 font-medium text-gray-500">Type</th>
-                    <th className="px-5 py-3 font-medium text-gray-500">Description</th>
-                    <th className="px-5 py-3 font-medium text-gray-500 text-right">Amount</th>
-                    <th className="px-5 py-3 font-medium text-gray-500 text-right">Balance</th>
+                    <th className="px-5 py-3 font-medium text-gray-500">{t('financials.table.date')}</th>
+                    <th className="px-5 py-3 font-medium text-gray-500">{t('financials.table.type')}</th>
+                    <th className="px-5 py-3 font-medium text-gray-500">{t('financials.table.description')}</th>
+                    <th className="px-5 py-3 font-medium text-gray-500 text-right">{t('financials.table.net')}</th>
+                    <th className="px-5 py-3 font-medium text-gray-500 text-right">{t('financials.table.balance')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y dark:divide-gray-800">
@@ -915,7 +1081,7 @@ export default function FinancialsPage() {
                             entryTypeBadgeClasses(entry.entry_type)
                           )}
                         >
-                          {entryTypeLabel(entry.entry_type)}
+                          {translateEntryType(entry.entry_type)}
                         </span>
                       </td>
                       <td className="px-5 py-3 max-w-xs truncate text-gray-700 dark:text-gray-300">
@@ -938,7 +1104,7 @@ export default function FinancialsPage() {
                   {ledger.entries.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-5 py-12 text-center text-gray-400">
-                        No ledger entries found for this period and filter.
+                        {t('financials.noLedgerEntries')}
                       </td>
                     </tr>
                   )}

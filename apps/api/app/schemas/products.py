@@ -16,6 +16,7 @@ class ProductImportRequest(BaseModel):
     variants: Optional[Dict] = None
     price: Optional[int] = None
     quantity: Optional[int] = None
+    cost_usd_cents: Optional[int] = None
 
 
 class ProductImportBatchRequest(BaseModel):
@@ -36,6 +37,7 @@ class ProductResponse(BaseModel):
     images: Optional[List[str]]
     price: Optional[int]
     quantity: Optional[int]
+    cost_usd_cents: Optional[int] = 0
     source: str
     ingest_batch_id: Optional[str]
     created_at: datetime

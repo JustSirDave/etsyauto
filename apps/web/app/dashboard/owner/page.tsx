@@ -228,7 +228,7 @@ function OwnerDashboardContent() {
         setStats(statsData);
         setRecentOrders(ordersData.orders || []);
       } catch (error: any) {
-        showToast(error.detail || 'Failed to load dashboard', 'error');
+        showToast(error.detail || t('dashboard.loadFailed'), 'error');
       } finally {
         setLoading(false);
       }
@@ -252,7 +252,7 @@ function OwnerDashboardContent() {
       setStats(statsData);
       setRecentOrders(ordersData.orders || []);
     } catch (error: any) {
-      showToast(error.detail || 'Failed to load dashboard', 'error');
+      showToast(error.detail || t('dashboard.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -287,7 +287,7 @@ function OwnerDashboardContent() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-[var(--text-primary)]">
-          Hi, {selectedShop?.display_name || user?.name || 'there'}. Welcome back! Here's your Etsy shop overview.
+          {`${selectedShop?.display_name || user?.name || ''}, ${t('dashboard.welcomeBack')}`}
         </h1>
         <p className="text-[var(--text-muted)] mt-1">
           {t('dashboard.subtitle')}
@@ -297,32 +297,32 @@ function OwnerDashboardContent() {
       {/* Analytics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Total Orders"
+          title={t('dashboard.totalOrders')}
           value={stats.total_orders || 0}
           icon={ShoppingCart}
           trend={stats.changes?.orders}
-          trendLabel="vs last period"
+          trendLabel={t('dashboard.vsLastPeriod')}
         />
         <StatCard
-          title="Total Products"
+          title={t('dashboard.totalProducts')}
           value={stats.total_products || 0}
           icon={Package}
           trend={stats.changes?.products}
-          trendLabel="vs last period"
+          trendLabel={t('dashboard.vsLastPeriod')}
         />
         <StatCard
-          title="Active Listings"
+          title={t('dashboard.activeListings')}
           value={stats.active_listings || 0}
           icon={FileText}
           trend={stats.changes?.listings}
-          trendLabel="vs last period"
+          trendLabel={t('dashboard.vsLastPeriod')}
         />
         <StatCard
-          title="Total Customers"
+          title={t('dashboard.totalCustomers')}
           value={stats.total_customers || 0}
           icon={Users}
           trend={stats.changes?.customers}
-          trendLabel="vs last period"
+          trendLabel={t('dashboard.vsLastPeriod')}
         />
       </div>
 
@@ -365,10 +365,10 @@ function OwnerDashboardContent() {
               {t('dashboard.quickActions')}
             </h2>
             <div className="grid grid-cols-2 gap-3">
-              <QuickActionButton icon={Upload} label="Bulk Upload" href="/products/import" />
-              <QuickActionButton icon={Sparkles} label="AI Generate" href="/ai-content" variant="secondary" />
-              <QuickActionButton icon={FileText} label="View Products" href="/products" variant="secondary" />
-              <QuickActionButton icon={Users} label="Manage Team" href="/team" variant="secondary" />
+              <QuickActionButton icon={Upload} label={t('dashboard.bulkUpload')} href="/products/import" />
+              <QuickActionButton icon={Sparkles} label={t('dashboard.aiGenerate')} href="/ai-content" variant="secondary" />
+              <QuickActionButton icon={FileText} label={t('dashboard.viewProducts')} href="/products" variant="secondary" />
+              <QuickActionButton icon={Users} label={t('dashboard.manageTeam')} href="/team" variant="secondary" />
             </div>
           </div>
         </div>

@@ -530,10 +530,11 @@ class FinancialService:
         is not possible at the SQL level.
         """
         try:
+            order_date_col = func.coalesce(Order.etsy_created_at, Order.created_at)
             order_filters = [
                 Order.tenant_id == tenant_id,
-                Order.order_date >= start_date,
-                Order.order_date <= end_date,
+                order_date_col >= start_date,
+                order_date_col <= end_date,
             ]
             self._apply_shop_filter(order_filters, Order.shop_id, shop_id, shop_ids)
 

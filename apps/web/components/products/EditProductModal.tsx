@@ -19,6 +19,7 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
     tags_raw: [] as string[],
     images: [] as string[],
     variants: [] as any[],
+    cost_usd_cents: 0 as number | undefined,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +35,7 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
         tags_raw: product.tags_raw || [],
         images: product.images || [],
         variants: product.variants || [],
+        cost_usd_cents: product.cost_usd_cents ?? 0,
       });
       setTagsInput((product.tags_raw || []).join(', '));
       setImagesInput((product.images || []).join('\n'));
@@ -66,6 +68,7 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
         ...formData,
         tags_raw: tags,
         images: images,
+        cost_usd_cents: formData.cost_usd_cents ?? 0,
       });
 
       showToast('Product updated successfully!', 'success');
@@ -149,6 +152,30 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
               disabled={isSubmitting}
               className="w-full px-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-colors resize-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
+          </div>
+
+          {/* Cost (optional, for COGS) */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+              Cost per unit (USD) <span className="text-[var(--text-muted)] font-normal">— Optional, for COGS</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">$</span>
+              <input
+                type="number"
+                value={formData.cost_usd_cents != null && formData.cost_usd_cents > 0 ? (formData.cost_usd_cents / 100).toFixed(2) : ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const cents = val === '' ? 0 : Math.round(parseFloat(val) * 100);
+                  setFormData({ ...formData, cost_usd_cents: cents >= 0 ? cents : 0 });
+                }}
+                placeholder="0.00"
+                step="0.01"
+                min="0"
+                disabled={isSubmitting}
+                className="w-full pl-8 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+            </div>
           </div>
 
           {/* Tags */}

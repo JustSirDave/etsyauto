@@ -42,6 +42,7 @@ class EtsyClient:
         self.db = db
         self.base_url = settings.ETSY_API_BASE_URL
         self.client_id = settings.ETSY_CLIENT_ID
+        self.client_secret = settings.ETSY_CLIENT_SECRET
 
         # Initialize rate limiter
         if rate_limiter is None:
@@ -141,7 +142,7 @@ class EtsyClient:
 
         # Make request
         headers = kwargs.pop("headers", {})
-        headers["x-api-key"] = self.client_id
+        headers["x-api-key"] = f"{self.client_id}:{self.client_secret}" if self.client_secret else self.client_id
         headers["Authorization"] = f"Bearer {access_token}"
 
         url = f"{self.base_url}{endpoint}"

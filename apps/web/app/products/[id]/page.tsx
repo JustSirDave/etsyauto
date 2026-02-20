@@ -11,12 +11,15 @@ import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { ArrowLeft, Package, Calendar, Tag, DollarSign, Sparkles, Trash2, Edit } from 'lucide-react';
 import { productsApi, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { useAuth } from '@/lib/auth-context';
 import { EditProductModal } from '@/components/products/EditProductModal';
 
 function ProductDetailContent() {
   const router = useRouter();
   const params = useParams();
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const isSupplier = user?.role?.toLowerCase() === 'supplier';
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -126,6 +129,7 @@ function ProductDetailContent() {
         </button>
 
         <div className="flex items-center gap-3">
+          {!isSupplier && (
           <button
             onClick={handleGenerateAI}
             disabled={generating}
@@ -143,15 +147,19 @@ function ProductDetailContent() {
               </>
             )}
           </button>
+          )}
 
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-            <span>Edit</span>
-          </button>
+          {!isSupplier && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors"
+            >
+              <Edit className="w-4 h-4" />
+              <span>Edit</span>
+            </button>
+          )}
 
+          {!isSupplier && (
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -169,6 +177,7 @@ function ProductDetailContent() {
               </>
             )}
           </button>
+          )}
         </div>
       </div>
 
@@ -234,7 +243,16 @@ function ProductDetailContent() {
                     <p className="text-xs text-[var(--text-muted)] mb-1">Price</p>
                     <p className="text-sm text-[var(--text-primary)] font-medium flex items-center gap-1">
                       <DollarSign className="w-4 h-4" />
-                      {product.price.toFixed(2)}
+                      ${(product.price / 100).toFixed(2)}
+                    </p>
+                  </div>
+                )}
+                {(product.cost_usd_cents ?? 0) > 0 && (
+                  <div>
+                    <p className="text-xs text-[var(--text-muted)] mb-1">Cost (COGS)</p>
+                    <p className="text-sm text-[var(--text-primary)] font-medium flex items-center gap-1">
+                      <DollarSign className="w-4 h-4" />
+                      ${((product.cost_usd_cents ?? 0) / 100).toFixed(2)}
                     </p>
                   </div>
                 )}

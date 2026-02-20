@@ -5,6 +5,7 @@ Products API Endpoints
 from datetime import datetime, timezone
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
@@ -23,7 +24,6 @@ from app.api.dependencies import (
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
-from app.models.tenancy import User
 from app.models.listings import Product, AIGeneration
 from app.schemas.products import (
     ProductImportRequest, 
@@ -61,6 +61,7 @@ async def import_product(
         variants=request.variants,
         price=request.price,
         quantity=request.quantity,
+        cost_usd_cents=request.cost_usd_cents or 0,
         source='manual'
     )
     
@@ -88,7 +89,7 @@ async def import_batch(
     
     products = []
     for item in request.products:
-        product = Product(
+        product =         Product(
             tenant_id=context.tenant_id,
             sku=item.sku,
             title_raw=item.title_raw,
@@ -98,6 +99,7 @@ async def import_batch(
             variants=item.variants,
             price=item.price,
             quantity=item.quantity,
+            cost_usd_cents=item.cost_usd_cents or 0,
             source='json',
             ingest_batch_id=batch_id
         )
@@ -217,11 +219,24 @@ async def export_problem_products(
     Export products with validation issues as CSV
     Includes products with missing required fields or other problems
     Requires: READ_PRODUCT permission
+    Suppliers/viewers see only products from shops assigned to them.
     """
     from fastapi.responses import StreamingResponse
     
     # Get products with issues (missing required fields for Etsy listing)
     query = filter_by_tenant(db.query(Product), context.tenant_id, Product.tenant_id)
+    
+    # Suppliers/viewers: products in assigned shops OR tenant-wide (shop_id null)
+    if context.role.lower() not in ("owner", "admin"):
+        if context.allowed_shop_ids:
+            query = query.filter(
+                or_(
+                    Product.shop_id.in_(context.allowed_shop_ids),
+                    Product.shop_id.is_(None),
+                )
+            )
+        else:
+            query = query.filter(Product.shop_id == -1)
     
     if batch_id:
         query = query.filter(Product.ingest_batch_id == batch_id)
@@ -319,13 +334,22 @@ async def list_products(
     List all products for current tenant
     Requires: READ_PRODUCT permission (all roles)
     Supports: shop_id (single) or shop_ids (comma-separated) for multi-shop filtering
+    Suppliers/viewers see only products from shops assigned to them.
     """
-    # Automatically filter by tenant
-    query = filter_by_tenant(
-        db.query(Product),
-        context.tenant_id,
-        Product.tenant_id
-    )
+    # Filter by tenant
+    query = filter_by_tenant(db.query(Product), context.tenant_id, Product.tenant_id)
+    
+    # Suppliers/viewers: products in assigned shops OR tenant-wide (shop_id null)
+    if context.role.lower() not in ("owner", "admin"):
+        if context.allowed_shop_ids:
+            query = query.filter(
+                or_(
+                    Product.shop_id.in_(context.allowed_shop_ids),
+                    Product.shop_id.is_(None),
+                )
+            )
+        else:
+            query = query.filter(Product.shop_id == -1)  # No access
     
     if batch_id:
         query = query.filter(Product.ingest_batch_id == batch_id)
@@ -335,10 +359,12 @@ async def list_products(
         for sid in ids:
             ensure_shop_access(sid, context, db)
         if ids:
-            query = query.filter(Product.shop_id.in_(ids))
+            # Include products with shop_id in selected shops OR shop_id=null (manual/CSV imports)
+            query = query.filter(or_(Product.shop_id.in_(ids), Product.shop_id.is_(None)))
     elif shop_id:
         ensure_shop_access(shop_id, context, db)
-        query = query.filter(Product.shop_id == shop_id)
+        # Include products with this shop OR shop_id=null (manual/CSV imports)
+        query = query.filter(or_(Product.shop_id == shop_id, Product.shop_id.is_(None)))
     
     total = query.count()
     products = query.offset(skip).limit(limit).all()
@@ -354,6 +380,7 @@ async def list_products(
                 "tags_raw": p.tags_raw,
                 "images": p.images,
                 "price": p.price,
+                "cost_usd_cents": getattr(p, "cost_usd_cents", 0) or 0,
                 "source": p.source,
                 "batch_id": p.ingest_batch_id,
                 "created_at": p.created_at.isoformat()
@@ -386,7 +413,12 @@ async def get_product(
     
     # Ensure tenant access (defense in depth)
     ensure_tenant_access(product.tenant_id, context)
-    
+
+    # Suppliers can access products in assigned shops or tenant-wide (shop_id null)
+    if context.role.lower() in ("supplier", "viewer"):
+        if product.shop_id is not None:
+            ensure_shop_access(product.shop_id, context, db)
+
     return {
         "id": product.id,
         "shop_id": product.shop_id,
@@ -397,9 +429,10 @@ async def get_product(
         "images": product.images,
         "variants": product.variants,
         "price": product.price,
+        "cost_usd_cents": getattr(product, "cost_usd_cents", 0) or 0,
         "source": product.source,
         "batch_id": product.ingest_batch_id,
-        "created_at": product.created_at.isoformat()
+        "created_at": product.created_at.isoformat(),
     }
 
 
@@ -520,6 +553,8 @@ async def update_product(
     product.tags_raw = request.tags_raw
     product.images = request.images
     product.variants = request.variants
+    if request.cost_usd_cents is not None:
+        product.cost_usd_cents = max(0, request.cost_usd_cents)
     product.updated_at = datetime.utcnow()
     
     db.commit()

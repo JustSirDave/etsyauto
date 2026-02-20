@@ -1,11 +1,13 @@
 'use client';
 
 import { useShop } from '@/lib/shop-context';
+import { useLanguage } from '@/lib/language-context';
 import { WifiOff } from 'lucide-react';
 import Link from 'next/link';
 
 export function DisconnectedShopBanner() {
   const { selectedShops } = useShop();
+  const { t } = useLanguage();
 
   const disconnectedShops = selectedShops.filter((s) => s.status === 'revoked');
 
@@ -18,14 +20,13 @@ export function DisconnectedShopBanner() {
       <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
       <p className="text-amber-300 flex-1">
         <span className="font-medium">{names}</span>
-        {disconnectedShops.length === 1 ? ' is' : ' are'} disconnected. Data for{' '}
-        {disconnectedShops.length === 1 ? 'this shop' : 'these shops'} won&apos;t sync until reconnected.
+        {' '}{disconnectedShops.length === 1 ? t('disconnected.isDisconnected') : t('disconnected.areDisconnected')}
       </p>
       <Link
         href="/settings?tab=shops"
         className="text-amber-300 hover:text-amber-200 underline font-medium flex-shrink-0"
       >
-        Reconnect
+        {t('disconnected.reconnect')}
       </Link>
     </div>
   );

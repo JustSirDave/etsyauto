@@ -5,13 +5,14 @@
  * Minimal fulfillment-focused view: assigned orders only, no analytics/revenue
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { dashboardApi, type DashboardOrder } from '@/lib/api';
+import { dashboardApi, productsApi, type DashboardOrder, type Product } from '@/lib/api';
+import { useShop } from '@/lib/shop-context';
 import { cn } from '@/lib/utils';
 import {
   Package,
@@ -20,6 +21,7 @@ import {
   TruckIcon,
   AlertCircle,
   FileText,
+  Upload,
 } from 'lucide-react';
 
 // Stat Card Component (no revenue/sensitive data)
@@ -53,13 +55,67 @@ function SupplierDashboardContent() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { t } = useLanguage();
+  const { selectedShopIds } = useShop();
   const [assignedOrders, setAssignedOrders] = useState<DashboardOrder[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productCount, setProductCount] = useState(0);
   const [stats, setStats] = useState({
     pending: 0,
     shipped: 0,
     total: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [refreshingProducts, setRefreshingProducts] = useState(false);
+
+  const CATALOG_REFRESH_KEY = 'lastRefresh_catalog';
+  const REFRESH_WINDOW_MS = 60 * 1000;
+
+  const loadProducts = useCallback(async () => {
+    const shopIds = selectedShopIds.length > 0 ? selectedShopIds : undefined;
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/8f7a8806-9c11-477c-afba-6f56151b52a3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supplier/page.tsx:loadProducts',message:'loadProducts called',data:{selectedShopIds,shopIds},hypothesisId:'H3',timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    try {
+      const data = await productsApi.getAll(1, 5, undefined, { shopIds });
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/8f7a8806-9c11-477c-afba-6f56151b52a3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supplier/page.tsx:loadProducts',message:'productsApi.getAll response',data:{productCount:data?.products?.length,total:data?.total},hypothesisId:'H2,H3',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setProducts(data.products);
+      setProductCount(data.total);
+    } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/8f7a8806-9c11-477c-afba-6f56151b52a3',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'supplier/page.tsx:loadProducts',message:'loadProducts catch',data:{error:String(err)},hypothesisId:'H2,H4',timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setProducts([]);
+      setProductCount(0);
+      throw err;
+    }
+  }, [selectedShopIds]);
+
+  const handleRefreshProducts = async () => {
+    const lastRefresh = typeof window !== 'undefined' ? localStorage.getItem(CATALOG_REFRESH_KEY) : null;
+    const lastRefreshTime = lastRefresh ? parseInt(lastRefresh, 10) : 0;
+    const alreadyUpToDate = Date.now() - lastRefreshTime < REFRESH_WINDOW_MS;
+
+    if (alreadyUpToDate) {
+      showToast('Synchronization is up to date', 'success');
+      return;
+    }
+
+    try {
+      setRefreshingProducts(true);
+      await loadProducts();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(CATALOG_REFRESH_KEY, Date.now().toString());
+      }
+      showToast('Products refreshed', 'success');
+    } catch (error: unknown) {
+      const errObj = error as { detail?: string };
+      showToast(errObj?.detail || 'Failed to refresh products', 'error');
+    } finally {
+      setRefreshingProducts(false);
+    }
+  };
 
   // Load supplier-assigned orders
   useEffect(() => {
@@ -95,6 +151,11 @@ function SupplierDashboardContent() {
 
     loadOrders();
   }, [showToast]);
+
+  // Load products for supplier
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   if (loading) {
     return (
@@ -248,6 +309,74 @@ function SupplierDashboardContent() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Products Section */}
+      <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">
+            Your Products
+          </h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRefreshProducts}
+              disabled={refreshingProducts}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+            >
+              <Upload className="w-4 h-4" />
+              {refreshingProducts ? 'Refreshing...' : 'Sync from catalog'}
+            </button>
+            <Link
+              href="/products"
+              className="text-sm text-[var(--primary)] hover:underline"
+            >
+              View All
+            </Link>
+          </div>
+        </div>
+        {products.length === 0 ? (
+          <div className="text-center py-12">
+            <Package className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3" />
+            <p className="text-[var(--text-muted)]">
+              No products yet. Owner/admin can add products; use Sync from catalog to refresh.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {products.map((product) => (
+              <Link
+                key={product.id}
+                href={`/products/${product.id}`}
+                className="flex items-center gap-4 p-4 rounded-lg bg-[var(--background)] border border-[var(--border-color)] hover:border-[var(--primary)]/30 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-lg bg-[var(--card-bg)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {product.images?.[0] ? (
+                    <img
+                      src={product.images[0]}
+                      alt={product.title_raw}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Package className="w-5 h-5 text-[var(--text-muted)]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-[var(--text-primary)] truncate">
+                    {product.title_raw || 'Untitled Product'}
+                  </p>
+                </div>
+              </Link>
+            ))}
+            {productCount > 5 && (
+              <Link
+                href="/products"
+                className="block text-center text-sm text-[var(--primary)] hover:underline py-2"
+              >
+                View all {productCount} products
+              </Link>
+            )}
           </div>
         )}
       </div>

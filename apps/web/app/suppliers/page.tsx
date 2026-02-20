@@ -9,17 +9,21 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { teamApi, TeamMember } from '@/lib/api';
+import { teamApi, shopsApi, TeamMember, Shop } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
-import { Truck, Mail, User, Calendar, Shield, AlertCircle } from 'lucide-react';
+import { Truck, Mail, User, Calendar, Shield, AlertCircle, Settings2, X } from 'lucide-react';
 
 export default function SuppliersPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { showToast } = useToast();
   const [suppliers, setSuppliers] = useState<TeamMember[]>([]);
+  const [shops, setShops] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shopAccessMember, setShopAccessMember] = useState<TeamMember | null>(null);
+  const [shopAccessSelections, setShopAccessSelections] = useState<number[]>([]);
+  const [savingShopAccess, setSavingShopAccess] = useState(false);
 
   useEffect(() => {
     // Only owners and admins can access this page
@@ -29,7 +33,17 @@ export default function SuppliersPage() {
     }
     
     loadSuppliers();
+    loadShops();
   }, [user, router]);
+
+  const loadShops = async () => {
+    try {
+      const data = await shopsApi.getAll();
+      setShops(data);
+    } catch {
+      setShops([]);
+    }
+  };
 
   const loadSuppliers = async () => {
     try {
@@ -44,6 +58,38 @@ export default function SuppliersPage() {
       showToast(error.detail || 'Failed to load suppliers', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getShopNames = (ids: number[] | undefined): string => {
+    if (!ids || ids.length === 0) return 'No shops assigned';
+    return ids
+      .map((id) => shops.find((s) => s.id === id)?.display_name || `Shop #${id}`)
+      .join(', ');
+  };
+
+  const openShopAccessModal = (member: TeamMember) => {
+    setShopAccessMember(member);
+    setShopAccessSelections(member.allowed_shop_ids || []);
+  };
+
+  const closeShopAccessModal = () => {
+    setShopAccessMember(null);
+    setShopAccessSelections([]);
+  };
+
+  const saveShopAccess = async () => {
+    if (!shopAccessMember) return;
+    try {
+      setSavingShopAccess(true);
+      await teamApi.updateShopAccess(shopAccessMember.user_id, shopAccessSelections);
+      showToast('Shop access updated', 'success');
+      await loadSuppliers();
+      closeShopAccessModal();
+    } catch (error: any) {
+      showToast(error.detail || 'Failed to update shop access', 'error');
+    } finally {
+      setSavingShopAccess(false);
     }
   };
 
@@ -185,6 +231,9 @@ export default function SuppliersPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
                       Shop Access
                     </th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-[var(--text-muted)]">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -221,10 +270,19 @@ export default function SuppliersPage() {
                       </td>
                       <td className="py-4 px-4">
                         <p className="text-[var(--text-secondary)] text-sm">
-                          {supplier.allowed_shop_ids && supplier.allowed_shop_ids.length > 0
-                            ? `${supplier.allowed_shop_ids.length} shop(s)`
-                            : 'All shops'}
+                          {getShopNames(supplier.allowed_shop_ids)}
                         </p>
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        {supplier.invitation_status === 'accepted' && (
+                          <button
+                            onClick={() => openShopAccessModal(supplier)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--primary)] hover:bg-[var(--primary-bg)] rounded-lg transition-colors"
+                          >
+                            <Settings2 className="w-4 h-4" />
+                            Manage Shops
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -233,6 +291,67 @@ export default function SuppliersPage() {
             </div>
           )}
         </DashboardCard>
+
+        {/* Shop Access Modal */}
+        {shopAccessMember && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 max-w-lg w-full mx-4 shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-[var(--text-primary)]">Shop Access</h2>
+                <button onClick={closeShopAccessModal} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-[var(--text-muted)] mb-4">
+                Select which shops {shopAccessMember.name} can access:
+              </p>
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {shops.length === 0 ? (
+                  <p className="text-sm text-[var(--text-muted)]">No shops connected</p>
+                ) : (
+                  shops.map((shop) => (
+                    <label
+                      key={shop.id}
+                      className="flex items-center gap-3 p-3 bg-[var(--background)] rounded-lg border border-[var(--border-color)] cursor-pointer hover:border-[var(--primary)]/30 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={shopAccessSelections.includes(shop.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setShopAccessSelections((prev) => [...prev, shop.id]);
+                          } else {
+                            setShopAccessSelections((prev) => prev.filter((id) => id !== shop.id));
+                          }
+                        }}
+                        className="rounded"
+                      />
+                      <div>
+                        <p className="text-[var(--text-primary)] font-medium">{shop.display_name || 'Unnamed Shop'}</p>
+                        <p className="text-xs text-[var(--text-muted)]">{shop.etsy_shop_id}</p>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={closeShopAccessModal}
+                  className="flex-1 px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded-lg hover:bg-[var(--card-bg-hover)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveShopAccess}
+                  disabled={savingShopAccess}
+                  className="flex-1 px-4 py-3 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                >
+                  {savingShopAccess ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Info Card */}
         <DashboardCard>

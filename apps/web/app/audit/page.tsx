@@ -26,6 +26,7 @@ import {
 import { useToast } from '@/lib/toast-context';
 import { AuditLogDetailModal } from '@/components/audit/AuditLogDetailModal';
 import { useShop } from '@/lib/shop-context';
+import { useLanguage } from '@/lib/language-context';
 
 // Types
 interface AuditLog {
@@ -64,6 +65,7 @@ interface AuditStats {
 export default function AuditLogsPage() {
   const { showToast } = useToast();
   const { selectedShopId } = useShop();
+  const { t } = useLanguage();
   
   // State
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -112,7 +114,7 @@ export default function AuditLogsPage() {
         },
       });
       
-      if (!response.ok) throw new Error('Failed to load audit logs');
+      if (!response.ok) throw new Error(t('audit.loadFailed'));
       
       const data = await response.json();
       setLogs(data.logs);
@@ -120,7 +122,7 @@ export default function AuditLogsPage() {
       setTotalPages(data.total_pages);
     } catch (error: any) {
       console.error('Error loading audit logs:', error);
-      showToast(error.message || 'Failed to load audit logs', 'error');
+      showToast(error.message || t('audit.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -140,7 +142,7 @@ export default function AuditLogsPage() {
         },
       });
       
-      if (!response.ok) throw new Error('Failed to load stats');
+      if (!response.ok) throw new Error(t('audit.loadFailed'));
       
       const data = await response.json();
       setStats(data);
@@ -224,10 +226,10 @@ export default function AuditLogsPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
               <Shield className="w-7 h-7 text-blue-600" />
-              Audit Logs
+              {t('audit.title')}
             </h1>
             <p className="text-gray-600 mt-1">
-              View and monitor all system activities (30-day retention)
+              {t('audit.subtitle')}
             </p>
           </div>
           <button
@@ -239,7 +241,7 @@ export default function AuditLogsPage() {
             }`}
           >
             <Filter className="w-5 h-5" />
-            Filters
+            {t('audit.filters')}
           </button>
         </div>
 
@@ -253,7 +255,7 @@ export default function AuditLogsPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.total_actions.toLocaleString()}</p>
-                  <p className="text-gray-600 text-sm">Total Actions</p>
+                  <p className="text-gray-600 text-sm">{t('audit.totalActions')}</p>
                 </div>
               </div>
             </div>
@@ -265,7 +267,7 @@ export default function AuditLogsPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.success_count.toLocaleString()}</p>
-                  <p className="text-gray-600 text-sm">Successful</p>
+                  <p className="text-gray-600 text-sm">{t('audit.successful')}</p>
                 </div>
               </div>
             </div>
@@ -277,7 +279,7 @@ export default function AuditLogsPage() {
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-gray-900">{stats.failure_count + stats.error_count}</p>
-                  <p className="text-gray-600 text-sm">Failed/Errors</p>
+                  <p className="text-gray-600 text-sm">{t('audit.failedErrors')}</p>
                 </div>
               </div>
             </div>
@@ -291,7 +293,7 @@ export default function AuditLogsPage() {
                   <p className="text-2xl font-bold text-gray-900">
                     {stats.avg_latency_ms ? `${stats.avg_latency_ms.toFixed(0)}ms` : 'N/A'}
                   </p>
-                  <p className="text-gray-600 text-sm">Avg Latency</p>
+                  <p className="text-gray-600 text-sm">{t('audit.avgLatency')}</p>
                 </div>
               </div>
             </div>
@@ -300,18 +302,18 @@ export default function AuditLogsPage() {
 
         {/* Filters Panel */}
         {showFilters && (
-          <DashboardCard title="Filters">
+          <DashboardCard title={t('audit.filters')}>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Action Type
+                  {t('audit.actionType')}
                 </label>
                 <select
                   value={filters.action}
                   onChange={(e) => setFilters({ ...filters, action: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">All Actions</option>
+                  <option value="">{t('audit.allActions')}</option>
                   <option value="auth.login">Auth - Login</option>
                   <option value="auth.logout">Auth - Logout</option>
                   <option value="product.create">Product - Create</option>
@@ -325,14 +327,14 @@ export default function AuditLogsPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Status
+                  {t('audit.status')}
                 </label>
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">All Statuses</option>
+                  <option value="">{t('audit.allStatuses')}</option>
                   <option value="success">Success</option>
                   <option value="failure">Failure</option>
                   <option value="error">Error</option>
@@ -342,7 +344,7 @@ export default function AuditLogsPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Actor Email
+                  {t('audit.actorEmail')}
                 </label>
                 <input
                   type="text"
@@ -355,7 +357,7 @@ export default function AuditLogsPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date From
+                  {t('audit.dateFrom')}
                 </label>
                 <input
                   type="datetime-local"
@@ -367,7 +369,7 @@ export default function AuditLogsPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date To
+                  {t('audit.dateTo')}
                 </label>
                 <input
                   type="datetime-local"
@@ -382,13 +384,13 @@ export default function AuditLogsPage() {
                   onClick={handleApplyFilters}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                  Apply
+                  {t('audit.apply')}
                 </button>
                 <button
                   onClick={handleResetFilters}
                   className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
                 >
-                  Reset
+                  {t('audit.reset')}
                 </button>
               </div>
             </div>
@@ -396,7 +398,7 @@ export default function AuditLogsPage() {
         )}
 
         {/* Audit Logs Table */}
-        <DashboardCard title={`Audit Logs (${total.toLocaleString()} total)`}>
+        <DashboardCard title={`${t('audit.title')} (${total.toLocaleString()} ${t('audit.total')})`}>
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -404,21 +406,21 @@ export default function AuditLogsPage() {
           ) : logs.length === 0 ? (
             <div className="text-center py-12">
               <Shield className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600">No audit logs found</p>
-              <p className="text-gray-500 text-sm mt-1">Try adjusting your filters</p>
+              <p className="text-gray-600">{t('audit.noLogs')}</p>
+              <p className="text-gray-500 text-sm mt-1">{t('audit.adjustFilters')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Timestamp</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Action</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Actor</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Target</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Latency</th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">Details</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.timestamp')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.action')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.actor')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.status')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.target')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.latency')}</th>
+                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700">{t('audit.details')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -435,7 +437,7 @@ export default function AuditLogsPage() {
                         {formatAction(log.action)}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">
-                        {log.actor_email || 'System'}
+                        {log.actor_email || t('audit.system')}
                       </td>
                       <td className="py-3 px-4">
                         {getStatusBadge(log.status)}
@@ -448,7 +450,7 @@ export default function AuditLogsPage() {
                       </td>
                       <td className="py-3 px-4">
                         <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">
-                          View
+                          {t('audit.view')}
                         </button>
                       </td>
                     </tr>
@@ -462,7 +464,7 @@ export default function AuditLogsPage() {
           {!loading && logs.length > 0 && (
             <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
               <p className="text-sm text-gray-600">
-                Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total.toLocaleString()} results
+                {t('audit.showing')} {(page - 1) * pageSize + 1} {t('audit.to')} {Math.min(page * pageSize, total)} {t('audit.of')} {total.toLocaleString()} {t('audit.results')}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -473,7 +475,7 @@ export default function AuditLogsPage() {
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <span className="text-sm text-gray-700">
-                  Page {page} of {totalPages}
+                  {t('audit.page')} {page} {t('audit.of')} {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(page + 1)}
@@ -498,4 +500,3 @@ export default function AuditLogsPage() {
     </DashboardLayout>
   );
 }
-

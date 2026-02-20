@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import Script from 'next/script';
 import { Providers } from './providers';
 
-const inter = Inter({ subsets: ['latin'] });
+const fontClass = 'font-sans';
 
 export const metadata: Metadata = {
   title: 'Etsy Automation Platform',
@@ -31,7 +30,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={fontClass}>
         <Providers>{children}</Providers>
       </body>
     </html>

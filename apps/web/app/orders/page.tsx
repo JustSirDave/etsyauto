@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { ordersApi, Order, OrderStats } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useShop } from '@/lib/shop-context';
+import { useLanguage } from '@/lib/language-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import { SyncStatusModal, useRecentSync } from '@/components/modals/SyncStatusModal';
 import { useAuth } from '@/lib/auth-context';
@@ -75,6 +76,7 @@ function OrdersContent() {
   const { showToast } = useToast();
   const { selectedShopId, selectedShopIds } = useShop();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<OrderStats | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
@@ -92,7 +94,7 @@ function OrdersContent() {
   // Sync orders from Etsy
   const handleSyncOrders = async () => {
     if (wasSyncedRecently) {
-      const proceed = confirm('You synced orders recently. Sync again?');
+      const proceed = confirm(t('orders.syncConfirm'));
       if (!proceed) return;
     }
     try {
@@ -102,13 +104,13 @@ function OrdersContent() {
         setSyncTaskId(result.task_id);
         setShowSyncModal(true);
       } else {
-        showToast('Orders synced successfully!', 'success');
+        showToast(t('orders.syncSuccess'), 'success');
         await loadOrders();
         await loadStats();
       }
     } catch (error: any) {
       console.error('Failed to sync orders:', error);
-      showToast(error.detail || 'Failed to sync orders', 'error');
+      showToast(error.detail || t('orders.syncFailed'), 'error');
     } finally {
       setSyncing(false);
     }
@@ -141,7 +143,7 @@ function OrdersContent() {
       setTotal(data.total);
     } catch (error: any) {
       console.error('Failed to load orders:', error);
-      showToast(error.detail || 'Failed to load orders', 'error');
+      showToast(error.detail || t('orders.loadFailed'), 'error');
     } finally {
       setLoading(false);
     }
@@ -187,16 +189,16 @@ function OrdersContent() {
   };
 
   const orderStatsData = [
-    { key: 'processing', title: 'Processing', value: stats?.order_status.processing || 0, icon: <Calendar className="w-6 h-6" /> },
-    { key: 'in_transit', title: 'In Transit', value: stats?.order_status.in_transit || 0, icon: <RefreshCcw className="w-6 h-6" /> },
-    { key: 'completed', title: 'Completed', value: stats?.order_status.completed || 0, icon: <CheckCircle className="w-6 h-6" /> },
-    { key: 'cancelled', title: 'Cancelled', value: stats?.order_status.cancelled || 0, icon: <XCircle className="w-6 h-6" /> },
-    { key: 'refunded', title: 'Refunded', value: stats?.order_status.refunded || 0, icon: <RotateCcw className="w-6 h-6" /> },
+    { key: 'processing', title: t('orders.status.processing'), value: stats?.order_status.processing || 0, icon: <Calendar className="w-6 h-6" /> },
+    { key: 'in_transit', title: t('orders.status.inTransit'), value: stats?.order_status.in_transit || 0, icon: <RefreshCcw className="w-6 h-6" /> },
+    { key: 'completed', title: t('orders.status.completed'), value: stats?.order_status.completed || 0, icon: <CheckCircle className="w-6 h-6" /> },
+    { key: 'cancelled', title: t('orders.status.cancelled'), value: stats?.order_status.cancelled || 0, icon: <XCircle className="w-6 h-6" /> },
+    { key: 'refunded', title: t('orders.status.refunded'), value: stats?.order_status.refunded || 0, icon: <RotateCcw className="w-6 h-6" /> },
   ] as const;
 
   const paymentStatsData = [
-    { key: 'paid', title: 'Paid', value: stats?.payment_status.paid || 0 },
-    { key: 'unpaid', title: 'Unpaid', value: stats?.payment_status.unpaid || 0 },
+    { key: 'paid', title: t('orders.payment.paid'), value: stats?.payment_status.paid || 0 },
+    { key: 'unpaid', title: t('orders.payment.unpaid'), value: stats?.payment_status.unpaid || 0 },
   ] as const;
 
   const totalPages = Math.ceil(total / pageSize);
@@ -208,13 +210,13 @@ function OrdersContent() {
         {/* Order Status - Left Column */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Order Status</h2>
+            <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.orderStatus')}</h2>
             {(statusFilter || paymentFilter) && (
               <button
                 onClick={() => router.push('/orders')}
                 className="text-xs text-[var(--primary)] hover:underline"
               >
-                Clear filters
+                {t('orders.clearFilters')}
               </button>
             )}
           </div>
@@ -281,7 +283,7 @@ function OrdersContent() {
 
         {/* Payment Status - Right Column */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment Status</h2>
+          <h2 className="text-sm font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.paymentStatus')}</h2>
           <div className="grid grid-cols-1 gap-4">
             {paymentStatsData.map((stat) => {
               const paymentStyle = PAYMENT_STATUS_STYLES[stat.key];
@@ -322,7 +324,7 @@ function OrdersContent() {
       {/* Table */}
       <DashboardCard noPadding>
         <div className="p-5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-[var(--border-color)]">
-          <div className="w-full sm:w-80"><SearchInput placeholder="Search Order" value={searchQuery} onChange={setSearchQuery} /></div>
+          <div className="w-full sm:w-80"><SearchInput placeholder={t('orders.searchPlaceholder')} value={searchQuery} onChange={setSearchQuery} /></div>
           <div className="flex items-center gap-3">
             {(user?.role === 'owner' || user?.role === 'admin') && (
               <button
@@ -331,7 +333,7 @@ function OrdersContent() {
                 className="flex items-center gap-2 px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--background)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <RefreshCcw className={cn('w-4 h-4', syncing && 'animate-spin')} />
-                <span>{syncing ? 'Syncing...' : 'Sync Orders'}</span>
+                <span>{syncing ? t('orders.syncing') : t('orders.syncOrders')}</span>
               </button>
             )}
             <PageSizeDropdown value={pageSize} onChange={setPageSize} />
@@ -344,9 +346,9 @@ function OrdersContent() {
             </div>
           ) : filteredOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20">
-              <p className="text-[var(--text-muted)] text-lg">No orders yet...</p>
+              <p className="text-[var(--text-muted)] text-lg">{t('orders.noOrders')}</p>
               {searchQuery && (
-                <p className="text-[var(--text-muted)] text-sm mt-2">Try adjusting your search query</p>
+                <p className="text-[var(--text-muted)] text-sm mt-2">{t('orders.adjustSearch')}</p>
               )}
             </div>
           ) : (
@@ -354,15 +356,15 @@ function OrdersContent() {
               <thead>
                 <tr className="border-b border-[var(--border-color)]">
                   <th className="text-left py-4 px-5 w-12"><TableCheckbox checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0} indeterminate={selectedOrders.length > 0 && selectedOrders.length < filteredOrders.length} onChange={toggleSelectAll} /></th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Order</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Date</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Customer</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Assigned To</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Payment</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Tracking</th>
-                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Amount</th>
-                  <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">Actions</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.order')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.date')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.customer')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.assignedTo')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.payment')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.status')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.tracking')}</th>
+                  <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.amount')}</th>
+                  <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">{t('orders.table.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -419,7 +421,7 @@ function OrdersContent() {
                         {order.total_price === null ? '--' : `${order.currency} ${order.total_price.toFixed(2)}`}
                       </span>
                     </td>
-                    <td className="py-4 px-5"><TableActions onView={() => router.push(`/orders/${order.id}`)} onDelete={() => showToast('Delete functionality coming soon', 'info')} /></td>
+                    <td className="py-4 px-5"><TableActions onView={() => router.push(`/orders/${order.id}`)} onDelete={() => showToast(t('orders.deleteComingSoon'), 'info')} /></td>
                   </tr>
                 ))}
               </tbody>

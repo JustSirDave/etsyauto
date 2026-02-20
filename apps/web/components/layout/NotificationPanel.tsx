@@ -144,9 +144,9 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return t('notifications.justNow');
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffMins < 60) return `${diffMins}${t('notifications.minutesAgo')}`;
+    if (diffHours < 24) return `${diffHours}${t('notifications.hoursAgo')}`;
+    if (diffDays < 7) return `${diffDays}${t('notifications.daysAgo')}`;
     return date.toLocaleDateString();
   };
 
@@ -269,7 +269,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
                             <button
                               onClick={(e) => handleMarkAsRead(notification.id, e)}
                               className="p-1.5 hover:bg-[var(--background)] rounded transition-colors"
-                              title="Mark as read"
+                              title={t('notifications.markAsRead')}
                             >
                               <Check className="w-4 h-4 text-[var(--text-muted)]" />
                             </button>
@@ -277,7 +277,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
                           <button
                             onClick={(e) => handleDelete(notification.id, e)}
                             className="p-1.5 hover:bg-[var(--danger-bg)] rounded transition-colors group"
-                            title="Delete"
+                            title={t('notifications.delete')}
                           >
                             <Trash2 className="w-4 h-4 text-[var(--text-muted)] group-hover:text-[var(--danger)]" />
                           </button>
@@ -301,7 +301,7 @@ export function NotificationPanel({ isOpen, onClose, unreadCount, onCountChange 
               }}
               className="text-sm text-[var(--primary)] hover:underline font-medium"
             >
-              View all notifications
+              {t('notifications.viewAll')}
             </button>
           </div>
         )}

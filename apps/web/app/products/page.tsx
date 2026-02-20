@@ -13,6 +13,7 @@ import { Package, Upload, Plus, Download } from 'lucide-react';
 import { productsApi, listingsApi, type Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
+import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import { SyncStatusModal, useRecentSync } from '@/components/modals/SyncStatusModal';
@@ -23,7 +24,9 @@ function ProductsContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const { t } = useLanguage();
+  const { user } = useAuth();
   const { shops, selectedShopId, selectedShopIds } = useShop();
+  const isSupplier = user?.role?.toLowerCase() === 'supplier';
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
@@ -34,13 +37,14 @@ function ProductsContent() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [refreshingCatalog, setRefreshingCatalog] = useState(false);
   const [syncTaskId, setSyncTaskId] = useState<string | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const { wasSyncedRecently } = useRecentSync('products');
 
   // Load products
   useEffect(() => {
-    loadProducts();
+    loadProducts().catch(() => {});
   }, [currentPage, pageSize, selectedShopIds]);
 
   const loadProducts = async () => {
@@ -57,6 +61,7 @@ function ProductsContent() {
     } catch (error: any) {
       console.error('Failed to load products:', error);
       showToast(error.detail || t('toast.loadProductsFailed'), 'error');
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -76,8 +81,30 @@ function ProductsContent() {
     }
   };
 
+  const handleSyncFromCatalog = async () => {
+    const CATALOG_REFRESH_KEY = 'lastRefresh_catalog';
+    const REFRESH_WINDOW_MS = 60 * 1000;
+    const lastRefresh = typeof window !== 'undefined' ? localStorage.getItem(CATALOG_REFRESH_KEY) : null;
+    const lastRefreshTime = lastRefresh ? parseInt(lastRefresh, 10) : 0;
+    if (Date.now() - lastRefreshTime < REFRESH_WINDOW_MS) {
+      showToast('Synchronization is up to date', 'success');
+      return;
+    }
+    try {
+      setRefreshingCatalog(true);
+      await loadProducts();
+      if (typeof window !== 'undefined') localStorage.setItem(CATALOG_REFRESH_KEY, Date.now().toString());
+      showToast('Products refreshed', 'success');
+    } catch (error: unknown) {
+      showToast((error as { detail?: string })?.detail || t('toast.loadProductsFailed'), 'error');
+    } finally {
+      setRefreshingCatalog(false);
+    }
+  };
+
   const handleSyncFromEtsy = async () => {
-    if (!selectedShopId) {
+    const shopId = selectedShopIds[0] ?? selectedShopId;
+    if (!shopId) {
       showToast(t('toast.connectShopFirst'), 'error');
       return;
     }
@@ -87,7 +114,7 @@ function ProductsContent() {
     }
     try {
       setSyncing(true);
-      const result = await productsApi.syncFromEtsy(selectedShopId);
+      const result = await productsApi.syncFromEtsy(shopId);
       if (result?.task_id) {
         setSyncTaskId(result.task_id);
         setShowSyncModal(true);
@@ -209,15 +236,27 @@ function ProductsContent() {
             </div>
             <div className="flex items-center gap-3">
               <PageSizeDropdown value={pageSize} onChange={setPageSize} />
+              {isSupplier ? (
                 <button
-                onClick={handleSyncFromEtsy}
-                disabled={!selectedShopId || syncing}
-                className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  onClick={handleSyncFromCatalog}
+                  disabled={refreshingCatalog}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                  title="Refresh products from catalog"
+                >
+                  <Upload className="w-4 h-4" />
+                  {refreshingCatalog ? 'Refreshing...' : 'Sync from catalog'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleSyncFromEtsy}
+                  disabled={(!selectedShopId && selectedShopIds.length === 0) || syncing}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
                   title={t('products.syncEtsy')}
-              >
-                <Upload className="w-4 h-4" />
+                >
+                  <Upload className="w-4 h-4" />
                   {syncing ? t('products.syncing') : t('products.syncEtsy')}
-              </button>
+                </button>
+              )}
               <button
                 onClick={() => setShowImportModal(true)}
                 className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] transition-colors"
@@ -225,14 +264,16 @@ function ProductsContent() {
                 <Upload className="w-4 h-4" />
                 {t('products.importCsv')}
               </button>
-              <button
-                onClick={handleExportProblemProducts}
-                className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] transition-colors"
-                title="Export products with validation issues"
-              >
-                <Download className="w-4 h-4" />
-                Export Problems
-              </button>
+              {!isSupplier && (
+                <button
+                  onClick={handleExportProblemProducts}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)] transition-colors"
+                  title="Export products with validation issues"
+                >
+                  <Download className="w-4 h-4" />
+                  Export Problems
+                </button>
+              )}
               <button
                 onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
@@ -295,6 +336,9 @@ function ProductsContent() {
                       {t('products.table.price')}
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                      {t('products.table.cost')}
+                    </th>
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
                       {t('products.table.images')}
                     </th>
                     <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
@@ -348,6 +392,9 @@ function ProductsContent() {
                       <td className="py-4 px-5 text-[var(--text-primary)] font-medium">
                         {product.price ? `$${(product.price / 100).toFixed(2)}` : '-'}
                       </td>
+                      <td className="py-4 px-5 text-[var(--text-primary)] font-medium">
+                        {(product.cost_usd_cents ?? 0) > 0 ? `$${((product.cost_usd_cents ?? 0) / 100).toFixed(2)}` : '-'}
+                      </td>
                       <td className="py-4 px-5 text-[var(--text-primary)]">
                         {product.images?.length || 0}
                       </td>
@@ -374,18 +421,20 @@ function ProductsContent() {
                       </td>
                       <td className="py-4 px-5">
                         <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handlePublishToEtsy(product)}
-                            disabled={!!product.etsy_listing_id || (!selectedShopId && !product.shop_id)}
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary)] disabled:opacity-60 disabled:cursor-not-allowed transition"
-                            title={product.etsy_listing_id ? t('products.alreadyOnEtsy') : t('products.publish')}
-                          >
-                            <Upload className="w-4 h-4" />
-                          </button>
+                          {!isSupplier && (
+                            <button
+                              onClick={() => handlePublishToEtsy(product)}
+                              disabled={!!product.etsy_listing_id || (!selectedShopId && !product.shop_id)}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary)] disabled:opacity-60 disabled:cursor-not-allowed transition"
+                              title={product.etsy_listing_id ? t('products.alreadyOnEtsy') : t('products.publish')}
+                            >
+                              <Upload className="w-4 h-4" />
+                            </button>
+                          )}
                           <TableActions
                             onView={() => router.push(`/products/${product.id}`)}
-                            onEdit={() => router.push(`/products/${product.id}/edit`)}
-                            onDelete={() => handleDelete(product.id)}
+                            onEdit={!isSupplier ? () => router.push(`/products/${product.id}/edit`) : undefined}
+                            onDelete={!isSupplier ? () => handleDelete(product.id) : undefined}
                           />
                         </div>
                       </td>

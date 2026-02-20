@@ -115,14 +115,14 @@ export function TopBar() {
               <Store className="w-4 h-4 flex-shrink-0" />
               <span className="text-sm font-medium flex-1 text-left truncate">
                 {shopsLoading
-                  ? 'Loading...'
+                  ? t('topbar.loading')
                   : shops.length === 0
-                    ? 'No shop connected'
+                    ? t('topbar.noShopConnected')
                     : selectedShopIds.length === shops.length
-                      ? 'All shops'
+                      ? t('topbar.allShops')
                       : selectedShopIds.length === 1
                         ? (shops.find((s) => s.id === selectedShopIds[0])?.display_name || `Shop ${selectedShopIds[0]}`)
-                        : `${selectedShopIds.length} shops`}
+                        : `${selectedShopIds.length} ${t('topbar.shopsCount')}`}
               </span>
               <ChevronDown className={`w-4 h-4 transition-transform ${showShopMenu ? 'rotate-180' : ''}`} />
             </button>
@@ -140,13 +140,13 @@ export function TopBar() {
                       onClick={selectAllShops}
                       className="text-xs px-2 py-1 rounded bg-[var(--background)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                     >
-                      Select all
+                      {t('topbar.selectAll')}
                     </button>
                     <button
                       onClick={clearAllShops}
                       className="text-xs px-2 py-1 rounded bg-[var(--background)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
                     >
-                      Clear
+                      {t('topbar.clear')}
                     </button>
                     <span className="ml-auto text-xs text-[var(--text-muted)]">
                       {selectedShopIds.length}/{shops.length}
@@ -185,7 +185,7 @@ export function TopBar() {
                           </button>
                           {disconnectedPromptShopId === shop.id && isDisconnected && (
                             <div className="mx-4 mb-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
-                              <p className="text-amber-400 mb-1.5">This shop is disconnected. Data won&apos;t sync.</p>
+                              <p className="text-amber-400 mb-1.5">{t('topbar.disconnectedWarning')}</p>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -195,7 +195,7 @@ export function TopBar() {
                                 }}
                                 className="text-amber-300 hover:text-amber-200 underline font-medium"
                               >
-                                Reconnect
+                                {t('topbar.reconnect')}
                               </button>
                             </div>
                           )}
@@ -350,21 +350,21 @@ export function TopBar() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <User className="w-4 h-4" />
-                      <span>Profile Settings</span>
+                      <span>{t('topbar.profileSettings')}</span>
                     </button>
                     <a
                       href="/settings"
                       className="flex items-center gap-3 px-4 py-2.5 text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <Settings className="w-4 h-4" />
-                      <span>Shop Settings</span>
+                      <span>{t('topbar.shopSettings')}</span>
                     </a>
                     <a
                       href="/docs"
                       className="flex items-center gap-3 px-4 py-2.5 text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
                     >
                       <BookOpen className="w-4 h-4" />
-                      <span>Documentation</span>
+                      <span>{t('topbar.documentation')}</span>
                     </a>
                   </div>
 
@@ -375,7 +375,7 @@ export function TopBar() {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--text-primary)] hover:bg-[var(--background)] rounded-lg transition-colors"
                     >
                       <LogOut className="w-4 h-4" />
-                      <span>Logout</span>
+                      <span>{t('topbar.logout')}</span>
                     </button>
                   </div>
                 </div>

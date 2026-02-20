@@ -125,7 +125,7 @@ const adminNavigation: NavSection[] = [
   },
 ];
 
-// Supplier navigation: Fulfillment and supplier profile settings
+// Supplier navigation: Fulfillment, products, and supplier profile settings
 const supplierNavigation: NavSection[] = [
   {
     items: [
@@ -136,6 +136,12 @@ const supplierNavigation: NavSection[] = [
     title: 'nav.fulfillment',
     items: [
       { name: 'nav.assignedOrders', href: '/orders', icon: ShoppingCart },
+    ],
+  },
+  {
+    title: 'nav.shopManagement',
+    items: [
+      { name: 'nav.products', href: '/products', icon: Package },
     ],
   },
   {
@@ -219,7 +225,7 @@ export function Sidebar() {
       <button
         onClick={toggleSidebar}
         className="absolute right-0 top-20 translate-x-1/2 w-6 h-6 bg-[var(--text-inverse)] text-[var(--primary)] border border-[var(--border-color)] rounded-full flex items-center justify-center shadow-lg hover:bg-[var(--text-inverse)] hover:text-[var(--primary-dark)] transition-colors z-50"
-        title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+        title={isCollapsed ? t('sidebar.expand') : t('sidebar.collapse')}
       >
         {isCollapsed ? (
           <ChevronRight className="w-4 h-4" />
@@ -318,7 +324,7 @@ export function Sidebar() {
             <button
               onClick={dismissHelpCard}
               className="absolute top-2 right-2 text-[var(--text-inverse-muted)] hover:text-[var(--text-inverse)] transition-colors"
-              title="Dismiss"
+              title={t('sidebar.dismiss')}
             >
               <X className="w-4 h-4" />
             </button>

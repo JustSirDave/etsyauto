@@ -87,6 +87,7 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM}
       USE_RESEND: ${USE_RESEND:-true}
+      DEBUG_LOG_PATH: /debug-logs/debug.log
     ports:
       - "8080:8080"
     depends_on:
@@ -96,6 +97,7 @@ services:
         condition: service_healthy
     volumes:
       - ./apps/api:/app
+      - ../.cursor:/debug-logs
     command: uvicorn main:app --host 0.0.0.0 --port 8080 --reload
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]

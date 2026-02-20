@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, XCircle, Edit3, AlertTriangle, Sparkles, Clock, Tag } from "lucide-react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useLanguage } from '@/lib/language-context';
 
 interface PolicyViolation {
   type: string;
@@ -37,6 +38,7 @@ interface ModifyFormData {
 }
 
 export default function AIReviewPage() {
+  const { t } = useLanguage();
   const [pendingReviews, setPendingReviews] = useState<PendingReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReview, setSelectedReview] = useState<PendingReview | null>(null);
@@ -94,11 +96,11 @@ export default function AIReviewPage() {
         setPendingReviews((prev) => prev.filter((r) => r.id !== generationId));
         setSelectedReview(null);
       } else {
-        alert("Failed to accept generation");
+        alert(t('aiReview.failedAccept'));
       }
     } catch (error) {
       console.error("Failed to accept:", error);
-      alert("Error accepting generation");
+      alert(t('aiReview.errorAccepting'));
     } finally {
       setActionLoading(false);
     }
@@ -122,11 +124,11 @@ export default function AIReviewPage() {
         setPendingReviews((prev) => prev.filter((r) => r.id !== generationId));
         setSelectedReview(null);
       } else {
-        alert("Failed to reject generation");
+        alert(t('aiReview.failedReject'));
       }
     } catch (error) {
       console.error("Failed to reject:", error);
-      alert("Error rejecting generation");
+      alert(t('aiReview.errorRejecting'));
     } finally {
       setActionLoading(false);
     }
@@ -148,8 +150,8 @@ export default function AIReviewPage() {
     try {
       const tagsArray = modifyForm.tags
         .split(",")
-        .map((t) => t.trim())
-        .filter((t) => t);
+        .map((tag) => tag.trim())
+        .filter((tag) => tag);
 
       const params = new URLSearchParams({
         title: modifyForm.title,
@@ -202,11 +204,11 @@ export default function AIReviewPage() {
 
         setShowModifyModal(false);
       } else {
-        alert("Failed to modify generation");
+        alert(t('aiReview.failedModify'));
       }
     } catch (error) {
       console.error("Failed to modify:", error);
-      alert("Error modifying generation");
+      alert(t('aiReview.errorModifying'));
     } finally {
       setActionLoading(false);
     }
@@ -223,7 +225,7 @@ export default function AIReviewPage() {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--danger-bg)] text-[var(--danger)]">
           <XCircle className="w-3 h-3 mr-1 text-[var(--danger)]" />
-          Failed
+          {t('ai.failed')}
         </span>
       );
     }
@@ -231,7 +233,7 @@ export default function AIReviewPage() {
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[var(--warning-bg)] text-[var(--warning)]">
           <AlertTriangle className="w-3 h-3 mr-1 text-[var(--warning)]" />
-          Needs Review
+          {t('aiReview.needsReview')}
         </span>
       );
     }
@@ -248,7 +250,7 @@ export default function AIReviewPage() {
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)] mx-auto"></div>
-            <p className="mt-4 text-[var(--text-muted)]">Loading pending reviews...</p>
+            <p className="mt-4 text-[var(--text-muted)]">{t('aiReview.loadingReviews')}</p>
           </div>
         </div>
       </DashboardLayout>
@@ -262,10 +264,10 @@ export default function AIReviewPage() {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
             <Sparkles className="w-7 h-7 text-[var(--primary)]" />
-            AI Content Review
+            {t('aiReview.title')}
           </h1>
           <p className="text-[var(--text-muted)] mt-1">
-            Review AI-generated content with policy violations
+            {t('aiReview.subtitle')}
           </p>
         </div>
 
@@ -278,7 +280,7 @@ export default function AIReviewPage() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-[var(--text-primary)]">{pendingReviews.length}</p>
-                <p className="text-[var(--text-muted)] text-sm">Pending Reviews</p>
+                <p className="text-[var(--text-muted)] text-sm">{t('aiReview.pendingReviews')}</p>
               </div>
             </div>
           </div>
@@ -287,15 +289,15 @@ export default function AIReviewPage() {
         {pendingReviews.length === 0 ? (
           <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-10 text-center">
             <CheckCircle2 className="w-14 h-14 text-[var(--text-muted)] mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">All caught up!</h3>
-            <p className="text-[var(--text-secondary)]">No pending AI-generated content to review.</p>
+            <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">{t('aiReview.allCaughtUp')}</h3>
+            <p className="text-[var(--text-secondary)]">{t('aiReview.noPending')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left: List of pending reviews */}
             <div className="lg:col-span-1 space-y-3">
               <h2 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider px-2">
-                Pending Reviews
+                {t('aiReview.pendingReviews')}
               </h2>
               <div className="space-y-2">
                 {pendingReviews.map((review) => (
@@ -323,7 +325,7 @@ export default function AIReviewPage() {
                     </div>
                     <div className="mt-2 flex items-center text-xs text-[var(--danger)]">
                       <AlertTriangle className="w-3 h-3 mr-1" />
-                      {review.policy_flags?.violations?.length || 0} violation(s)
+                      {review.policy_flags?.violations?.length || 0} {t('aiReview.violations')}
                     </div>
                   </button>
                 ))}
@@ -356,7 +358,7 @@ export default function AIReviewPage() {
                   <div className="p-6 border-b border-[var(--border-color)] bg-[var(--background)]">
                     <h3 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center">
                       <AlertTriangle className="w-4 h-4 mr-2 text-[var(--danger)]" />
-                      Policy Violations ({selectedReview.policy_flags?.violations?.length || 0})
+                      {t('aiReview.policyViolations')} ({selectedReview.policy_flags?.violations?.length || 0})
                     </h3>
                     <div className="space-y-2">
                       {selectedReview.policy_flags?.violations?.map((violation, idx) => (
@@ -372,12 +374,12 @@ export default function AIReviewPage() {
                               <p className="font-medium text-sm">{violation.message}</p>
                               {violation.field && (
                                 <p className="text-xs mt-1 opacity-75">
-                                  Field: <span className="font-mono">{violation.field}</span>
+                                  {t('aiReview.field')} <span className="font-mono">{violation.field}</span>
                                 </p>
                               )}
                               {violation.location && (
                                 <p className="text-xs mt-1 opacity-75">
-                                  Location: {violation.location}
+                                  {t('aiReview.location')} {violation.location}
                                 </p>
                               )}
                             </div>
@@ -391,7 +393,7 @@ export default function AIReviewPage() {
                       selectedReview.policy_flags.suggestions.length > 0 && (
                         <div className="mt-4 p-3 bg-[var(--info-bg)] rounded-lg border border-[var(--border-color)]">
                           <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">
-                            Suggestions
+                            {t('aiReview.suggestions')}
                           </h4>
                           <ul className="text-sm text-[var(--text-secondary)] space-y-1">
                             {selectedReview.policy_flags.suggestions.map((suggestion, idx) => (
@@ -408,12 +410,12 @@ export default function AIReviewPage() {
                   {/* Generated Content */}
                   <div className="p-6 space-y-4">
                     <div>
-                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Title</h3>
+                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('aiReview.titleLabel')}</h3>
                       <p className="text-[var(--text-primary)]">{selectedReview.title}</p>
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Description</h3>
+                      <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">{t('aiReview.descriptionLabel')}</h3>
                       <p className="text-[var(--text-primary)] whitespace-pre-wrap">
                         {selectedReview.description}
                       </p>
@@ -445,7 +447,7 @@ export default function AIReviewPage() {
                       className="px-4 py-2 border border-[var(--danger)]/40 text-[var(--danger)] rounded-lg hover:bg-[var(--danger-bg)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                     >
                       <XCircle className="w-4 h-4 mr-2" />
-                      Reject
+                      {t('aiReview.reject')}
                     </button>
 
                     <div className="flex items-center space-x-3">
@@ -455,7 +457,7 @@ export default function AIReviewPage() {
                         className="px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--card-bg-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                       >
                         <Edit3 className="w-4 h-4 mr-2" />
-                        Modify
+                        {t('aiReview.modify')}
                       </button>
 
                       <button
@@ -464,7 +466,7 @@ export default function AIReviewPage() {
                         className="px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                       >
                         <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Accept Anyway
+                        {t('aiReview.acceptAnyway')}
                       </button>
                     </div>
                   </div>
@@ -473,11 +475,10 @@ export default function AIReviewPage() {
                 <div className="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-10 text-center">
                   <Sparkles className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-[var(--text-primary)] mb-2">
-                    Select a review to get started
+                    {t('aiReview.selectReview')}
                   </h3>
                   <p className="text-[var(--text-secondary)]">
-                    Choose an item from the list to review its AI-generated content and policy
-                    violations.
+                    {t('aiReview.selectReviewDesc')}
                   </p>
                 </div>
               )}
@@ -493,16 +494,16 @@ export default function AIReviewPage() {
             <div className="p-6 border-b border-[var(--border-color)]">
               <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center">
                 <Edit3 className="w-5 h-5 mr-2" />
-                Modify Content
+                {t('aiReview.modifyContent')}
               </h2>
               <p className="text-sm text-[var(--text-secondary)] mt-1">
-                Edit the content to fix policy violations. It will be re-checked automatically.
+                {t('aiReview.modifyDescription')}
               </p>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Title</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('aiReview.titleLabel')}</label>
                 <input
                   type="text"
                   value={modifyForm.title}
@@ -510,11 +511,11 @@ export default function AIReviewPage() {
                   className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
                   maxLength={140}
                 />
-                <p className="text-xs text-[var(--text-muted)] mt-1">{modifyForm.title.length}/140 characters</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{modifyForm.title.length}/140 {t('aiReview.characters')}</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Description</label>
+                <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('aiReview.descriptionLabel')}</label>
                 <textarea
                   value={modifyForm.description}
                   onChange={(e) => setModifyForm({ ...modifyForm, description: e.target.value })}
@@ -523,13 +524,13 @@ export default function AIReviewPage() {
                   maxLength={1000}
                 />
                 <p className="text-xs text-[var(--text-muted)] mt-1">
-                  {modifyForm.description.length}/1000 characters
+                  {modifyForm.description.length}/1000 {t('aiReview.characters')}
                 </p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                  Tags (comma-separated)
+                  {t('aiReview.tagsCommaSeparated')}
                 </label>
                 <input
                   type="text"
@@ -539,7 +540,7 @@ export default function AIReviewPage() {
                   placeholder="handmade, ceramic, mug, coffee"
                 />
                 <p className="text-xs text-[var(--text-muted)] mt-1">
-                  {modifyForm.tags.split(",").filter((t) => t.trim()).length} tags (max 13)
+                  {modifyForm.tags.split(",").filter((tag) => tag.trim()).length} {t('aiReview.tags')}
                 </p>
               </div>
             </div>
@@ -550,7 +551,7 @@ export default function AIReviewPage() {
                 disabled={actionLoading}
                 className="px-4 py-2 border border-[var(--border-color)] text-[var(--text-primary)] rounded-lg hover:bg-[var(--card-bg)] transition-colors disabled:opacity-50"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleModify}
@@ -560,12 +561,12 @@ export default function AIReviewPage() {
                 {actionLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Saving...
+                    {t('common.saving')}
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Save & Re-Check
+                    {t('aiReview.saveReCheck')}
                   </>
                 )}
               </button>

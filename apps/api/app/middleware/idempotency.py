@@ -27,6 +27,11 @@ EXEMPT_PATHS = {
     "/api/oauth/google/callback",
 }
 
+# Path prefixes exempt from idempotency (for dynamic-token endpoints)
+EXEMPT_PATH_PREFIXES = (
+    "/api/shops/connect-link/",
+)
+
 
 class IdempotencyMiddleware:
     """
@@ -46,7 +51,7 @@ class IdempotencyMiddleware:
         path = scope.get("path", "")
 
         # Skip OPTIONS, non-mutating methods, and exempt paths
-        if method == "OPTIONS" or method not in IDEMPOTENCY_METHODS_STR or path in EXEMPT_PATHS:
+        if method == "OPTIONS" or method not in IDEMPOTENCY_METHODS_STR or path in EXEMPT_PATHS or path.startswith(EXEMPT_PATH_PREFIXES):
             return await self.app(scope, receive, send)
 
         # Extract Idempotency-Key from headers

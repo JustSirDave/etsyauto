@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { tasksApi, type TaskStatus } from '@/lib/api';
+import { useLanguage } from '@/lib/language-context';
 import { Loader2, CheckCircle, XCircle, AlertCircle, X, RefreshCcw } from 'lucide-react';
 
 interface SyncStatusModalProps {
@@ -15,11 +16,16 @@ interface SyncStatusModalProps {
 const LAST_SYNC_KEY_PREFIX = 'lastSync_';
 
 export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete }: SyncStatusModalProps) {
+  const { t } = useLanguage();
   const [status, setStatus] = useState<TaskStatus | null>(null);
   const [polling, setPolling] = useState(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
+  const pollingRef = useRef(false);
 
   const poll = useCallback(async () => {
-    if (!taskId) return;
+    if (!taskId || pollingRef.current) return;
+    pollingRef.current = true;
     setPolling(true);
     try {
       const finalStatus = await tasksApi.pollUntilComplete(
@@ -31,7 +37,7 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
       setStatus(finalStatus);
       if (finalStatus.status === 'completed') {
         localStorage.setItem(`${LAST_SYNC_KEY_PREFIX}${syncType}`, Date.now().toString());
-        onComplete?.();
+        onCompleteRef.current?.();
       }
     } catch {
       setStatus({
@@ -39,12 +45,13 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
         state: 'ERROR',
         ready: true,
         status: 'failed',
-        error: 'Failed to check sync status',
+        error: t('sync.checkFailed'),
       });
     } finally {
       setPolling(false);
+      pollingRef.current = false;
     }
-  }, [taskId, syncType, onComplete]);
+  }, [taskId, syncType]);
 
   useEffect(() => {
     if (isOpen && taskId) {
@@ -66,7 +73,7 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
   const totalProcessed = created + updated + skipped;
   const isAlreadySynced = isSuccess && created === 0 && updated === 0;
 
-  const label = syncType === 'orders' ? 'Orders' : 'Products';
+  const label = syncType === 'orders' ? t('sync.orders') : t('sync.products');
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -74,7 +81,7 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
         {/* Header */}
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-            {label} Sync
+            {label} {t('sync.title')}
           </h3>
           {isComplete && (
             <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
@@ -89,9 +96,9 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
             <>
               <Loader2 className="w-12 h-12 text-[var(--primary)] animate-spin" />
               <div>
-                <p className="text-[var(--text-primary)] font-medium">Syncing {label.toLowerCase()}...</p>
+                <p className="text-[var(--text-primary)] font-medium">{t('sync.syncing')} {label.toLowerCase()}...</p>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  {status?.state === 'PENDING' ? 'Waiting for worker...' : 'Processing...'}
+                  {status?.state === 'PENDING' ? t('sync.waitingWorker') : t('sync.processing')}
                 </p>
               </div>
             </>
@@ -101,9 +108,9 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
             <>
               <CheckCircle className="w-12 h-12 text-green-400" />
               <div>
-                <p className="text-[var(--text-primary)] font-medium">Already up to date</p>
+                <p className="text-[var(--text-primary)] font-medium">{t('sync.alreadyUpToDate')}</p>
                 <p className="text-sm text-[var(--text-muted)] mt-1">
-                  All {label.toLowerCase()} are already synced. No new data found.
+                  {label} {t('sync.alreadySyncedMessage')}
                 </p>
               </div>
             </>
@@ -113,24 +120,24 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
             <>
               <CheckCircle className="w-12 h-12 text-green-400" />
               <div>
-                <p className="text-[var(--text-primary)] font-medium">Sync Complete</p>
+                <p className="text-[var(--text-primary)] font-medium">{t('sync.complete')}</p>
                 <div className="mt-3 grid grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-2xl font-bold text-green-400">{created}</p>
-                    <p className="text-xs text-[var(--text-muted)]">New</p>
+                    <p className="text-xs text-[var(--text-muted)]">{t('sync.new')}</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-blue-400">{updated}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Updated</p>
+                    <p className="text-xs text-[var(--text-muted)]">{t('sync.updated')}</p>
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-[var(--text-muted)]">{skipped}</p>
-                    <p className="text-xs text-[var(--text-muted)]">Skipped</p>
+                    <p className="text-xs text-[var(--text-muted)]">{t('sync.skipped')}</p>
                   </div>
                 </div>
                 {totalProcessed > 0 && (
                   <p className="text-xs text-[var(--text-muted)] mt-2">
-                    {totalProcessed} {label.toLowerCase()} processed
+                    {totalProcessed} {label.toLowerCase()} {t('sync.processed')}
                   </p>
                 )}
               </div>
@@ -141,8 +148,8 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
             <>
               <XCircle className="w-12 h-12 text-red-400" />
               <div>
-                <p className="text-[var(--text-primary)] font-medium">Sync Failed</p>
-                <p className="text-sm text-red-400 mt-1">{status?.error || 'An unknown error occurred'}</p>
+                <p className="text-[var(--text-primary)] font-medium">{t('sync.failed')}</p>
+                <p className="text-sm text-red-400 mt-1">{status?.error || t('sync.unknownError')}</p>
               </div>
             </>
           )}
@@ -155,7 +162,7 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
               onClick={onClose}
               className="px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90"
             >
-              Close
+              {t('common.close')}
             </button>
           </div>
         )}

@@ -4,6 +4,7 @@ Owner/Admin-only analytics with cached aggregations.
 Supports multi-store filtering via shop_ids parameter.
 """
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -16,6 +17,19 @@ from app.services.analytics_service import AnalyticsService
 
 
 router = APIRouter()
+
+
+def _parse_date(value: Optional[str]) -> Optional[datetime]:
+    """Parse ISO date string to timezone-aware datetime, or return None."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        return None
 
 
 def _parse_analytics_shop_ids(
@@ -42,18 +56,24 @@ def _parse_analytics_shop_ids(
 async def get_overview_analytics(
     shop_id: Optional[int] = None,
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    start_date: Optional[str] = Query(None, description="ISO start date for date range filter"),
+    end_date: Optional[str] = Query(None, description="ISO end date for date range filter"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """Get overview analytics with multi-store support."""
+    """Get overview analytics with multi-store and date range support."""
     parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date)
     analytics = AnalyticsService(db)
     return analytics.get_overview_analytics(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed else None,
         force_refresh=force_refresh,
         shop_ids=parsed,
+        start_date=start_dt,
+        end_date=end_dt,
     )
 
 

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AlertCircle, AlertTriangle, Info, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 
 interface ErrorAction {
   label: string;
@@ -25,240 +26,222 @@ interface ActionableErrorMessageProps {
 }
 
 interface ErrorConfig {
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
   severity: 'error' | 'warning' | 'info';
   icon: React.ComponentType<{ className?: string }>;
-  actions: ErrorAction[];
+  actions: { labelKey: string; href?: string; variant?: 'primary' | 'secondary' }[];
   documentation?: string;
 }
 
 const ERROR_CONFIGS: Record<string, ErrorConfig> = {
-  // Authentication Errors
   'ETSY_401': {
-    title: 'Etsy Connection Expired',
-    description: 'Your Etsy shop connection has expired. Please reconnect your shop to continue publishing listings.',
+    titleKey: 'errors.etsy401.title',
+    descriptionKey: 'errors.etsy401.description',
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'Reconnect Shop', href: '/settings?tab=shops', variant: 'primary' },
-      { label: 'Learn More', href: '/docs/authentication', variant: 'secondary' }
+      { labelKey: 'errors.etsy401.reconnectShop', href: '/settings?tab=shops', variant: 'primary' },
+      { labelKey: 'errors.etsy401.learnMore', href: '/docs/authentication', variant: 'secondary' }
     ],
     documentation: '/docs/authentication#token-expiry'
   },
-  
   'ETSY_403': {
-    title: 'Permission Denied',
-    description: 'You don\'t have permission to perform this action. Check your Etsy app permissions.',
+    titleKey: 'errors.etsy403.title',
+    descriptionKey: 'errors.etsy403.description',
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'Review Permissions', href: 'https://www.etsy.com/your/account/apps', variant: 'primary' },
-      { label: 'Contact Support', href: '/support', variant: 'secondary' }
+      { labelKey: 'errors.etsy403.reviewPermissions', href: 'https://www.etsy.com/your/account/apps', variant: 'primary' },
+      { labelKey: 'errors.etsy403.contactSupport', href: '/support', variant: 'secondary' }
     ]
   },
-
-  // Rate Limiting
   'ETSY_429': {
-    title: 'Rate Limit Reached',
-    description: 'Etsy API rate limit exceeded. Your job will automatically retry in a few minutes.',
+    titleKey: 'errors.etsy429.title',
+    descriptionKey: 'errors.etsy429.description',
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { label: 'View Rate Limits', href: '/docs/rate-limits', variant: 'secondary' }
+      { labelKey: 'errors.etsy429.viewRateLimits', href: '/docs/rate-limits', variant: 'secondary' }
     ],
     documentation: '/docs/rate-limits'
   },
-
   'RATE_LIMIT_429_STORM': {
-    title: 'Rate Limit Storm Detected',
-    description: 'Multiple rate limit errors detected. Consider spreading out your publishing schedule.',
+    titleKey: 'errors.rateLimitStorm.title',
+    descriptionKey: 'errors.rateLimitStorm.description',
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { label: 'Adjust Schedule', href: '/schedules', variant: 'primary' },
-      { label: 'View Guidelines', href: '/docs/best-practices', variant: 'secondary' }
+      { labelKey: 'errors.rateLimitStorm.adjustSchedule', href: '/schedules', variant: 'primary' },
+      { labelKey: 'errors.rateLimitStorm.viewGuidelines', href: '/docs/best-practices', variant: 'secondary' }
     ]
   },
-
-  // Policy Violations
   'POLICY_BLOCKED': {
-    title: 'Policy Violation',
-    description: 'This listing violates one or more policies and cannot be published until fixed.',
+    titleKey: 'errors.policyBlocked.title',
+    descriptionKey: 'errors.policyBlocked.description',
     severity: 'error',
     icon: AlertCircle,
     actions: [
-      { label: 'Review & Fix', variant: 'primary' },
-      { label: 'View Policies', href: '/docs/policies', variant: 'secondary' }
+      { labelKey: 'errors.policyBlocked.reviewFix', variant: 'primary' },
+      { labelKey: 'errors.policyBlocked.viewPolicies', href: '/docs/policies', variant: 'secondary' }
     ],
     documentation: '/docs/policies'
   },
-
   'PROHIBITED_TERMS': {
-    title: 'Prohibited Terms Detected',
-    description: 'Your listing contains prohibited terms or phrases. Edit the content to comply with policies.',
+    titleKey: 'errors.prohibitedTerms.title',
+    descriptionKey: 'errors.prohibitedTerms.description',
     severity: 'error',
     icon: AlertCircle,
     actions: [
-      { label: 'Edit Listing', variant: 'primary' },
-      { label: 'View Prohibited Terms', href: '/docs/prohibited-terms', variant: 'secondary' }
+      { labelKey: 'errors.prohibitedTerms.editListing', variant: 'primary' },
+      { labelKey: 'errors.prohibitedTerms.viewTerms', href: '/docs/prohibited-terms', variant: 'secondary' }
     ]
   },
-
   'HANDMADE_REQUIRED': {
-    title: 'Handmade Declaration Missing',
-    description: 'This listing must declare who made it. Update the "who_made" field.',
+    titleKey: 'errors.handmadeRequired.title',
+    descriptionKey: 'errors.handmadeRequired.description',
     severity: 'error',
     icon: AlertCircle,
     actions: [
-      { label: 'Update Product', variant: 'primary' }
+      { labelKey: 'errors.handmadeRequired.updateProduct', variant: 'primary' }
     ]
   },
-
-  // Resource Not Found
   'ETSY_404': {
-    title: 'Listing Not Found',
-    description: 'This listing was not found on Etsy. It may have been deleted or the ID is incorrect.',
+    titleKey: 'errors.etsy404.title',
+    descriptionKey: 'errors.etsy404.description',
     severity: 'warning',
     icon: Info,
     actions: [
-      { label: 'Republish', variant: 'primary' },
-      { label: 'View on Etsy', href: '#', variant: 'secondary' }
+      { labelKey: 'errors.etsy404.republish', variant: 'primary' },
+      { labelKey: 'errors.etsy404.viewOnEtsy', href: '#', variant: 'secondary' }
     ]
   },
-
   'LISTING_DELETED': {
-    title: 'Listing Deleted on Etsy',
-    description: 'This listing has been deleted on Etsy and can no longer be synced.',
+    titleKey: 'errors.listingDeleted.title',
+    descriptionKey: 'errors.listingDeleted.description',
     severity: 'info',
     icon: Info,
     actions: [
-      { label: 'Create New Listing', variant: 'primary' }
+      { labelKey: 'errors.listingDeleted.createNew', variant: 'primary' }
     ]
   },
-
-  // Listing State Errors
   'LISTING_EXPIRED': {
-    title: 'Listing Expired',
-    description: 'This listing has expired on Etsy. You can renew it to make it active again.',
+    titleKey: 'errors.listingExpired.title',
+    descriptionKey: 'errors.listingExpired.description',
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { label: 'Renew Listing', variant: 'primary' },
-      { label: 'Learn About Renewals', href: '/docs/listing-management', variant: 'secondary' }
+      { labelKey: 'errors.listingExpired.renewListing', variant: 'primary' },
+      { labelKey: 'errors.listingExpired.learnRenewals', href: '/docs/listing-management', variant: 'secondary' }
     ]
   },
-
   'ETSY_STATE_INACTIVE': {
-    title: 'Listing Deactivated',
-    description: 'This listing is inactive on Etsy. Reactivate it to continue selling.',
+    titleKey: 'errors.etsyStateInactive.title',
+    descriptionKey: 'errors.etsyStateInactive.description',
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { label: 'Reactivate', variant: 'primary' }
+      { labelKey: 'errors.etsyStateInactive.reactivate', variant: 'primary' }
     ]
   },
-
   'ETSY_STATE_SOLD_OUT': {
-    title: 'Listing Sold Out',
-    description: 'This listing is sold out. Update the quantity to continue selling.',
+    titleKey: 'errors.etsyStateSoldOut.title',
+    descriptionKey: 'errors.etsyStateSoldOut.description',
     severity: 'info',
     icon: Info,
     actions: [
-      { label: 'Update Quantity', variant: 'primary' }
+      { labelKey: 'errors.etsyStateSoldOut.updateQuantity', variant: 'primary' }
     ]
   },
-
-  // Image Errors
   'IMAGE_TOO_LARGE': {
-    title: 'Image Too Large',
-    description: 'One or more images exceed the 10MB size limit. Compress your images and try again.',
+    titleKey: 'errors.imageTooLarge.title',
+    descriptionKey: 'errors.imageTooLarge.description',
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'Upload New Images', variant: 'primary' },
-      { label: 'Image Guidelines', href: '/docs/images', variant: 'secondary' }
+      { labelKey: 'errors.imageTooLarge.uploadNew', variant: 'primary' },
+      { labelKey: 'errors.imageTooLarge.guidelines', href: '/docs/images', variant: 'secondary' }
     ],
     documentation: '/docs/images#size-limits'
   },
-
   'IMAGE_UPLOAD_FAILED': {
-    title: 'Image Upload Failed',
-    description: 'Some images failed to upload. The listing was created but without all images.',
+    titleKey: 'errors.imageUploadFailed.title',
+    descriptionKey: 'errors.imageUploadFailed.description',
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { label: 'Retry Upload', variant: 'primary' }
+      { labelKey: 'errors.imageUploadFailed.retryUpload', variant: 'primary' }
     ]
   },
-
-  // RBAC Errors
   'RBAC_DENIED': {
-    title: 'Access Denied',
-    description: 'You don\'t have permission to perform this action. Contact your account owner.',
+    titleKey: 'errors.rbacDenied.title',
+    descriptionKey: 'errors.rbacDenied.description',
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'View Permissions', href: '/team', variant: 'secondary' }
+      { labelKey: 'errors.rbacDenied.viewPermissions', href: '/team', variant: 'secondary' }
     ]
   },
-
-  // Server Errors
   'ETSY_500': {
-    title: 'Etsy Server Error',
-    description: 'Etsy is experiencing technical difficulties. Your job will automatically retry.',
+    titleKey: 'errors.etsy500.title',
+    descriptionKey: 'errors.etsy500.description',
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { label: 'Check Etsy Status', href: 'https://status.etsy.com', variant: 'secondary' }
+      { labelKey: 'errors.etsy500.checkStatus', href: 'https://status.etsy.com', variant: 'secondary' }
     ]
   },
-
   'INTERNAL_ERROR': {
-    title: 'Internal Error',
-    description: 'An unexpected error occurred. Our team has been notified.',
+    titleKey: 'errors.internalError.title',
+    descriptionKey: 'errors.internalError.description',
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'Retry', variant: 'primary' },
-      { label: 'Contact Support', href: '/support', variant: 'secondary' }
+      { labelKey: 'errors.internalError.retry', variant: 'primary' },
+      { labelKey: 'errors.internalError.contactSupport', href: '/support', variant: 'secondary' }
     ]
   },
-
-  // Taxonomy/Category Errors
   'INVALID_TAXONOMY': {
-    title: 'Invalid Category',
-    description: 'The selected category is not valid for Etsy. Choose a different category.',
+    titleKey: 'errors.invalidTaxonomy.title',
+    descriptionKey: 'errors.invalidTaxonomy.description',
     severity: 'error',
     icon: AlertCircle,
     actions: [
-      { label: 'Update Category', variant: 'primary' },
-      { label: 'Browse Categories', href: '/docs/categories', variant: 'secondary' }
+      { labelKey: 'errors.invalidTaxonomy.updateCategory', variant: 'primary' },
+      { labelKey: 'errors.invalidTaxonomy.browseCategories', href: '/docs/categories', variant: 'secondary' }
     ]
   },
-
-  // Shipping Errors
   'MISSING_SHIPPING_PROFILE': {
-    title: 'Shipping Profile Missing',
-    description: 'No shipping profile is configured. Set up shipping in your Etsy shop settings.',
+    titleKey: 'errors.missingShippingProfile.title',
+    descriptionKey: 'errors.missingShippingProfile.description',
     severity: 'error',
     icon: XCircle,
     actions: [
-      { label: 'Configure Shipping', href: '/shops', variant: 'primary' },
-      { label: 'Etsy Shipping Guide', href: 'https://help.etsy.com/hc/en-us/articles/115015672808', variant: 'secondary' }
+      { labelKey: 'errors.missingShippingProfile.configureShipping', href: '/shops', variant: 'primary' },
+      { labelKey: 'errors.missingShippingProfile.guide', href: 'https://help.etsy.com/hc/en-us/articles/115015672808', variant: 'secondary' }
     ]
   },
-
-  // Default fallback
   'UNKNOWN': {
-    title: 'Error Occurred',
-    description: 'An error occurred while processing your request.',
+    titleKey: 'errors.unknown.title',
+    descriptionKey: 'errors.unknown.description',
     severity: 'error',
     icon: AlertCircle,
     actions: [
-      { label: 'Retry', variant: 'primary' }
+      { labelKey: 'errors.unknown.retry', variant: 'primary' }
     ]
   }
+};
+
+const RETRY_KEYS = new Set([
+  'errors.internalError.retry',
+  'errors.unknown.retry',
+]);
+
+const NAVIGATE_ACTIONS: Record<string, (ctx?: ActionableErrorMessageProps['context']) => string | undefined> = {
+  'errors.policyBlocked.reviewFix': (ctx) => ctx?.productId ? `/products/${ctx.productId}` : undefined,
+  'errors.prohibitedTerms.editListing': (ctx) => ctx?.productId ? `/products/${ctx.productId}/edit` : undefined,
+  'errors.handmadeRequired.updateProduct': (ctx) => ctx?.productId ? `/products/${ctx.productId}` : undefined,
+  'errors.etsy401.reconnectShop': () => '/settings?tab=shops',
 };
 
 const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
@@ -269,6 +252,7 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
   onDismiss,
   compact = false
 }) => {
+  const { t } = useLanguage();
   const config = ERROR_CONFIGS[errorCode] || ERROR_CONFIGS['UNKNOWN'];
   const Icon = config.icon;
 
@@ -300,19 +284,15 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
 
   const styles = getSeverityStyles();
 
-  const handleAction = (action: ErrorAction) => {
-    if (action.onClick) {
-      action.onClick();
-    } else if (action.label === 'Retry' && onRetry) {
+  const handleAction = (action: { labelKey: string }) => {
+    if (RETRY_KEYS.has(action.labelKey) && onRetry) {
       onRetry();
-    } else if (action.label === 'Review & Fix' && context?.productId) {
-      window.location.href = `/products/${context.productId}`;
-    } else if (action.label === 'Edit Listing' && context?.productId) {
-      window.location.href = `/products/${context.productId}/edit`;
-    } else if (action.label === 'Update Product' && context?.productId) {
-      window.location.href = `/products/${context.productId}`;
-    } else if (action.label === 'Reconnect Shop') {
-      window.location.href = '/settings?tab=shops';
+      return;
+    }
+    const navFn = NAVIGATE_ACTIONS[action.labelKey];
+    if (navFn) {
+      const url = navFn(context);
+      if (url) window.location.href = url;
     }
   };
 
@@ -321,14 +301,14 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
       <div className={`flex items-center gap-2 p-2 rounded border ${styles.container}`}>
         <Icon className={`w-4 h-4 flex-shrink-0 ${styles.icon}`} />
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium ${styles.title}`}>{config.title}</p>
+          <p className={`text-sm font-medium ${styles.title}`}>{t(config.titleKey)}</p>
         </div>
         {onRetry && (
           <button
             onClick={onRetry}
             className="flex-shrink-0 text-sm font-medium hover:underline"
           >
-            Retry
+            {t('common.retry')}
           </button>
         )}
       </div>
@@ -341,14 +321,13 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
         <Icon className={`w-5 h-5 flex-shrink-0 ${styles.icon}`} />
         
         <div className="flex-1 min-w-0">
-          {/* Header */}
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <h3 className={`text-sm font-semibold ${styles.title}`}>
-                {config.title}
+                {t(config.titleKey)}
               </h3>
               <p className={`mt-1 text-sm ${styles.description}`}>
-                {errorMessage || config.description}
+                {errorMessage || t(config.descriptionKey)}
               </p>
             </div>
             
@@ -356,25 +335,25 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
               <button
                 onClick={onDismiss}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
-                aria-label="Dismiss"
+                aria-label={t('sidebar.dismiss')}
               >
                 <XCircle className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          {/* Error Code & Context */}
           <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
-            <span>Code: {errorCode}</span>
-            {context?.jobId && <span>Job: #{context.jobId}</span>}
-            {context?.listingId && <span>Listing: {context.listingId}</span>}
+            <span>{t('errors.code')} {errorCode}</span>
+            {context?.jobId && <span>{t('errors.job')} #{context.jobId}</span>}
+            {context?.listingId && <span>{t('errors.listing')} {context.listingId}</span>}
           </div>
 
-          {/* Actions */}
           {config.actions.length > 0 && (
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {config.actions.map((action, idx) => {
                 const isPrimary = action.variant === 'primary';
+                const label = t(action.labelKey);
+                const isRetry = RETRY_KEYS.has(action.labelKey);
                 
                 if (action.href) {
                   return (
@@ -389,7 +368,7 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      {action.label}
+                      {label}
                       {action.href.startsWith('http') && (
                         <ExternalLink className="w-3 h-3" />
                       )}
@@ -407,22 +386,21 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
                         : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                     }`}
                   >
-                    {action.label === 'Retry' && <RefreshCw className="w-3 h-3" />}
-                    {action.label}
+                    {isRetry && <RefreshCw className="w-3 h-3" />}
+                    {label}
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* Documentation Link */}
           {config.documentation && (
             <div className="mt-3 text-xs">
               <a
                 href={config.documentation}
                 className="text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
               >
-                View documentation
+                {t('errors.viewDocumentation')}
                 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
@@ -434,4 +412,3 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
 };
 
 export default ActionableErrorMessage;
-

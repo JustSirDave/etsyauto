@@ -6,6 +6,7 @@
  */
 
 import { useEffect } from 'react';
+import { API_BASE_URL } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useLanguage } from '@/lib/language-context';
@@ -28,6 +29,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading) {
+    if (typeof window !== 'undefined') console.log('[DEBUG analytics] DashboardLayout: auth loading');
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--background)]">
         <div className="text-center">
@@ -42,6 +44,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return null;
   }
 
+  if (typeof window !== 'undefined') console.log('[DEBUG analytics] DashboardLayout: auth done, rendering layout');
   return (
     <div className="flex h-screen bg-[var(--background)] overflow-hidden">
       <Sidebar />

@@ -7,12 +7,14 @@
  * Cards are clickable — opening a slide-over detail panel with the underlying data.
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useToast } from '@/lib/toast-context';
+import { useLanguage } from '@/lib/language-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
+import { API_BASE_URL } from '@/lib/api';
 import {
   analyticsApi,
   ordersApi,
@@ -64,6 +66,20 @@ type DetailView =
   | { kind: 'suppliers' }
   | null;
 
+type DateRangePreset = '7d' | '30d' | '90d' | '12m' | 'all';
+
+function dateRangeToParams(preset: DateRangePreset): { start?: string; end?: string } {
+  if (preset === 'all') return {};
+  const end = new Date();
+  const days: Record<DateRangePreset, number> = { '7d': 7, '30d': 30, '90d': 90, '12m': 365, all: 0 };
+  const start = new Date();
+  start.setDate(start.getDate() - days[preset]);
+  return {
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
 /* ================================================================== */
 /*  Reusable components                                                */
 /* ================================================================== */
@@ -87,6 +103,7 @@ function KpiCard({
   suffix?: string;
   onClick?: () => void;
 }) {
+  const { t } = useLanguage();
   const hasTrend = trend !== undefined && trend !== null;
   const isPositive = (trend ?? 0) >= 0;
 
@@ -122,7 +139,7 @@ function KpiCard({
       )}
       {onClick && (
         <p className="text-[10px] text-[var(--text-muted)] mt-2 flex items-center gap-1">
-          <ExternalLink className="w-3 h-3" /> Click to view details
+          <ExternalLink className="w-3 h-3" /> {t('analytics.clickToViewDetails')}
         </p>
       )}
     </div>
@@ -293,6 +310,7 @@ function DetailDrawer({
   const [page, setPage] = useState(1);
   const limit = 15;
   const drawerRef = useRef<HTMLDivElement>(null);
+  const { t } = useLanguage();
 
   // Close on Escape
   useEffect(() => {
@@ -360,15 +378,15 @@ function DetailDrawer({
 
   const getTitle = (): string => {
     switch (view.kind) {
-      case 'revenue': return 'Revenue Breakdown';
-      case 'orders': return view.statusFilter ? `Orders — ${view.statusFilter.replace(/_/g, ' ')}` : 'All Orders';
-      case 'payment': return view.paymentFilter ? `Orders — ${view.paymentFilter}` : 'Payment Overview';
-      case 'products': return 'All Products';
-      case 'listings': return 'Listing Jobs';
-      case 'fulfillment': return view.stateFilter ? `Fulfillment — ${view.stateFilter.replace(/_/g, ' ')}` : 'Fulfillment Overview';
-      case 'sources': return 'Shipment Sources';
-      case 'suppliers': return 'Supplier Performance';
-      default: return 'Details';
+      case 'revenue': return t('analytics.revenueBreakdown');
+      case 'orders': return view.statusFilter ? `${t('analytics.orders')} — ${view.statusFilter.replace(/_/g, ' ')}` : t('analytics.allOrders');
+      case 'payment': return view.paymentFilter ? `${t('analytics.orders')} — ${view.paymentFilter}` : t('analytics.paymentOverview');
+      case 'products': return t('analytics.allProducts');
+      case 'listings': return t('analytics.listingJobs');
+      case 'fulfillment': return view.stateFilter ? `${t('analytics.fulfillment')} — ${view.stateFilter.replace(/_/g, ' ')}` : t('analytics.fulfillmentOverview');
+      case 'sources': return t('analytics.shipmentSources');
+      case 'suppliers': return t('analytics.supplierPerformance');
+      default: return t('analytics.details');
     }
   };
 
@@ -378,33 +396,33 @@ function DetailDrawer({
       return (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
-            <StatTile label="Total Revenue" value={`$${overview.total_revenue.toFixed(2)}`} />
-            <StatTile label="Avg Order Value" value={`$${overview.avg_order_value.toFixed(2)}`} />
-            <StatTile label="Total Orders" value={overview.total_orders.toLocaleString()} />
+            <StatTile label={t('analytics.totalRevenue')} value={`$${overview.total_revenue.toFixed(2)}`} />
+            <StatTile label={t('analytics.avgOrderValue')} value={`$${overview.avg_order_value.toFixed(2)}`} />
+            <StatTile label={t('analytics.totalOrders')} value={overview.total_orders.toLocaleString()} />
           </div>
 
           <div className="border-t border-[var(--border-color)] pt-4">
-            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">7-Day Performance</h4>
+            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('analytics.performance7d')}</h4>
             <div className="grid grid-cols-2 gap-4">
-              <TrendTile label="Orders" value={overview.orders_7d} trend={overview.orders_7d_trend} />
-              <TrendTile label="Revenue" value={`$${overview.revenue_7d.toFixed(2)}`} trend={overview.revenue_7d_trend} />
+              <TrendTile label={t('analytics.orders')} value={overview.orders_7d} trend={overview.orders_7d_trend} />
+              <TrendTile label={t('analytics.revenue')} value={`$${overview.revenue_7d.toFixed(2)}`} trend={overview.revenue_7d_trend} />
             </div>
           </div>
 
           <div className="border-t border-[var(--border-color)] pt-4">
-            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">30-Day Performance</h4>
+            <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('analytics.performance30d')}</h4>
             <div className="grid grid-cols-2 gap-4">
-              <TrendTile label="Orders" value={overview.orders_30d} trend={overview.orders_30d_trend} />
-              <TrendTile label="Revenue" value={`$${overview.revenue_30d.toFixed(2)}`} trend={overview.revenue_30d_trend} />
+              <TrendTile label={t('analytics.orders')} value={overview.orders_30d} trend={overview.orders_30d_trend} />
+              <TrendTile label={t('analytics.revenue')} value={`$${overview.revenue_30d.toFixed(2)}`} trend={overview.revenue_30d_trend} />
             </div>
           </div>
 
           {overview.orders_30d > 0 && (
             <div className="border-t border-[var(--border-color)] pt-4">
-              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Insights</h4>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('analytics.insights')}</h4>
               <div className="space-y-2 text-sm text-[var(--text-secondary)]">
-                <p>Daily avg (30d): <strong className="text-[var(--text-primary)]">${(overview.revenue_30d / 30).toFixed(2)}</strong> revenue, <strong className="text-[var(--text-primary)]">{(overview.orders_30d / 30).toFixed(1)}</strong> orders</p>
-                <p>Daily avg (7d): <strong className="text-[var(--text-primary)]">${(overview.revenue_7d / 7).toFixed(2)}</strong> revenue, <strong className="text-[var(--text-primary)]">{(overview.orders_7d / 7).toFixed(1)}</strong> orders</p>
+                <p>{t('analytics.dailyAvg30d')} <strong className="text-[var(--text-primary)]">${(overview.revenue_30d / 30).toFixed(2)}</strong> {t('analytics.revenue').toLowerCase()}, <strong className="text-[var(--text-primary)]">{(overview.orders_30d / 30).toFixed(1)}</strong> {t('analytics.orders').toLowerCase()}</p>
+                <p>{t('analytics.dailyAvg7d')} <strong className="text-[var(--text-primary)]">${(overview.revenue_7d / 7).toFixed(2)}</strong> {t('analytics.revenue').toLowerCase()}, <strong className="text-[var(--text-primary)]">{(overview.orders_7d / 7).toFixed(1)}</strong> {t('analytics.orders').toLowerCase()}</p>
               </div>
             </div>
           )}
@@ -415,7 +433,7 @@ function DetailDrawer({
     /* ── Orders list ───────────────────────────── */
     if ((view.kind === 'orders' || view.kind === 'payment' || view.kind === 'fulfillment') && !detailLoading) {
       if (detailOrders.length === 0) {
-        return <EmptyState message="No orders found for this filter." />;
+        return <EmptyState message={t('analytics.noOrdersFound')} />;
       }
       return (
         <div className="space-y-4">
@@ -458,7 +476,7 @@ function DetailDrawer({
     /* ── Products list ─────────────────────────── */
     if (view.kind === 'products' && !detailLoading) {
       if (detailProducts.length === 0) {
-        return <EmptyState message="No products found." />;
+        return <EmptyState message={t('analytics.noProductsFound')} />;
       }
       return (
         <div className="space-y-4">
@@ -510,27 +528,27 @@ function DetailDrawer({
       const jTotal = jobs.total || 1;
       return (
         <div className="space-y-6">
-          <StatTile label="Total Listing Jobs" value={jobs.total.toLocaleString()} />
+          <StatTile label={t('analytics.totalJobs')} value={jobs.total.toLocaleString()} />
           <div className="space-y-3">
-            <ProgressRow label="Successful" value={jobs.successful} total={jTotal} color="bg-emerald-500" />
-            <ProgressRow label="Pending" value={jobs.pending} total={jTotal} color="bg-blue-500" />
-            <ProgressRow label="Failed" value={jobs.failed} total={jTotal} color="bg-red-500" />
+            <ProgressRow label={t('analytics.successful')} value={jobs.successful} total={jTotal} color="bg-emerald-500" />
+            <ProgressRow label={t('analytics.pending')} value={jobs.pending} total={jTotal} color="bg-blue-500" />
+            <ProgressRow label={t('analytics.failed')} value={jobs.failed} total={jTotal} color="bg-red-500" />
           </div>
           {jobs.total > 0 && (
             <div className="border-t border-[var(--border-color)] pt-4">
-              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">Rates</h4>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-2">{t('analytics.rates')}</h4>
               <div className="grid grid-cols-3 gap-3 text-center text-sm">
                 <div>
                   <p className="text-xl font-bold text-emerald-500">{((jobs.successful / jobs.total) * 100).toFixed(1)}%</p>
-                  <p className="text-xs text-[var(--text-muted)]">Success</p>
+                  <p className="text-xs text-[var(--text-muted)]">{t('analytics.success')}</p>
                 </div>
                 <div>
                   <p className="text-xl font-bold text-red-500">{((jobs.failed / jobs.total) * 100).toFixed(1)}%</p>
-                  <p className="text-xs text-[var(--text-muted)]">Failure</p>
+                  <p className="text-xs text-[var(--text-muted)]">{t('analytics.failure')}</p>
                 </div>
                 <div>
                   <p className="text-xl font-bold text-blue-500">{((jobs.pending / jobs.total) * 100).toFixed(1)}%</p>
-                  <p className="text-xs text-[var(--text-muted)]">Pending</p>
+                  <p className="text-xs text-[var(--text-muted)]">{t('analytics.pending')}</p>
                 </div>
               </div>
             </div>
@@ -548,20 +566,20 @@ function DetailDrawer({
           <div className="grid grid-cols-3 gap-4 text-center">
             <div className="p-4 rounded-lg bg-[var(--background)]">
               <p className="text-2xl font-bold text-violet-500">{src.manual}</p>
-              <p className="text-xs text-[var(--text-muted)]">Manual</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('analytics.manual')}</p>
             </div>
             <div className="p-4 rounded-lg bg-[var(--background)]">
               <p className="text-2xl font-bold text-blue-500">{src.etsy_sync}</p>
-              <p className="text-xs text-[var(--text-muted)]">Etsy Sync</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('analytics.etsySync')}</p>
             </div>
             <div className="p-4 rounded-lg bg-[var(--background)]">
               <p className="text-2xl font-bold text-emerald-500">{src.auto}</p>
-              <p className="text-xs text-[var(--text-muted)]">Automatic</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('analytics.automatic')}</p>
             </div>
           </div>
-          <ProgressRow label="Manual" value={src.manual} total={sTotal} color="bg-violet-500" />
-          <ProgressRow label="Etsy Sync" value={src.etsy_sync} total={sTotal} color="bg-blue-500" />
-          <ProgressRow label="Automatic" value={src.auto} total={sTotal} color="bg-emerald-500" />
+          <ProgressRow label={t('analytics.manual')} value={src.manual} total={sTotal} color="bg-violet-500" />
+          <ProgressRow label={t('analytics.etsySync')} value={src.etsy_sync} total={sTotal} color="bg-blue-500" />
+          <ProgressRow label={t('analytics.automatic')} value={src.auto} total={sTotal} color="bg-emerald-500" />
         </div>
       );
     }
@@ -569,7 +587,7 @@ function DetailDrawer({
     /* ── Supplier performance detail ───────────── */
     if (view.kind === 'suppliers' && fulfillment && isOwner) {
       const entries = Object.entries(fulfillment.supplier_performance);
-      if (entries.length === 0) return <EmptyState message="No supplier performance data yet." />;
+      if (entries.length === 0) return <EmptyState message={t('analytics.noSupplierData')} />;
       const maxShipments = Math.max(...entries.map(([, d]) => d.shipment_count), 1);
       return (
         <div className="space-y-4">
@@ -578,8 +596,8 @@ function DetailDrawer({
             .map(([supplierId, data]) => (
               <div key={supplierId} className="p-4 rounded-lg bg-[var(--background)]">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-[var(--text-primary)]">Supplier #{supplierId}</span>
-                  <span className="text-sm font-bold text-[var(--primary)]">{data.shipment_count} shipments</span>
+                  <span className="text-sm font-semibold text-[var(--text-primary)]">{t('analytics.supplier')} #{supplierId}</span>
+                  <span className="text-sm font-bold text-[var(--primary)]">{data.shipment_count} {t('analytics.shipments')}</span>
                 </div>
                 <div className="h-2 rounded-full bg-[var(--card-bg)] overflow-hidden">
                   <div
@@ -601,7 +619,7 @@ function DetailDrawer({
       );
     }
 
-    return <EmptyState message="No data available." />;
+    return <EmptyState message={t('analytics.noDataAvailable')} />;
   };
 
   return (
@@ -614,7 +632,7 @@ function DetailDrawer({
       {/* Drawer */}
       <div
         ref={drawerRef}
-        className="fixed right-0 top-0 h-full w-full max-w-lg bg-[var(--card-bg)] shadow-2xl z-50 flex flex-col animate-slide-in-right"
+        className="fixed right-0 top-0 h-screen w-full max-w-xl bg-[var(--card-bg)] shadow-2xl z-50 flex flex-col animate-slide-in-right"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-[var(--border-color)]">
@@ -628,7 +646,7 @@ function DetailDrawer({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-behavior-contain p-5">
           {detailLoading ? (
             <div className="flex items-center justify-center py-20">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]" />
@@ -685,6 +703,7 @@ function ProgressRow({ label, value, total, color }: { label: string; value: num
 }
 
 function Pagination({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (p: number) => void }) {
+  const { t } = useLanguage();
   return (
     <div className="flex items-center justify-between pt-4 border-t border-[var(--border-color)]">
       <button
@@ -692,7 +711,7 @@ function Pagination({ page, totalPages, onPageChange }: { page: number; totalPag
         disabled={page <= 1}
         className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--background)] transition disabled:opacity-40"
       >
-        <ChevronLeft className="w-4 h-4" /> Previous
+        <ChevronLeft className="w-4 h-4" /> {t('common.previous')}
       </button>
       <span className="text-sm text-[var(--text-muted)]">
         Page {page} of {totalPages}
@@ -702,7 +721,7 @@ function Pagination({ page, totalPages, onPageChange }: { page: number; totalPag
         disabled={page >= totalPages}
         className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--background)] transition disabled:opacity-40"
       >
-        Next <ChevronRight className="w-4 h-4" />
+        {t('common.next')} <ChevronRight className="w-4 h-4" />
       </button>
     </div>
   );
@@ -730,14 +749,15 @@ function ShopComparisonPanel({
   shops: { id: number; display_name: string }[];
   onClose: () => void;
 }) {
+  const { t } = useLanguage();
   const shopEntries = Object.entries(comparisonData);
 
   return (
     <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-[var(--text-primary)]">Shop Comparison</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t('analytics.shopComparison')}</h3>
         <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm">
-          Close
+          {t('common.close')}
         </button>
       </div>
 
@@ -752,45 +772,45 @@ function ShopComparisonPanel({
               </h4>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-[var(--text-muted)] text-xs">Revenue</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.revenue')}</p>
                   <p className="text-[var(--text-primary)] font-semibold">${data.overview.total_revenue.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-[var(--text-muted)] text-xs">Orders</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders')}</p>
                   <p className="text-[var(--text-primary)] font-semibold">{data.overview.total_orders}</p>
                 </div>
                 <div>
-                  <p className="text-[var(--text-muted)] text-xs">Avg Order</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.avgOrder')}</p>
                   <p className="text-[var(--text-primary)] font-semibold">${data.overview.avg_order_value.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-[var(--text-muted)] text-xs">Rev (30d)</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.rev30d')}</p>
                   <p className="text-[var(--text-primary)] font-semibold">${data.overview.revenue_30d.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-[var(--text-muted)] text-xs">Orders (7d)</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders7d')}</p>
                   <p className="text-[var(--text-primary)] font-semibold">{data.overview.orders_7d}</p>
                 </div>
                 <div>
-                  <p className="text-[var(--text-muted)] text-xs">Orders (30d)</p>
+                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders30d')}</p>
                   <p className="text-[var(--text-primary)] font-semibold">{data.overview.orders_30d}</p>
                 </div>
               </div>
               <div className="text-xs space-y-1 pt-2 border-t border-[var(--border-color)]">
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Processing</span>
+                  <span className="text-[var(--text-muted)]">{t('analytics.processing')}</span>
                   <span className="text-yellow-400">{data.orders.status_breakdown.processing}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">In Transit</span>
+                  <span className="text-[var(--text-muted)]">{t('analytics.inTransit')}</span>
                   <span className="text-blue-400">{data.orders.status_breakdown.in_transit}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Completed</span>
+                  <span className="text-[var(--text-muted)]">{t('analytics.completed')}</span>
                   <span className="text-green-400">{data.orders.status_breakdown.completed}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">Cancelled</span>
+                  <span className="text-[var(--text-muted)]">{t('analytics.cancelled')}</span>
                   <span className="text-red-400">{data.orders.status_breakdown.cancelled}</span>
                 </div>
               </div>
@@ -804,8 +824,9 @@ function ShopComparisonPanel({
 
 function AnalyticsContent() {
   const { user } = useAuth();
-  const { selectedShop, selectedShopIds, selectedShops } = useShop();
+  const { selectedShop, selectedShopIds, selectedShops, isLoading: shopLoading } = useShop();
   const { showToast } = useToast();
+  const { t } = useLanguage();
 
   const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
   const [orders, setOrders] = useState<OrderAnalytics | null>(null);
@@ -817,18 +838,41 @@ function AnalyticsContent() {
   const [comparisonData, setComparisonData] = useState<Record<string, { overview: OverviewAnalytics; orders: OrderAnalytics }> | null>(null);
   const [showComparison, setShowComparison] = useState(false);
   const [loadingComparison, setLoadingComparison] = useState(false);
+  const [dateRange, setDateRange] = useState<DateRangePreset>('30d');
+
+  // #region agent log
+  const loadCountRef = useRef(0);
+  const renderCountRef = useRef(0);
+  const hasContentRef = useRef(false);
+  // #endregion
 
   const isOwner = user?.role?.toLowerCase() === 'owner';
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
   const shopId = !shopIds ? selectedShop?.id : undefined;
 
+  const { start: startDate, end: endDate } = useMemo(
+    () => dateRangeToParams(dateRange),
+    [dateRange]
+  );
+
   const loadAnalytics = useCallback(async (forceRefresh = false) => {
+    // #region agent log
+    loadCountRef.current += 1;
+    const callId = loadCountRef.current;
+    if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:loadAnalytics', message: 'loadAnalytics invoked', data: { callId, shopId, shopIdsLen: shopIds?.length ?? 0 }, timestamp: Date.now() }) }).catch(() => {});
+    // #endregion
     try {
-      if (forceRefresh) setRefreshing(true);
-      else setLoading(true);
+      if (forceRefresh) {
+        setRefreshing(true);
+      } else if (hasContentRef.current) {
+        if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:loadAnalytics', message: 'BLINK AVOIDED', data: { callId }, timestamp: Date.now() }) }).catch(() => {});
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
 
       const [overviewData, ordersData, productsData, fulfillmentData] = await Promise.all([
-        analyticsApi.getOverview(shopId, forceRefresh, shopIds),
+        analyticsApi.getOverview(shopId, forceRefresh, shopIds, startDate, endDate),
         analyticsApi.getOrders(shopId, forceRefresh, shopIds),
         analyticsApi.getProducts(shopId, forceRefresh, shopIds),
         analyticsApi.getFulfillment(shopId, forceRefresh, shopIds),
@@ -840,16 +884,23 @@ function AnalyticsContent() {
       setFulfillment(fulfillmentData);
     } catch (err: unknown) {
       const error = err as { detail?: string };
-      showToast(error?.detail || 'Failed to load analytics', 'error');
+      showToast(error?.detail || t('analytics.loadFailed'), 'error');
     } finally {
+      // #region agent log
+      if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:loadAnalytics', message: 'loadAnalytics done', data: { callId }, timestamp: Date.now() }) }).catch(() => {});
+      // #endregion
       setLoading(false);
       setRefreshing(false);
     }
-  }, [shopId, shopIds, showToast]);
+  }, [shopId, shopIds, startDate, endDate, showToast, t]);
 
   useEffect(() => {
+    // #region agent log
+    if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:useEffect', message: 'useEffect', data: { shopLoading, shopIdsLen: shopIds?.length ?? 0 }, timestamp: Date.now() }) }).catch(() => {});
+    // #endregion
+    if (shopLoading) return;
     loadAnalytics();
-  }, [loadAnalytics]);
+  }, [loadAnalytics, shopLoading]);
 
   const handleKpiClick = useCallback(async (detailViewValue: DetailView) => {
     setDetailView(detailViewValue);
@@ -868,7 +919,13 @@ function AnalyticsContent() {
     }
   }, [shopIds]);
 
-  if (loading) {
+  // #region agent log
+  renderCountRef.current += 1;
+  hasContentRef.current = !!(overview && !loading && !shopLoading);
+  if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:render', message: 'render', data: { render: renderCountRef.current, loading, shopLoading, hasOverview: !!overview }, timestamp: Date.now() }) }).catch(() => {});
+  // #endregion
+
+  if (loading || shopLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)]" />
@@ -895,91 +952,104 @@ function AnalyticsContent() {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">Analytics</h1>
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('analytics.title')}</h1>
           <p className="text-[var(--text-muted)] mt-1">
-            Performance overview{shopIds && shopIds.length > 1 ? ` for ${shopIds.length} shops` : selectedShop ? ` for ${selectedShop.display_name}` : ''}
-            <span className="ml-2 text-xs">— click any card for details</span>
+            {t('analytics.performanceOverview')}{shopIds && shopIds.length > 1 ? ` ${t('analytics.forShops')} ${shopIds.length} ${t('analytics.shops')}` : selectedShop ? ` ${t('analytics.forShops')} ${selectedShop.display_name}` : ''}
+            <span className="ml-2 text-xs">— {t('analytics.clickCardDetails')}</span>
           </p>
         </div>
-        <button
-          onClick={() => loadAnalytics(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--card-hover)] transition disabled:opacity-50"
-        >
-          <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
+            className="rounded-lg border border-[var(--border-color)] px-3 py-2 text-sm bg-[var(--card-bg)] text-[var(--text-primary)] min-w-[140px]"
+          >
+            <option value="7d">{t('analytics.last7d')}</option>
+            <option value="30d">{t('analytics.last30d')}</option>
+            <option value="90d">{t('analytics.last90d')}</option>
+            <option value="12m">{t('analytics.last12m')}</option>
+            <option value="all">{t('analytics.allTime')}</option>
+          </select>
+          <button
+            onClick={() => loadAnalytics(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--card-hover)] transition disabled:opacity-50"
+          >
+            <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
+            {refreshing ? t('analytics.refreshing') : t('analytics.refresh')}
+          </button>
+        </div>
       </div>
 
       {/* ── Revenue & Order KPIs ─────────────────────────────── */}
       {overview && (
         <>
-          <SectionHeader title="Revenue & Orders" subtitle="Key performance indicators" />
+          <SectionHeader title={t('analytics.revenueOrders')} subtitle={t('analytics.keyIndicators')} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
-              title="Total Revenue"
+              title={t('analytics.totalRevenue')}
               value={overview.total_revenue.toFixed(2)}
               prefix="$"
               icon={DollarSign}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
-              title="Total Orders"
+              title={t('analytics.totalOrders')}
               value={overview.total_orders}
               icon={ShoppingCart}
               onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
-              title="Avg Order Value"
+              title={t('analytics.avgOrderValue')}
               value={overview.avg_order_value.toFixed(2)}
               prefix="$"
               icon={BarChart3}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
-              title="Revenue (30d)"
+              title={t('analytics.revenue30d')}
               value={overview.revenue_30d.toFixed(2)}
               prefix="$"
               icon={DollarSign}
               trend={overview.revenue_30d_trend}
-              trendLabel="vs prev 30d"
+              trendLabel={t('analytics.vsPrev30d')}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
-              title="Orders (7d)"
+              title={t('analytics.orders7d')}
               value={overview.orders_7d}
               icon={ShoppingCart}
               trend={overview.orders_7d_trend}
-              trendLabel="vs prev 7d"
+              trendLabel={t('analytics.vsPrev7d')}
               onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
-              title="Orders (30d)"
+              title={t('analytics.orders30d')}
               value={overview.orders_30d}
               icon={ShoppingCart}
               trend={overview.orders_30d_trend}
-              trendLabel="vs prev 30d"
+              trendLabel={t('analytics.vsPrev30d')}
               onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
-              title="Revenue (7d)"
+              title={t('analytics.revenue7d')}
               value={overview.revenue_7d.toFixed(2)}
               prefix="$"
               icon={TrendingUp}
               trend={overview.revenue_7d_trend}
-              trendLabel="vs prev 7d"
+              trendLabel={t('analytics.vsPrev7d')}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
-              title="Revenue (30d)"
+              title={t('analytics.revenue30d')}
               value={overview.revenue_30d.toFixed(2)}
               prefix="$"
               icon={TrendingUp}
               trend={overview.revenue_30d_trend}
-              trendLabel="vs prev 30d"
+              trendLabel={t('analytics.vsPrev30d')}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
           </div>
@@ -1006,22 +1076,22 @@ function AnalyticsContent() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Order status */}
           <ClickableCard>
-            <SectionHeader title="Order Status" subtitle={`${orderTotal} total orders`} />
+            <SectionHeader title={t('analytics.orderStatus')} subtitle={`${orderTotal} total orders`} />
             <div className="space-y-4">
-              <BarItem label="Processing" value={orders.status_breakdown.processing} total={orderTotal} color="bg-yellow-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'processing' })} />
-              <BarItem label="In Transit" value={orders.status_breakdown.in_transit} total={orderTotal} color="bg-blue-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'in_transit' })} />
-              <BarItem label="Completed" value={orders.status_breakdown.completed} total={orderTotal} color="bg-emerald-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'completed' })} />
-              <BarItem label="Cancelled" value={orders.status_breakdown.cancelled} total={orderTotal} color="bg-red-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'cancelled' })} />
-              <BarItem label="Refunded" value={orders.status_breakdown.refunded} total={orderTotal} color="bg-orange-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'refunded' })} />
+              <BarItem label={t('analytics.processing')} value={orders.status_breakdown.processing} total={orderTotal} color="bg-yellow-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'processing' })} />
+              <BarItem label={t('analytics.inTransit')} value={orders.status_breakdown.in_transit} total={orderTotal} color="bg-blue-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'in_transit' })} />
+              <BarItem label={t('analytics.completed')} value={orders.status_breakdown.completed} total={orderTotal} color="bg-emerald-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'completed' })} />
+              <BarItem label={t('analytics.cancelled')} value={orders.status_breakdown.cancelled} total={orderTotal} color="bg-red-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'cancelled' })} />
+              <BarItem label={t('analytics.refunded')} value={orders.status_breakdown.refunded} total={orderTotal} color="bg-orange-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'refunded' })} />
             </div>
           </ClickableCard>
 
           {/* Payment breakdown */}
           <ClickableCard>
-            <SectionHeader title="Payment Status" subtitle={`${paymentTotal} total orders`} />
+            <SectionHeader title={t('analytics.paymentStatus')} subtitle={`${paymentTotal} total orders`} />
             <div className="grid grid-cols-2 gap-4 mb-6">
               <DonutStat
-                label="Paid"
+                label={t('analytics.paid')}
                 value={orders.payment_breakdown.paid}
                 total={paymentTotal}
                 color="bg-emerald-100 text-emerald-600"
@@ -1029,7 +1099,7 @@ function AnalyticsContent() {
                 onClick={() => setDetailView({ kind: 'payment', paymentFilter: 'paid' })}
               />
               <DonutStat
-                label="Unpaid"
+                label={t('analytics.unpaid')}
                 value={orders.payment_breakdown.unpaid}
                 total={paymentTotal}
                 color="bg-amber-100 text-amber-600"
@@ -1051,8 +1121,8 @@ function AnalyticsContent() {
               </div>
             )}
             <div className="flex items-center justify-between mt-2 text-xs text-[var(--text-muted)]">
-              <span>Paid ({paymentTotal > 0 ? ((orders.payment_breakdown.paid / paymentTotal) * 100).toFixed(0) : 0}%)</span>
-              <span>Unpaid ({paymentTotal > 0 ? ((orders.payment_breakdown.unpaid / paymentTotal) * 100).toFixed(0) : 0}%)</span>
+              <span>{t('analytics.paid')} ({paymentTotal > 0 ? ((orders.payment_breakdown.paid / paymentTotal) * 100).toFixed(0) : 0}%)</span>
+              <span>{t('analytics.unpaid')} ({paymentTotal > 0 ? ((orders.payment_breakdown.unpaid / paymentTotal) * 100).toFixed(0) : 0}%)</span>
             </div>
           </ClickableCard>
         </div>
@@ -1063,22 +1133,22 @@ function AnalyticsContent() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Product overview */}
           <ClickableCard onClick={() => setDetailView({ kind: 'products' })}>
-            <SectionHeader title="Products" subtitle="Inventory overview — click to browse" />
+            <SectionHeader title={t('analytics.products')} subtitle={t('analytics.inventoryOverview')} />
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center p-4 rounded-lg bg-[var(--background)]">
                 <Package className="w-6 h-6 text-[var(--primary)] mx-auto mb-2" />
                 <p className="text-2xl font-bold text-[var(--text-primary)]">{products.total_products}</p>
-                <p className="text-xs text-[var(--text-muted)]">Total</p>
+                <p className="text-xs text-[var(--text-muted)]">{t('analytics.total')}</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-[var(--background)]">
                 <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-[var(--text-primary)]">{products.published_products}</p>
-                <p className="text-xs text-[var(--text-muted)]">Published</p>
+                <p className="text-xs text-[var(--text-muted)]">{t('analytics.published')}</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-[var(--background)]">
                 <FileText className="w-6 h-6 text-yellow-500 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-[var(--text-primary)]">{products.draft_products}</p>
-                <p className="text-xs text-[var(--text-muted)]">Drafts</p>
+                <p className="text-xs text-[var(--text-muted)]">{t('analytics.drafts')}</p>
               </div>
             </div>
 
@@ -1098,14 +1168,14 @@ function AnalyticsContent() {
 
           {/* Listing jobs */}
           <ClickableCard onClick={() => setDetailView({ kind: 'listings' })}>
-            <SectionHeader title="Listing Jobs" subtitle="Publishing pipeline — click for details" />
+            <SectionHeader title={t('analytics.listingJobs')} subtitle={t('analytics.publishingPipeline')} />
             <div className="space-y-4">
-              <BarItem label="Successful" value={products.listing_jobs.successful} total={products.listing_jobs.total} color="bg-emerald-500" />
-              <BarItem label="Pending" value={products.listing_jobs.pending} total={products.listing_jobs.total} color="bg-blue-500" />
-              <BarItem label="Failed" value={products.listing_jobs.failed} total={products.listing_jobs.total} color="bg-red-500" />
+              <BarItem label={t('analytics.successful')} value={products.listing_jobs.successful} total={products.listing_jobs.total} color="bg-emerald-500" />
+              <BarItem label={t('analytics.pending')} value={products.listing_jobs.pending} total={products.listing_jobs.total} color="bg-blue-500" />
+              <BarItem label={t('analytics.failed')} value={products.listing_jobs.failed} total={products.listing_jobs.total} color="bg-red-500" />
             </div>
             <div className="mt-4 p-3 rounded-lg bg-[var(--background)] text-center">
-              <p className="text-sm text-[var(--text-muted)]">Total Jobs</p>
+              <p className="text-sm text-[var(--text-muted)]">{t('analytics.totalJobs')}</p>
               <p className="text-xl font-bold text-[var(--text-primary)]">{products.listing_jobs.total}</p>
             </div>
           </ClickableCard>
@@ -1115,25 +1185,25 @@ function AnalyticsContent() {
       {/* ── Fulfillment ──────────────────────────────────────── */}
       {fulfillment && (
         <>
-          <SectionHeader title="Fulfillment" subtitle="Shipping and delivery performance" />
+          <SectionHeader title={t('analytics.fulfillment')} subtitle={t('analytics.shippingPerformance')} />
 
           {/* Fulfillment KPI row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <KpiCard
-              title="Avg Fulfillment Time"
+              title={t('analytics.avgFulfillmentTime')}
               value={fulfillment.avg_fulfillment_time_hours > 0 ? fulfillment.avg_fulfillment_time_hours.toFixed(1) : '—'}
-              suffix={fulfillment.avg_fulfillment_time_hours > 0 ? 'h' : ''}
+              suffix={fulfillment.avg_fulfillment_time_hours > 0 ? t('analytics.hours') : ''}
               icon={Timer}
               onClick={() => setDetailView({ kind: 'fulfillment' })}
             />
             <KpiCard
-              title="Delivered"
+              title={t('analytics.delivered')}
               value={fulfillment.state_breakdown.delivered}
               icon={CheckCircle}
               onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delivered' })}
             />
             <KpiCard
-              title="In Transit"
+              title={t('analytics.inTransit')}
               value={fulfillment.state_breakdown.in_transit + fulfillment.state_breakdown.shipped}
               icon={Truck}
               onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'in_transit' })}
@@ -1143,37 +1213,37 @@ function AnalyticsContent() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Fulfillment states */}
             <ClickableCard>
-              <SectionHeader title="Fulfillment Status" subtitle={`${fulfillmentTotal} shipments`} />
+              <SectionHeader title={t('analytics.fulfillmentStatus')} subtitle={`${fulfillmentTotal} ${t('analytics.shipments')}`} />
               <div className="space-y-3">
-                <DonutStat label="Processing" value={fulfillment.state_breakdown.processing} total={fulfillmentTotal} color="bg-yellow-100 text-yellow-600" icon={Clock} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'processing' })} />
-                <DonutStat label="Shipped" value={fulfillment.state_breakdown.shipped} total={fulfillmentTotal} color="bg-blue-100 text-blue-600" icon={Truck} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'shipped' })} />
-                <DonutStat label="In Transit" value={fulfillment.state_breakdown.in_transit} total={fulfillmentTotal} color="bg-indigo-100 text-indigo-600" icon={Truck} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'in_transit' })} />
-                <DonutStat label="Delivered" value={fulfillment.state_breakdown.delivered} total={fulfillmentTotal} color="bg-emerald-100 text-emerald-600" icon={CheckCircle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delivered' })} />
-                <DonutStat label="Delayed" value={fulfillment.state_breakdown.delayed} total={fulfillmentTotal} color="bg-orange-100 text-orange-600" icon={AlertTriangle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delayed' })} />
-                <DonutStat label="Cancelled" value={fulfillment.state_breakdown.cancelled} total={fulfillmentTotal} color="bg-red-100 text-red-600" icon={XCircle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'cancelled' })} />
+                <DonutStat label={t('analytics.processing')} value={fulfillment.state_breakdown.processing} total={fulfillmentTotal} color="bg-yellow-100 text-yellow-600" icon={Clock} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'processing' })} />
+                <DonutStat label={t('analytics.shipped')} value={fulfillment.state_breakdown.shipped} total={fulfillmentTotal} color="bg-blue-100 text-blue-600" icon={Truck} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'shipped' })} />
+                <DonutStat label={t('analytics.inTransit')} value={fulfillment.state_breakdown.in_transit} total={fulfillmentTotal} color="bg-indigo-100 text-indigo-600" icon={Truck} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'in_transit' })} />
+                <DonutStat label={t('analytics.delivered')} value={fulfillment.state_breakdown.delivered} total={fulfillmentTotal} color="bg-emerald-100 text-emerald-600" icon={CheckCircle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delivered' })} />
+                <DonutStat label={t('analytics.delayed')} value={fulfillment.state_breakdown.delayed} total={fulfillmentTotal} color="bg-orange-100 text-orange-600" icon={AlertTriangle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delayed' })} />
+                <DonutStat label={t('analytics.cancelled')} value={fulfillment.state_breakdown.cancelled} total={fulfillmentTotal} color="bg-red-100 text-red-600" icon={XCircle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'cancelled' })} />
               </div>
             </ClickableCard>
 
             {/* Shipment source + supplier performance */}
             <div className="space-y-6">
               <ClickableCard onClick={() => setDetailView({ kind: 'sources' })}>
-                <SectionHeader title="Shipment Source" subtitle="How shipments were created — click for details" />
+                <SectionHeader title={t('analytics.shipmentSource')} subtitle={t('analytics.howShipmentsCreated')} />
                 <div className="space-y-4">
-                  <BarItem label="Manual" value={fulfillment.source_breakdown.manual} total={sourceTotal} color="bg-violet-500" />
-                  <BarItem label="Etsy Sync" value={fulfillment.source_breakdown.etsy_sync} total={sourceTotal} color="bg-blue-500" />
-                  <BarItem label="Automatic" value={fulfillment.source_breakdown.auto} total={sourceTotal} color="bg-emerald-500" />
+                  <BarItem label={t('analytics.manual')} value={fulfillment.source_breakdown.manual} total={sourceTotal} color="bg-violet-500" />
+                  <BarItem label={t('analytics.etsySync')} value={fulfillment.source_breakdown.etsy_sync} total={sourceTotal} color="bg-blue-500" />
+                  <BarItem label={t('analytics.automatic')} value={fulfillment.source_breakdown.auto} total={sourceTotal} color="bg-emerald-500" />
                 </div>
               </ClickableCard>
 
               {/* Supplier performance (owner only) */}
               {isOwner && fulfillment.supplier_performance && Object.keys(fulfillment.supplier_performance).length > 0 && (
                 <ClickableCard onClick={() => setDetailView({ kind: 'suppliers' })}>
-                  <SectionHeader title="Supplier Performance" subtitle="Shipments per supplier — click for details" />
+                  <SectionHeader title={t('analytics.supplierPerformance')} subtitle={t('analytics.shipmentsPerSupplier')} />
                   <div className="space-y-3">
                     {Object.entries(fulfillment.supplier_performance).map(([supplierId, data]) => (
                       <div key={supplierId} className="flex items-center justify-between p-3 rounded-lg bg-[var(--background)]">
-                        <span className="text-sm text-[var(--text-secondary)]">Supplier #{supplierId}</span>
-                        <span className="font-semibold text-[var(--text-primary)]">{data.shipment_count} shipments</span>
+                        <span className="text-sm text-[var(--text-secondary)]">{t('analytics.supplier')} #{supplierId}</span>
+                        <span className="font-semibold text-[var(--text-primary)]">{data.shipment_count} {t('analytics.shipments')}</span>
                       </div>
                     ))}
                   </div>
@@ -1187,7 +1257,7 @@ function AnalyticsContent() {
       {/* Cache timestamp */}
       {overview?.computed_at && (
         <p className="text-xs text-[var(--text-muted)] text-right">
-          Data cached at {new Date(overview.computed_at).toLocaleString()}
+          {t('analytics.dataCachedAt')} {new Date(overview.computed_at).toLocaleString()}
         </p>
       )}
 

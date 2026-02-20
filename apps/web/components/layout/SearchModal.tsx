@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, FileText, Package, ShoppingCart, Settings, X, Sparkles, Calendar, BarChart3 } from 'lucide-react';
+import { useLanguage } from '@/lib/language-context';
 
 interface SearchModalProps {
   isOpen: boolean;
@@ -17,69 +18,70 @@ interface SearchResult {
   category: string;
 }
 
-const searchablePages: SearchResult[] = [
-  {
-    title: 'Dashboard',
-    description: 'View your shop overview and metrics',
-    icon: BarChart3,
-    href: '/',
-    category: 'Pages',
-  },
-  {
-    title: 'Products',
-    description: 'Manage your product catalog',
-    icon: Package,
-    href: '/products',
-    category: 'Pages',
-  },
-  {
-    title: 'Listings',
-    description: 'View and manage your Etsy listings',
-    icon: FileText,
-    href: '/listings',
-    category: 'Pages',
-  },
-  {
-    title: 'Orders',
-    description: 'Track and manage customer orders',
-    icon: ShoppingCart,
-    href: '/orders',
-    category: 'Pages',
-  },
-  {
-    title: 'AI Generation',
-    description: 'Generate product titles, descriptions, and tags',
-    icon: Sparkles,
-    href: '/ai',
-    category: 'Pages',
-  },
-  {
-    title: 'Schedules',
-    description: 'Automate tasks with scheduled jobs',
-    icon: Calendar,
-    href: '/schedules',
-    category: 'Pages',
-  },
-  {
-    title: 'Usage & Costs',
-    description: 'Monitor AI usage and costs',
-    icon: BarChart3,
-    href: '/usage',
-    category: 'Analytics',
-  },
-  {
-    title: 'Settings',
-    description: 'Configure your shop and team settings',
-    icon: Settings,
-    href: '/settings',
-    category: 'Settings',
-  },
-];
-
 export function SearchModal({ isOpen, onClose }: SearchModalProps) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>(searchablePages);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const router = useRouter();
+
+  const searchablePages = useMemo<SearchResult[]>(() => [
+    {
+      title: t('search.pages.dashboard'),
+      description: t('search.pages.dashboardDesc'),
+      icon: BarChart3,
+      href: '/',
+      category: t('search.categories.pages'),
+    },
+    {
+      title: t('search.pages.products'),
+      description: t('search.pages.productsDesc'),
+      icon: Package,
+      href: '/products',
+      category: t('search.categories.pages'),
+    },
+    {
+      title: t('search.pages.listings'),
+      description: t('search.pages.listingsDesc'),
+      icon: FileText,
+      href: '/listings',
+      category: t('search.categories.pages'),
+    },
+    {
+      title: t('search.pages.orders'),
+      description: t('search.pages.ordersDesc'),
+      icon: ShoppingCart,
+      href: '/orders',
+      category: t('search.categories.pages'),
+    },
+    {
+      title: t('search.pages.aiGeneration'),
+      description: t('search.pages.aiGenerationDesc'),
+      icon: Sparkles,
+      href: '/ai',
+      category: t('search.categories.pages'),
+    },
+    {
+      title: t('search.pages.schedules'),
+      description: t('search.pages.schedulesDesc'),
+      icon: Calendar,
+      href: '/schedules',
+      category: t('search.categories.pages'),
+    },
+    {
+      title: t('search.pages.usage'),
+      description: t('search.pages.usageDesc'),
+      icon: BarChart3,
+      href: '/usage',
+      category: t('search.categories.analytics'),
+    },
+    {
+      title: t('search.pages.settings'),
+      description: t('search.pages.settingsDesc'),
+      icon: Settings,
+      href: '/settings',
+      category: t('search.categories.settings'),
+    },
+  ], [t]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -111,7 +113,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
     );
 
     setResults(filtered);
-  }, [query]);
+  }, [query, searchablePages]);
 
   const handleSelect = useCallback(
     (href: string) => {
@@ -134,7 +136,7 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search pages, features, settings..."
+            placeholder={t('search.placeholder')}
             autoFocus
             className="w-full pl-12 pr-12 py-4 bg-transparent text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none text-lg"
           />
@@ -151,8 +153,8 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
           {results.length === 0 ? (
             <div className="text-center py-12">
               <Search className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" />
-              <p className="text-[var(--text-muted)]">No results found for "{query}"</p>
-              <p className="text-[var(--text-muted)] text-sm mt-1">Try searching for pages, features, or settings</p>
+              <p className="text-[var(--text-muted)]">{t('search.noResults')} &ldquo;{query}&rdquo;</p>
+              <p className="text-[var(--text-muted)] text-sm mt-1">{t('search.trySearching')}</p>
             </div>
           ) : (
             <div className="space-y-1">
@@ -187,10 +189,10 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
         <div className="border-t border-[var(--border-color)] px-4 py-3 bg-[var(--background)] rounded-b-xl">
           <div className="flex items-center justify-between text-xs text-[var(--text-muted)]">
             <div className="flex items-center gap-4">
-              <span>Press <kbd className="px-2 py-0.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded">↑↓</kbd> to navigate</span>
-              <span>Press <kbd className="px-2 py-0.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded">Enter</kbd> to select</span>
+              <span>Press <kbd className="px-2 py-0.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded">↑↓</kbd> {t('search.navigate')}</span>
+              <span>Press <kbd className="px-2 py-0.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded">Enter</kbd> {t('search.select')}</span>
             </div>
-            <span>Press <kbd className="px-2 py-0.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded">ESC</kbd> to close</span>
+            <span>Press <kbd className="px-2 py-0.5 bg-[var(--card-bg)] border border-[var(--border-color)] rounded">ESC</kbd> {t('search.closeHint')}</span>
           </div>
         </div>
       </div>

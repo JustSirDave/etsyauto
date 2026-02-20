@@ -316,6 +316,7 @@ export interface Product {
   tags_raw: string[];
   images: string[];
   price: number | null;
+  cost_usd_cents?: number;
   source: string;
   batch_id: string | null;
   created_at: string;
@@ -1190,7 +1191,13 @@ export interface FulfillmentAnalytics {
   computed_at: string;
 }
 
-function _analyticsParams(shopId?: number, forceRefresh?: boolean, shopIds?: number[]): URLSearchParams {
+function _analyticsParams(
+  shopId?: number,
+  forceRefresh?: boolean,
+  shopIds?: number[],
+  startDate?: string,
+  endDate?: string
+): URLSearchParams {
   const params = new URLSearchParams();
   if (shopIds && shopIds.length > 0) {
     params.append('shop_ids', shopIds.join(','));
@@ -1198,12 +1205,22 @@ function _analyticsParams(shopId?: number, forceRefresh?: boolean, shopIds?: num
     params.append('shop_id', String(shopId));
   }
   if (forceRefresh) params.append('force_refresh', 'true');
+  if (startDate) params.append('start_date', startDate);
+  if (endDate) params.append('end_date', endDate);
   return params;
 }
 
 export const analyticsApi = {
-  getOverview: async (shopId?: number, forceRefresh?: boolean, shopIds?: number[]): Promise<OverviewAnalytics> => {
-    return apiRequest<OverviewAnalytics>(`/api/analytics/overview?${_analyticsParams(shopId, forceRefresh, shopIds).toString()}`);
+  getOverview: async (
+    shopId?: number,
+    forceRefresh?: boolean,
+    shopIds?: number[],
+    startDate?: string,
+    endDate?: string
+  ): Promise<OverviewAnalytics> => {
+    return apiRequest<OverviewAnalytics>(
+      `/api/analytics/overview?${_analyticsParams(shopId, forceRefresh, shopIds, startDate, endDate).toString()}`
+    );
   },
 
   getOrders: async (shopId?: number, forceRefresh?: boolean, shopIds?: number[]): Promise<OrderAnalytics> => {

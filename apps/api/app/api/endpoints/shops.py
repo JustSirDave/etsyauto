@@ -139,17 +139,15 @@ async def start_oauth_from_connect_link(
     db.commit()
 
     auth_data = etsy_oauth.get_authorization_url()
-    redis_client.setex(
-        f"etsy_oauth_state:{auth_data['state']}",
-        600,
-        json.dumps({
+    _store_key = f"etsy_oauth_state:{auth_data['state']}"
+    _store_val = json.dumps({
             "code_verifier": auth_data["code_verifier"],
             "user_id": link.created_by_user_id,
             "tenant_id": link.tenant_id,
             "shop_name": link.shop_name,
             "from_connect_link": True,
-        }),
-    )
+        })
+    redis_client.setex(_store_key, 600, _store_val)
 
     return {"authorization_url": auth_data["auth_url"]}
 

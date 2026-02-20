@@ -36,6 +36,13 @@ class EtsyOAuthService:
         self.client_id = settings.ETSY_CLIENT_ID
         self.client_secret = settings.ETSY_CLIENT_SECRET
         self.redirect_uri = settings.ETSY_REDIRECT_URI
+
+    @property
+    def api_key_header(self) -> str:
+        """Etsy v3 API x-api-key format: {keystring}:{shared_secret}"""
+        if self.client_secret:
+            return f"{self.client_id}:{self.client_secret}"
+        return self.client_id
     
     def get_authorization_url(self, state: str = None) -> Dict[str, str]:
         """
@@ -107,7 +114,7 @@ class EtsyOAuthService:
                 self.TOKEN_URL,
                 data=data,
                 headers={
-                    "x-api-key": self.client_id,
+                    "x-api-key": self.api_key_header,
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
             )
@@ -139,7 +146,7 @@ class EtsyOAuthService:
                 self.TOKEN_URL,
                 data=data,
                 headers={
-                    "x-api-key": self.client_id,
+                    "x-api-key": self.api_key_header,
                     "Content-Type": "application/x-www-form-urlencoded",
                 },
             )
@@ -159,7 +166,7 @@ class EtsyOAuthService:
         """
         headers = {
             "Authorization": f"Bearer {access_token}",
-            "x-api-key": self.client_id,
+            "x-api-key": self.api_key_header,
             "Accept": "application/json",
         }
 

@@ -2,6 +2,7 @@
 Etsy Automation Platform - FastAPI Backend
 Main application entry point
 """
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -224,6 +225,26 @@ if not os.path.exists(uploads_dir):
     os.makedirs(uploads_dir, exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+
+# Debug log endpoint for client-side instrumentation (dev only)
+DEBUG_LOG_PATH = os.environ.get("DEBUG_LOG_PATH", "/debug-logs/debug.log")
+
+
+@app.post("/api/debug/log", tags=["Debug"])
+async def debug_log(request: Request):
+    """Accept client debug logs and append to file (NDJSON). Used for debugging."""
+    if settings.ENVIRONMENT == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        body = await request.json()
+        line = (body if isinstance(body, str) else json.dumps(body)) + "\n"
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(line)
+        return {"ok": True}
+    except Exception as e:
+        logger.warning("debug_log failed: %s", e)
+        return {"ok": False, "error": str(e)}
 
 
 @app.get("/healthz", tags=["Health"])

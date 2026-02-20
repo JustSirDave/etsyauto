@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { aiApi, productsApi, AIStats, AIGeneration, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
+import { useLanguage } from '@/lib/language-context';
 import { parseAIError, AIErrorDetails } from '@/lib/ai-error-handler';
 import { AIErrorModal } from '@/components/modals/AIErrorModal';
 import { Alert } from '@/components/ui/Alert';
@@ -36,6 +37,7 @@ function RecentGeneration({
   timestamp: string;
   status: 'completed' | 'failed';
 }) {
+  const { t } = useLanguage();
   const typeIcons = {
     title: FileText,
     description: Wand2,
@@ -58,12 +60,12 @@ function RecentGeneration({
         {status === 'completed' ? (
           <span className="flex items-center gap-1 text-[var(--success)] text-sm">
             <CheckCircle className="w-4 h-4" />
-            Completed
+            {t('ai.completed')}
           </span>
         ) : (
           <span className="flex items-center gap-1 text-[var(--danger)] text-sm">
             <AlertCircle className="w-4 h-4" />
-            Failed
+            {t('ai.failed')}
           </span>
         )}
       </div>
@@ -74,6 +76,7 @@ function RecentGeneration({
 export default function AIGenerationPage() {
   const router = useRouter();
   const { showToast } = useToast();
+  const { t } = useLanguage();
   const [stats, setStats] = useState<AIStats | null>(null);
   const [loadingStats, setLoadingStats] = useState(true);
   const [recentGenerations, setRecentGenerations] = useState<AIGeneration[]>([]);
@@ -118,7 +121,7 @@ export default function AIGenerationPage() {
       setProducts(data.products);
     } catch (error: any) {
       console.error('Failed to load products:', error);
-      showToast('Failed to load products', 'error');
+      showToast(t('ai.loadProductsFailed'), 'error');
     } finally {
       setLoadingProducts(false);
     }
@@ -133,15 +136,15 @@ export default function AIGenerationPage() {
   // Shared generate handler — accepts a generate_type
   const handleGenerate = async (generateType: string = 'all') => {
     if (!selectedProductId) {
-      showToast('Please select a product first', 'error');
+      showToast(t('ai.selectProductFirst'), 'error');
       return;
     }
 
     const labels: Record<string, string> = {
-      all: 'All content',
-      title: 'Title',
-      description: 'Description',
-      tags: 'Tags',
+      all: t('ai.allContent'),
+      title: t('ai.titleOnly'),
+      description: t('ai.descriptionOnly'),
+      tags: t('ai.tagsOnly'),
     };
 
     try {
@@ -149,7 +152,7 @@ export default function AIGenerationPage() {
       const result = await aiApi.generateContent(selectedProductId, { generate_type: generateType });
 
       showToast(
-        `${labels[generateType]} generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
+        `${labels[generateType]} ${t('ai.generatedSuccess')} $${(result.cost.usd_cents / 100).toFixed(2)}`,
         'success'
       );
 
@@ -176,17 +179,17 @@ export default function AIGenerationPage() {
         <div>
           <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-3">
             <Sparkles className="w-7 h-7 text-[var(--primary)]" />
-            AI Generation
+            {t('ai.title')}
           </h1>
           <p className="text-[var(--text-muted)] mt-1">
-            Generate Etsy-optimized titles, descriptions, and tags using AI
+            {t('ai.subtitle')}
           </p>
         </div>
 
         {/* Info Banner */}
         {!selectedProductId && (
           <Alert>
-            Select a product below to enable AI generation features
+            {t('ai.selectProductBanner')}
           </Alert>
         )}
 
@@ -204,7 +207,7 @@ export default function AIGenerationPage() {
                 ) : (
                   <p className="text-2xl font-bold text-[var(--text-primary)]">{stats?.total_generations.toLocaleString() || 0}</p>
                 )}
-                <p className="text-[var(--text-muted)] text-sm">Total Generations</p>
+                <p className="text-[var(--text-muted)] text-sm">{t('ai.totalGenerations')}</p>
               </div>
             </div>
           </div>
@@ -220,9 +223,9 @@ export default function AIGenerationPage() {
                 <FileText className="w-5 h-5 text-[var(--info)]" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Title Only</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">{t('ai.titleOnly')}</p>
                 <p className="text-[var(--text-muted)] text-sm">
-                  {generating ? 'Generating...' : 'Generate SEO title'}
+                  {generating ? t('ai.generating') : t('ai.generateSeoTitle')}
                 </p>
               </div>
             </div>
@@ -239,9 +242,9 @@ export default function AIGenerationPage() {
                 <Wand2 className="w-5 h-5 text-[var(--success)]" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Description Only</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">{t('ai.descriptionOnly')}</p>
                 <p className="text-[var(--text-muted)] text-sm">
-                  {generating ? 'Generating...' : 'Generate product description'}
+                  {generating ? t('ai.generating') : t('ai.generateDescription')}
                 </p>
               </div>
             </div>
@@ -258,9 +261,9 @@ export default function AIGenerationPage() {
                 <Tag className="w-5 h-5 text-[var(--warning)]" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-[var(--text-primary)]">Tags Only</p>
+                <p className="text-lg font-semibold text-[var(--text-primary)]">{t('ai.tagsOnly')}</p>
                 <p className="text-[var(--text-muted)] text-sm">
-                  {generating ? 'Generating...' : 'Generate 13 Etsy SEO tags'}
+                  {generating ? t('ai.generating') : t('ai.generateTags')}
                 </p>
               </div>
             </div>
@@ -271,11 +274,11 @@ export default function AIGenerationPage() {
           {/* Content Generation */}
           <div className="lg:col-span-2 space-y-6">
             {/* Quick Generate */}
-            <DashboardCard title="Quick Generate" subtitle="Generate content for a product">
+            <DashboardCard title={t('ai.quickGenerate')} subtitle={t('ai.quickGenerateSubtitle')}>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                    Select Product
+                    {t('ai.selectProduct')}
                   </label>
                   {loadingProducts ? (
                     <div className="w-full h-12 bg-[var(--background)] animate-pulse rounded-lg" />
@@ -285,7 +288,7 @@ export default function AIGenerationPage() {
                       onChange={(e) => setSelectedProductId(e.target.value ? Number(e.target.value) : null)}
                       className="w-full px-4 py-3 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition"
                     >
-                      <option value="">Select a product...</option>
+                      <option value="">{t('ai.selectProductPlaceholder')}</option>
                       {products.map((product) => (
                         <option key={product.id} value={product.id}>
                           {product.title_raw || `Product #${product.id}`}
@@ -295,16 +298,16 @@ export default function AIGenerationPage() {
                   )}
                   {products.length === 0 && !loadingProducts && (
                     <p className="text-[var(--text-muted)] text-sm mt-2">
-                      No products found. Add products first to generate AI content.
+                      {t('ai.noProducts')}
                     </p>
                   )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-                    Generate All Content
+                    {t('ai.generateAllContent')}
                   </label>
                   <p className="text-[var(--text-muted)] text-xs mb-3">
-                    Generates title, description, and 13 SEO tags together for best coherence. Or use the quick-action cards above to generate individually.
+                    {t('ai.generateAllDescription')}
                   </p>
                 </div>
                 <button
@@ -315,12 +318,12 @@ export default function AIGenerationPage() {
                   {generating ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Generating...
+                      {t('ai.generating')}
                     </>
                   ) : (
                     <>
                       <Play className="w-5 h-5" />
-                      Generate All (Title + Description + Tags)
+                      {t('ai.generateAll')}
                     </>
                   )}
                 </button>
@@ -331,14 +334,14 @@ export default function AIGenerationPage() {
           {/* Recent Generations */}
           <div className="space-y-6">
             <DashboardCard
-              title="Recent Generations"
-              subtitle="Your latest AI generations"
+              title={t('ai.recentGenerations')}
+              subtitle={t('ai.recentGenerationsSubtitle')}
               action={
                 <button
                   onClick={() => router.push('/ai/history')}
                   className="text-sm text-[var(--primary)] hover:underline"
                 >
-                  View All
+                  {t('ai.viewAll')}
                 </button>
               }
             >
@@ -357,9 +360,9 @@ export default function AIGenerationPage() {
               ) : recentGenerations.length === 0 ? (
                 <div className="text-center py-8">
                   <Sparkles className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-3" />
-                  <p className="text-[var(--text-muted)]">No generations yet</p>
+                  <p className="text-[var(--text-muted)]">{t('ai.noGenerations')}</p>
                   <p className="text-[var(--text-muted)] text-sm mt-1">
-                    Start generating AI content for your products
+                    {t('ai.startGenerating')}
                   </p>
                 </div>
               ) : (
@@ -382,11 +385,11 @@ export default function AIGenerationPage() {
                   <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h4 className="text-[var(--text-primary)] font-semibold mb-2">Pro Tips</h4>
+                  <h4 className="text-[var(--text-primary)] font-semibold mb-2">{t('ai.proTips')}</h4>
                   <ul className="text-[var(--text-muted)] text-sm space-y-1">
-                    <li>• Be specific with your product details</li>
-                    <li>• Include target keywords for Etsy SEO</li>
-                    <li>• Review content for Etsy policy compliance</li>
+                    <li>• {t('ai.tip1')}</li>
+                    <li>• {t('ai.tip2')}</li>
+                    <li>• {t('ai.tip3')}</li>
                   </ul>
                 </div>
               </div>

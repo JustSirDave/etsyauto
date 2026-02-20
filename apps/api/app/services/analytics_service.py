@@ -80,39 +80,59 @@ class AnalyticsService:
         shop_id: Optional[int] = None,
         force_refresh: bool = False,
         shop_ids: Optional[List[int]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Get overview analytics: sales, orders, revenue trends
         Cached for 5 minutes unless force_refresh=True
+        When start_date and end_date are provided, all metrics are computed for that range.
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "overview", shop_ids)
-        
+        date_suffix = ""
+        if start_date and end_date:
+            date_suffix = f":{start_date.isoformat()}:{end_date.isoformat()}"
+        cache_key = self._cache_key(tenant_id, shop_id, f"overview{date_suffix}", shop_ids)
+
         if not force_refresh:
             cached = self._get_cached(cache_key)
             if cached:
                 return cached
-        
+
         # Compute fresh analytics
         now = datetime.now(timezone.utc)
-        last_7_days = now - timedelta(days=7)
-        last_30_days = now - timedelta(days=30)
-        prev_7_days = last_7_days - timedelta(days=7)
-        prev_30_days = last_30_days - timedelta(days=30)
-        
+        use_date_range = start_date is not None and end_date is not None
+
+        if use_date_range:
+            last_7_days = end_date - timedelta(days=7)
+            last_30_days = end_date - timedelta(days=30)
+            last_7_days = max(last_7_days, start_date)
+            last_30_days = max(last_30_days, start_date)
+            prev_7_days = last_7_days - timedelta(days=7)
+            prev_30_days = last_30_days - timedelta(days=30)
+            date_filter = [Order.created_at >= start_date, Order.created_at <= end_date]
+        else:
+            last_7_days = now - timedelta(days=7)
+            last_30_days = now - timedelta(days=30)
+            prev_7_days = last_7_days - timedelta(days=7)
+            prev_30_days = last_30_days - timedelta(days=30)
+            date_filter = []
+
         # Base query
         base_query = self.db.query(Order).filter(Order.tenant_id == tenant_id)
         if shop_ids:
             base_query = base_query.filter(Order.shop_id.in_(shop_ids))
         elif shop_id:
             base_query = base_query.filter(Order.shop_id == shop_id)
-        
+        for f in date_filter:
+            base_query = base_query.filter(f)
+
         # Total orders
         total_orders = base_query.count()
-        
-        # Last 7/30 days orders
+
+        # Last 7/30 days orders (within range or rolling)
         orders_7d = base_query.filter(Order.created_at >= last_7_days).count()
         orders_30d = base_query.filter(Order.created_at >= last_30_days).count()
-        
+
         # Previous period for trends
         prev_orders_7d = base_query.filter(
             Order.created_at >= prev_7_days,
@@ -122,53 +142,63 @@ class AnalyticsService:
             Order.created_at >= prev_30_days,
             Order.created_at < last_30_days
         ).count()
-        
+
         # Revenue (in cents, convert to dollars)
-        rev_filters = [Order.tenant_id == tenant_id]
+        # Exclude cancelled and refunded orders to match Etsy shop dashboard
+        rev_filters = [
+            Order.tenant_id == tenant_id,
+            ~Order.status.in_(["cancelled", "refunded"]),
+            or_(
+                Order.lifecycle_status.is_(None),
+                ~Order.lifecycle_status.in_(["cancelled", "refunded"]),
+            ),
+        ]
         self._apply_shop_filter(rev_filters, Order.shop_id, shop_id, shop_ids)
+        rev_filters.extend(date_filter)
+
         total_revenue_cents = self.db.query(func.sum(Order.total_price)).filter(
             *rev_filters
         ).scalar() or 0
         total_revenue = float(total_revenue_cents) / 100
-        
+
         revenue_7d_cents = self.db.query(func.sum(Order.total_price)).filter(
             *rev_filters,
             Order.created_at >= last_7_days
         ).scalar() or 0
         revenue_7d = float(revenue_7d_cents) / 100
-        
+
         revenue_30d_cents = self.db.query(func.sum(Order.total_price)).filter(
-            Order.tenant_id == tenant_id,
-            Order.shop_id == shop_id if shop_id else True,
+            *rev_filters,
             Order.created_at >= last_30_days
         ).scalar() or 0
         revenue_30d = float(revenue_30d_cents) / 100
-        
+
         prev_revenue_7d_cents = self.db.query(func.sum(Order.total_price)).filter(
-            Order.tenant_id == tenant_id,
-            Order.shop_id == shop_id if shop_id else True,
+            *rev_filters,
             Order.created_at >= prev_7_days,
             Order.created_at < last_7_days
         ).scalar() or 0
         prev_revenue_7d = float(prev_revenue_7d_cents) / 100
-        
+
         prev_revenue_30d_cents = self.db.query(func.sum(Order.total_price)).filter(
-            Order.tenant_id == tenant_id,
-            Order.shop_id == shop_id if shop_id else True,
+            *rev_filters,
             Order.created_at >= prev_30_days,
             Order.created_at < last_30_days
         ).scalar() or 0
         prev_revenue_30d = float(prev_revenue_30d_cents) / 100
-        
+
+        # Count of orders that contribute to revenue (for avg_order_value)
+        orders_for_revenue = self.db.query(Order).filter(*rev_filters).count()
+
         # Calculate trends
         orders_7d_trend = self._calculate_trend(orders_7d, prev_orders_7d)
         orders_30d_trend = self._calculate_trend(orders_30d, prev_orders_30d)
         revenue_7d_trend = self._calculate_trend(revenue_7d, prev_revenue_7d)
         revenue_30d_trend = self._calculate_trend(revenue_30d, prev_revenue_30d)
-        
-        # Average order value
-        avg_order_value = total_revenue / total_orders if total_orders > 0 else 0
-        
+
+        # Average order value (based on revenue-contributing orders only)
+        avg_order_value = total_revenue / orders_for_revenue if orders_for_revenue > 0 else 0
+
         result = {
             "total_orders": total_orders,
             "total_revenue": round(total_revenue, 2),
@@ -183,7 +213,10 @@ class AnalyticsService:
             "revenue_30d_trend": round(revenue_30d_trend, 2),
             "computed_at": now.isoformat(),
         }
-        
+        if use_date_range:
+            result["start_date"] = start_date.isoformat()
+            result["end_date"] = end_date.isoformat()
+
         self._set_cached(cache_key, result)
         return result
     

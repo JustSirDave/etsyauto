@@ -4,6 +4,7 @@ Using Pydantic Settings for environment variable management
 """
 import logging
 from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -16,6 +17,16 @@ class Settings(BaseSettings):
     APP_NAME: str = "Etsy Automation Platform"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug(cls, v):  # noqa: B902
+        """Accept bool or string (e.g. WARN, true, false) for DEBUG."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes")
+        return False
     
 
     # Database
