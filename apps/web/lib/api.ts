@@ -3,7 +3,8 @@
  * Handles all HTTP requests to the FastAPI backend
  */
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined ? process.env.NEXT_PUBLIC_API_URL : 'http://localhost:8080';
+// Empty = same-origin; Next.js proxy forwards /api/* to backend
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 export interface ApiError {
   detail: string;
@@ -107,41 +108,44 @@ async function tryRefreshToken(): Promise<boolean> {
   return refreshPromise;
 }
 
+/** Endpoints that establish a session — never try refresh on 401 (would hide real auth errors) */
+const AUTH_ESTABLISH_ENDPOINTS = ['/api/auth/login', '/api/auth/register', '/api/auth/google'];
+
 /**
  * Generic API request handler
  * Auth tokens are sent automatically via HttpOnly cookies (credentials: 'include').
  */
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { skipRefreshOn401?: boolean } = {}
 ): Promise<T> {
+  const { skipRefreshOn401, ...fetchOptions } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+    ...(fetchOptions.headers as Record<string, string>),
   };
 
-  const method = (options.method || 'GET').toUpperCase();
+  const method = (fetchOptions.method || 'GET').toUpperCase();
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) && !headers['Idempotency-Key']) {
     headers['Idempotency-Key'] = generateIdempotencyKey();
   }
 
   const doFetch = () =>
     fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers,
       credentials: 'include',
     });
 
   let response = await doFetch();
 
-  // 401 interceptor — attempt a silent token refresh once
-  if (response.status === 401) {
+  // 401 interceptor — attempt a silent token refresh once (skip for auth-establishing endpoints)
+  const shouldSkipRefresh = skipRefreshOn401 ?? AUTH_ESTABLISH_ENDPOINTS.some((e) => endpoint.startsWith(e));
+  if (response.status === 401 && !shouldSkipRefresh) {
     const refreshed = await tryRefreshToken();
     if (refreshed) {
-      // Retry the original request with the fresh access_token cookie
       response = await doFetch();
     } else {
-      // Refresh also failed — redirect to login (but not if already on a public page)
       if (typeof window !== 'undefined') {
         const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/accept-invitation', '/'];
         const isPublicPage = publicPaths.includes(window.location.pathname);

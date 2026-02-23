@@ -80,11 +80,14 @@ async def google_callback(
         state_parts = request.state.split(":")
         state = state_parts[0]
         invitation_token = state_parts[1] if len(state_parts) > 1 else None
+        logger.info(f"Google OAuth callback: state_raw={request.state[:20]}..., state_parts={len(state_parts)}, invitation_token={'yes' if invitation_token else 'no'}")
 
         # Verify OAuth state exists in Redis (CSRF protection)
         redis_client = get_redis_client()
-        stored_state = redis_client.get(f"google_oauth_state:{state}")
+        redis_key = f"google_oauth_state:{state}"
+        stored_state = redis_client.get(redis_key)
         if not stored_state:
+            logger.warning(f"REJECT: Invalid or expired OAuth state. state={state[:16]}..., redis_key={redis_key}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired OAuth state. Please try again."
@@ -93,9 +96,14 @@ async def google_callback(
         redis_client.delete(f"google_oauth_state:{state}")
 
         # Exchange code for access token
-        token_response = await google_oauth_service.exchange_code_for_token(request.code)
+        try:
+            token_response = await google_oauth_service.exchange_code_for_token(request.code)
+        except Exception as e:
+            logger.warning(f"REJECT: Failed to get access token from Google: {e}")
+            raise
         access_token = token_response.get("access_token")
         if not access_token:
+            logger.warning("REJECT: Failed to get access token from Google (no access_token in response)")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Failed to get access token from Google"
@@ -110,6 +118,7 @@ async def google_callback(
         google_user_id = user_info.get("id")
         
         if not email:
+            logger.warning("REJECT: Email not provided by Google")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email not provided by Google"
@@ -222,6 +231,7 @@ async def google_callback(
                 redirect_url = f"{settings.FRONTEND_URL}/login?invitation_accepted=true"
                 redirect_response = RedirectResponse(url=redirect_url, status_code=302)
                 set_auth_cookies(redirect_response, jwt_token, refresh_tok)
+                logger.info(f"SUCCESS: Redirecting user_id={user.id} (invitation accepted)")
                 return redirect_response
         
         # If no invitation or user already has memberships
@@ -254,10 +264,12 @@ async def google_callback(
             redirect_url = f"{settings.FRONTEND_URL}/login?oauth=success"
             redirect_response = RedirectResponse(url=redirect_url, status_code=302)
             set_auth_cookies(redirect_response, jwt_token, refresh_tok)
+            logger.info(f"SUCCESS: Redirecting user_id={user.id} (existing membership)")
             return redirect_response
         else:
             # User exists but has no memberships and no invitation
             db.commit()
+            logger.warning(f"REJECT: No organization membership found. user_id={user.id}, email={user.email}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No organization membership found. Please use an invitation link."

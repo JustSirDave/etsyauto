@@ -41,7 +41,7 @@ function AcceptInvitationContent() {
       setError(null);
 
       // Get Google OAuth URL from backend
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
       const response = await fetch(`${apiUrl}/api/oauth/google/auth`, {
         method: 'POST',
         headers: {
@@ -100,9 +100,7 @@ function AcceptInvitationContent() {
       setLoading(true);
       setError(null);
 
-      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL !== undefined 
-        ? process.env.NEXT_PUBLIC_API_URL 
-        : 'http://localhost:8080';
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
       
       const response = await fetch(`${API_BASE_URL}/api/team/invitations/accept`, {
         method: 'POST',

@@ -49,6 +49,7 @@ function LoginContent() {
     }
 
     const authErrorCode = searchParams.get('auth_error');
+    const authErrorDetail = searchParams.get('auth_error_detail');
     if (authErrorCode) {
       const messageByCode: Record<string, string> = {
         google_oauth_error: 'Google sign-in was cancelled or denied. Please try again.',
@@ -56,9 +57,8 @@ function LoginContent() {
         oauth_callback_rejected: 'Google sign-in could not be completed. Please use your invitation link and try again.',
         oauth_callback_failed: 'Google sign-in could not be completed right now. Please try again.',
       };
-      setOauthErrorMessage(
-        messageByCode[authErrorCode] || 'Authentication failed. Please try again.'
-      );
+      const baseMessage = messageByCode[authErrorCode] || 'Authentication failed. Please try again.';
+      setOauthErrorMessage(authErrorDetail ? `${baseMessage} ${authErrorDetail}` : baseMessage);
     }
     
     // Check for registration success message

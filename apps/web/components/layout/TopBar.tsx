@@ -291,7 +291,7 @@ export function TopBar() {
                     src={
                       user.profile_picture_url.startsWith('http')
                         ? user.profile_picture_url
-                        : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${user.profile_picture_url}`
+                        : `${process.env.NEXT_PUBLIC_API_URL ?? ''}${user.profile_picture_url}`
                     }
                     alt={user.name}
                     className="w-full h-full object-cover"
@@ -322,7 +322,7 @@ export function TopBar() {
                             src={
                               user.profile_picture_url.startsWith('http')
                                 ? user.profile_picture_url
-                                : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}${user.profile_picture_url}`
+                                : `${process.env.NEXT_PUBLIC_API_URL ?? ''}${user.profile_picture_url}`
                             }
                             alt={user.name}
                             className="w-full h-full object-cover"

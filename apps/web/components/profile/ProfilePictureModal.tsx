@@ -98,7 +98,7 @@ export function ProfilePictureModal({ isOpen, onClose }: ProfilePictureModalProp
   const getImageUrl = (url: string | null | undefined) => {
     if (!url) return null
     if (url.startsWith('http')) return url
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? ''
     return `${baseUrl}${url}`
   }
 

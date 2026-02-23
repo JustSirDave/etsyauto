@@ -2,6 +2,7 @@
 Google OAuth Service
 Handles Google OAuth 2.0 authentication flow
 """
+import logging
 import httpx
 import secrets
 from typing import Dict, Optional, Tuple
@@ -12,6 +13,8 @@ from sqlalchemy.orm import Session
 
 from ..core.config import settings
 from ..models.tenancy import User, Tenant, Membership
+
+logger = logging.getLogger(__name__)
 
 
 class GoogleOAuthService:
@@ -74,6 +77,12 @@ class GoogleOAuthService:
                     "redirect_uri": self.redirect_uri
                 }
             )
+            if not response.is_success:
+                body = response.text
+                logger.warning(
+                    "REJECT: Google token exchange failed. status=%s body=%s redirect_uri=%s",
+                    response.status_code, body[:500] if body else "(empty)", self.redirect_uri
+                )
             response.raise_for_status()
             return response.json()
     
@@ -228,7 +237,8 @@ class GoogleOAuthService:
             return None, "Failed to verify Google token", None, False
         except Exception as e:
             db.rollback()
-            return None, "Authentication error", None, False
+            logger.exception("Google OAuth authentication failed: %s", e)
+            return None, f"Authentication error: {str(e)}", None, False
     
     @staticmethod
     def generate_state() -> str:

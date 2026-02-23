@@ -175,7 +175,9 @@ This invitation will expire in 7 days.
 Etsy Automation Platform
 """
 
-        return self.send_email(to_email, subject, html_content, text_content)
+        # Use unified email service (Resend when USE_RESEND=true, else SMTP)
+        from app.services.resend_email import send_email as send_email_unified
+        return send_email_unified(to_email, subject, html_content, text_content)
 
 
 # Global instance

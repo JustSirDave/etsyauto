@@ -5,11 +5,20 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-const API_INTERNAL_URL = process.env.API_INTERNAL_URL || 'http://api:8080';
+// Server-side: must reach backend directly (Docker: api:8080, local: localhost:8080)
+const API_INTERNAL_URL = process.env.API_INTERNAL_URL || 'http://localhost:8080';
 
-function buildLoginErrorRedirect(request: NextRequest, code: string) {
-  return NextResponse.redirect(new URL(`/login?auth_error=${encodeURIComponent(code)}`, request.url));
+function buildLoginErrorRedirect(
+  request: NextRequest,
+  code: string,
+  detail?: string
+) {
+  const url = new URL('/login', request.url);
+  url.searchParams.set('auth_error', code);
+  if (detail) {
+    url.searchParams.set('auth_error_detail', detail);
+  }
+  return NextResponse.redirect(url);
 }
 
 export async function GET(request: NextRequest) {
@@ -32,9 +41,7 @@ export async function GET(request: NextRequest) {
     // When running in Docker, localhost inside the web container is not the API.
     // Try configured URL first, then internal service URL.
     const callbackPath = '/api/oauth/google/callback';
-    const candidateBaseUrls = [API_BASE_URL, API_INTERNAL_URL].filter(
-      (url, index, all) => Boolean(url) && all.indexOf(url) === index
-    );
+    const candidateBaseUrls = [API_INTERNAL_URL];
     let response: Response | null = null;
     let networkError: unknown = null;
 
@@ -61,13 +68,33 @@ export async function GET(request: NextRequest) {
     }
 
     if (!response.ok) {
-      return buildLoginErrorRedirect(request, 'oauth_callback_rejected');
+      let detail: string | undefined;
+      try {
+        const errData = await response.json();
+        detail = typeof errData?.detail === 'string' ? errData.detail : undefined;
+      } catch {
+        // Response body may not be JSON
+      }
+      return buildLoginErrorRedirect(request, 'oauth_callback_rejected', detail);
     }
 
     // Check if backend returned a redirect
     const redirectLocation = response.headers.get('location');
     if (redirectLocation) {
-      return NextResponse.redirect(redirectLocation);
+      const redirectResponse = NextResponse.redirect(redirectLocation);
+      // Forward Set-Cookie headers from backend so auth cookies reach the user's browser
+      const setCookies = response.headers.getSetCookie?.() ?? [];
+      if (setCookies.length > 0) {
+        for (const cookie of setCookies) {
+          redirectResponse.headers.append('Set-Cookie', cookie);
+        }
+      } else {
+        const setCookie = response.headers.get('set-cookie');
+        if (setCookie) {
+          redirectResponse.headers.append('Set-Cookie', setCookie);
+        }
+      }
+      return redirectResponse;
     }
 
     // If backend returns JSON with redirect URL
