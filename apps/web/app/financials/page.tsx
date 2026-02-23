@@ -549,13 +549,13 @@ export default function FinancialsPage() {
   if (!loading && !summary) {
     return (
       <DashboardLayout>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-8 text-center">
-          <ShieldAlert className="w-12 h-12 text-amber-600 dark:text-amber-400 mx-auto mb-4" />
-          <p className="text-lg font-medium text-amber-800 dark:text-amber-300">{t('financials.loadFailed')}</p>
-          <p className="text-sm text-amber-700 dark:text-amber-400 mt-2 mb-4">Check that you have a connected shop and billing scope.</p>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 dark:bg-slate-800/40 dark:border-slate-600 p-8 text-center">
+          <ShieldAlert className="w-12 h-12 text-slate-500 dark:text-slate-400 mx-auto mb-4" />
+          <p className="text-lg font-medium text-slate-600 dark:text-slate-300">{t('financials.loadFailed')}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 mb-4">Check that you have a connected shop and billing scope.</p>
           <button
             onClick={() => fetchAll(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-slate-600 px-4 py-2 text-sm font-medium text-white hover:bg-slate-500 dark:bg-slate-500 dark:hover:bg-slate-400"
           >
             <RefreshCw className="w-4 h-4" />
             {t('common.retry') || 'Retry'}

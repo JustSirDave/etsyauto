@@ -658,6 +658,9 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
     user.failed_login_attempts = 0
     user.locked_until = None
 
+    # Mark email as verified — reset link proves the user controls this email
+    user.email_verified = True
+
     db.commit()
 
     # Send notification email

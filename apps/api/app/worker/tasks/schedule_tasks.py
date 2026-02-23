@@ -4,7 +4,7 @@ Handles automated listing publication based on schedules
 """
 import logging
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 
 from app.worker.celery_app import celery_app
@@ -33,15 +33,15 @@ def process_scheduled_listings() -> Dict[str, Any]:
     db = SessionLocal()
 
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Find active schedules that are due to run
         active_schedules = (
             db.query(Schedule)
             .filter(
-                Schedule.is_active == True,
-                # Either never run before, or next_run is in the past
-                (Schedule.next_run == None) | (Schedule.next_run <= now)
+                Schedule.status == "active",
+                # Either never run before, or next_run_at is in the past
+                (Schedule.next_run_at == None) | (Schedule.next_run_at <= now)
             )
             .all()
         )
@@ -93,7 +93,7 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
     Returns:
         dict: Result summary
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     result = {
         "jobs_created": 0,
@@ -118,7 +118,7 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
     if remaining_quota <= 0:
         logger.info(f"Schedule {schedule.id} has reached daily quota ({schedule.daily_quota})")
         # Update next run to tomorrow
-        schedule.next_run = _calculate_next_run(schedule, now)
+        schedule.next_run_at = _calculate_next_run(schedule, now)
         db.commit()
         return result
 
@@ -144,8 +144,8 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
     if not ready_products:
         logger.info(f"No ready products found for schedule {schedule.id}")
         # Update next run
-        schedule.next_run = _calculate_next_run(schedule, now)
-        schedule.last_run = now
+        schedule.next_run_at = _calculate_next_run(schedule, now)
+        schedule.last_run_at = now
         db.commit()
         return result
 
@@ -168,7 +168,7 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
 
         # Generate idempotency key for this job
         # Format: {tenant_id}:{shop_id}:{product_id}:{timestamp_hash}
-        timestamp_component = datetime.utcnow().isoformat()
+        timestamp_component = datetime.now(timezone.utc).isoformat()
         idempotency_key = hashlib.sha256(
             f"{shop.tenant_id}:{shop.id}:{product.id}:{timestamp_component}".encode()
         ).hexdigest()[:32]  # First 32 chars of hash
@@ -198,8 +198,8 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
             job.error_message = f"Failed to queue: {str(e)}"
 
     # Update schedule
-    schedule.last_run = now
-    schedule.next_run = _calculate_next_run(schedule, now)
+    schedule.last_run_at = now
+    schedule.next_run_at = _calculate_next_run(schedule, now)
     db.commit()
 
     logger.info(
@@ -212,7 +212,7 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
 
 def _calculate_next_run(schedule: Schedule, current_time: datetime) -> datetime:
     """
-    Calculate the next run time for a schedule based on frequency.
+    Calculate the next run time for a schedule based on cron_expr.
 
     Args:
         schedule: Schedule instance
@@ -221,50 +221,19 @@ def _calculate_next_run(schedule: Schedule, current_time: datetime) -> datetime:
     Returns:
         datetime: Next run time
     """
-    if schedule.frequency == "hourly":
-        # Run every hour at the first time slot minute
-        if schedule.time_slots:
-            # Extract minute from first time slot (e.g., "09:30" -> 30)
-            hour, minute = map(int, schedule.time_slots[0].split(":"))
-            next_run = current_time.replace(minute=minute, second=0, microsecond=0)
-            if next_run <= current_time:
-                next_run += timedelta(hours=1)
-        else:
-            next_run = current_time + timedelta(hours=1)
+    try:
+        from croniter import croniter
 
-    elif schedule.frequency == "daily":
-        # Run at the next time slot
-        if schedule.time_slots:
-            # Find next time slot
-            current_time_str = current_time.strftime("%H:%M")
-
-            next_slot = None
-            for time_slot in sorted(schedule.time_slots):
-                if time_slot > current_time_str:
-                    next_slot = time_slot
-                    break
-
-            if next_slot:
-                # Use next slot today
-                hour, minute = map(int, next_slot.split(":"))
-                next_run = current_time.replace(
-                    hour=hour, minute=minute, second=0, microsecond=0
-                )
-            else:
-                # Use first slot tomorrow
-                hour, minute = map(int, schedule.time_slots[0].split(":"))
-                next_run = (current_time + timedelta(days=1)).replace(
-                    hour=hour, minute=minute, second=0, microsecond=0
-                )
-        else:
-            # Default to tomorrow same time
-            next_run = current_time + timedelta(days=1)
-
-    else:
-        # Default: 24 hours from now
-        next_run = current_time + timedelta(days=1)
-
-    return next_run
+        now = current_time.replace(tzinfo=timezone.utc) if current_time.tzinfo is None else current_time
+        cron = croniter(schedule.cron_expr, now)
+        next_run = cron.get_next(datetime)
+        return next_run.replace(tzinfo=timezone.utc) if next_run.tzinfo is None else next_run
+    except ImportError:
+        logger.warning("croniter not installed, using simple 1-hour interval")
+        return current_time + timedelta(hours=1)
+    except Exception as e:
+        logger.error(f"Error calculating next run for schedule {schedule.id}: {e}")
+        return current_time + timedelta(hours=1)
 
 
 @celery_app.task(name="app.worker.tasks.schedule_tasks.trigger_schedule_now", max_retries=3)
@@ -289,7 +258,7 @@ def trigger_schedule_now(schedule_id: int) -> Dict[str, Any]:
                 "error": "Schedule not found"
             }
 
-        if not schedule.is_active:
+        if schedule.status != "active":
             return {
                 "success": False,
                 "error": "Schedule is not active"
