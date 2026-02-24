@@ -343,18 +343,18 @@ class AnalyticsService:
             if cached:
                 return cached
         
-        # Product counts
+        # Product counts (include shop_id=null for manual/CSV imports when filtering by shop)
         product_query = self.db.query(Product).filter(Product.tenant_id == tenant_id)
         if shop_ids:
-            product_query = product_query.filter(Product.shop_id.in_(shop_ids))
+            product_query = product_query.filter(or_(Product.shop_id.in_(shop_ids), Product.shop_id.is_(None)))
         elif shop_id:
-            product_query = product_query.filter(Product.shop_id == shop_id)
+            product_query = product_query.filter(or_(Product.shop_id == shop_id, Product.shop_id.is_(None)))
         
         total_products = product_query.count()
         published_products = product_query.filter(Product.etsy_listing_id.isnot(None)).count()
         draft_products = product_query.filter(Product.etsy_listing_id.is_(None)).count()
         
-        # Listing job stats
+        # Listing job stats (listing jobs always have shop_id)
         job_query = self.db.query(ListingJob).filter(ListingJob.tenant_id == tenant_id)
         if shop_ids:
             job_query = job_query.filter(ListingJob.shop_id.in_(shop_ids))

@@ -939,6 +939,7 @@ export const onboardingApi = {
  */
 export interface DashboardStats {
   total_products: number;
+  published_products?: number;
   total_customers: number;
   total_orders: number;
   active_listings: number;

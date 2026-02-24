@@ -304,8 +304,8 @@ function OwnerDashboardContent() {
           trendLabel={t('dashboard.vsLastPeriod')}
         />
         <StatCard
-          title={t('dashboard.totalProducts')}
-          value={stats.total_products || 0}
+          title={t('dashboard.publishedProducts')}
+          value={stats.published_products ?? stats.total_products ?? 0}
           icon={Package}
           trend={stats.changes?.products}
           trendLabel={t('dashboard.vsLastPeriod')}

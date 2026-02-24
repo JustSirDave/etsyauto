@@ -5,7 +5,7 @@ Provides aggregated statistics for the dashboard
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, or_
 
 from app.api.dependencies import get_user_context, UserContext, require_permission
 from app.core.database import get_db
@@ -49,15 +49,16 @@ async def get_dashboard_stats(
         # Suppliers: default to their assigned shops when no filter passed
         parsed_shop_ids = context.allowed_shop_ids
 
-    # Count total products (filtered by tenant)
+    # Count products (include shop_id=null for manual/CSV imports when filtering by shop)
     products_query = filter_by_tenant(
         db.query(Product),
         context.tenant_id,
         Product.tenant_id
     )
     if parsed_shop_ids:
-        products_query = products_query.filter(Product.shop_id.in_(parsed_shop_ids))
+        products_query = products_query.filter(or_(Product.shop_id.in_(parsed_shop_ids), Product.shop_id.is_(None)))
     total_products = products_query.count()
+    published_products = products_query.filter(Product.etsy_listing_id.isnot(None)).count()
 
     # Count active/completed listings (filtered by tenant)
     listings_query = filter_by_tenant(
@@ -119,6 +120,7 @@ async def get_dashboard_stats(
 
     return {
         "total_products": total_products,
+        "published_products": published_products,
         "total_customers": total_customers,
         "total_orders": total_orders,
         "active_listings": active_listings,

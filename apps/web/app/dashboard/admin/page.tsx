@@ -134,8 +134,8 @@ function AdminDashboardContent() {
           trendLabel="vs last period"
         />
         <StatCard
-          title="Total Products"
-          value={stats.total_products || 0}
+          title={t('dashboard.publishedProducts')}
+          value={stats.published_products ?? stats.total_products ?? 0}
           icon={Package}
           trend={stats.changes?.products}
           trendLabel="vs last period"
