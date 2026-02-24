@@ -15,7 +15,9 @@ from app.api.dependencies import get_user_context, UserContext, require_revenue_
 from app.core.database import get_db
 from app.core.query_helpers import ensure_shop_access
 from app.services.financial_service import FinancialService
+from app.services.currency_conversion import enrich_financial_response
 from app.models.tenancy import OAuthToken, Shop
+from app.models.user_preferences import UserPreference
 from app.models.listings import FinancialSyncStatus, LedgerEntryTypeRegistry
 from app.worker.tasks.financial_tasks import sync_ledger_entries, sync_payment_details
 
@@ -88,6 +90,20 @@ def _parse_shop_ids(
     return ids
 
 
+def _get_target_currency(
+    context: UserContext,
+    target_currency_param: Optional[str],
+    db: Session,
+) -> Optional[str]:
+    """Get target currency from query param or user preference."""
+    if target_currency_param:
+        return target_currency_param.upper().strip()
+    pref = db.query(UserPreference).filter(UserPreference.user_id == context.user_id).first()
+    if pref and pref.preferred_currency_code != "USD":
+        return pref.preferred_currency_code
+    return None
+
+
 def _parse_date(value: Optional[str], default: datetime) -> datetime:
     """Parse an ISO date string into a timezone-aware datetime, or return default."""
     if not value:
@@ -110,6 +126,7 @@ async def get_financial_summary(
     start_date: Optional[str] = Query(None, description="ISO start date"),
     end_date: Optional[str] = Query(None, description="ISO end date"),
     force_refresh: bool = Query(False, description="Bypass cache and fetch fresh data"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -121,7 +138,7 @@ async def get_financial_summary(
     parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
 
     svc = FinancialService(db)
-    return svc.get_financial_summary(
+    result = svc.get_financial_summary(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed_shop_ids else None,
         start_date=_parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)),
@@ -129,6 +146,10 @@ async def get_financial_summary(
         shop_ids=parsed_shop_ids,
         force_refresh=force_refresh,
     )
+    target = _get_target_currency(context, target_currency, db)
+    if target:
+        result = enrich_financial_response(result, target, db)
+    return result
 
 
 # ── 1. Profit & Loss ──
@@ -139,6 +160,7 @@ async def get_profit_and_loss(
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     start_date: Optional[str] = Query(None, description="ISO start date"),
     end_date: Optional[str] = Query(None, description="ISO end date"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -149,13 +171,17 @@ async def get_profit_and_loss(
     parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
 
     svc = FinancialService(db)
-    return svc.get_profit_and_loss(
+    result = svc.get_profit_and_loss(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed_shop_ids else None,
         start_date=_parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)),
         end_date=_parse_date(end_date, datetime.now(timezone.utc)),
         shop_ids=parsed_shop_ids,
     )
+    target = _get_target_currency(context, target_currency, db)
+    if target:
+        result = enrich_financial_response(result, target, db)
+    return result
 
 
 # ── 2. Payout estimate ──
@@ -164,6 +190,7 @@ async def get_profit_and_loss(
 async def get_payout_estimate(
     shop_id: Optional[int] = None,
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -174,11 +201,15 @@ async def get_payout_estimate(
     parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
 
     svc = FinancialService(db)
-    return svc.get_payout_estimate(
+    result = svc.get_payout_estimate(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed_shop_ids else None,
         shop_ids=parsed_shop_ids,
     )
+    target = _get_target_currency(context, target_currency, db)
+    if target:
+        result = enrich_financial_response(result, target, db)
+    return result
 
 
 # ── 3. Fee breakdown ──
@@ -189,6 +220,7 @@ async def get_fee_breakdown(
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     start_date: Optional[str] = Query(None, description="ISO start date"),
     end_date: Optional[str] = Query(None, description="ISO end date"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -199,13 +231,17 @@ async def get_fee_breakdown(
     parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
 
     svc = FinancialService(db)
-    return svc.get_fee_breakdown(
+    result = svc.get_fee_breakdown(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed_shop_ids else None,
         start_date=_parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)),
         end_date=_parse_date(end_date, datetime.now(timezone.utc)),
         shop_ids=parsed_shop_ids,
     )
+    target = _get_target_currency(context, target_currency, db)
+    if target:
+        result = enrich_financial_response(result, target, db)
+    return result
 
 
 # ── 4. Order profitability ──
@@ -419,6 +455,7 @@ async def get_discounts(
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     start_date: Optional[str] = Query(None, description="ISO start date"),
     end_date: Optional[str] = Query(None, description="ISO end date"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -429,13 +466,17 @@ async def get_discounts(
     parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
 
     svc = FinancialService(db)
-    return svc.get_discount_summary(
+    result = svc.get_discount_summary(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed_shop_ids else None,
         start_date=_parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)),
         end_date=_parse_date(end_date, datetime.now(timezone.utc)),
         shop_ids=parsed_shop_ids,
     )
+    target = _get_target_currency(context, target_currency, db)
+    if target:
+        result = enrich_financial_response(result, target, db)
+    return result
 
 
 # ── 9. Manual sync trigger ──
@@ -445,6 +486,7 @@ async def get_financial_comparison(
     shop_ids: str = Query(..., description="Comma-separated shop IDs to compare"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):
@@ -457,6 +499,7 @@ async def get_financial_comparison(
         raise HTTPException(status_code=400, detail="At least one shop_id is required")
 
     svc = FinancialService(db)
+    target = _get_target_currency(context, target_currency, db)
     start_dt = _parse_date(start_date, datetime.now(timezone.utc) - timedelta(days=30)) if start_date else datetime.now(timezone.utc) - timedelta(days=30)
     end_dt = _parse_date(end_date, datetime.now(timezone.utc)) if end_date else datetime.now(timezone.utc)
     per_shop = {}
@@ -467,6 +510,8 @@ async def get_financial_comparison(
             start_date=start_dt,
             end_date=end_dt,
         )
+        if target:
+            summary = enrich_financial_response(summary, target, db)
         per_shop[str(sid)] = summary
 
     return {

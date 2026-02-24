@@ -411,7 +411,7 @@ function OwnerDashboardContent() {
                       </div>
                       <div className="text-right">
                         <p className="font-medium text-[var(--text-primary)]">
-                          ${order.total_price?.toFixed(2) || '0.00'}
+                          {order.amount ?? (order.total_price != null ? `${order.currency || 'USD'} ${order.total_price.toFixed(2)}` : '—')}
                         </p>
                         <span className={cn(
                           "text-xs px-2 py-1 rounded-full",

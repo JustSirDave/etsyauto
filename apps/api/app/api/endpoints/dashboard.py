@@ -3,7 +3,8 @@ Dashboard API Endpoints
 Provides aggregated statistics for the dashboard
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct, or_
 
@@ -13,6 +14,8 @@ from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access
 from app.models.listings import Product, ListingJob, Order
 from app.models.tenancy import Membership
+from app.models.user_preferences import UserPreference
+from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENCIES
 from app.services.order_utils import derive_payment_status, derive_lifecycle_status
 
 router = APIRouter()
@@ -134,11 +137,22 @@ async def get_dashboard_stats(
     }
 
 
+def _get_target_currency(context: UserContext, target_param: Optional[str], db: Session) -> Optional[str]:
+    """Get target currency from query param or user preference."""
+    if target_param:
+        return target_param.upper().strip() if target_param.upper().strip() in SUPPORTED_CURRENCIES else None
+    pref = db.query(UserPreference).filter(UserPreference.user_id == context.user_id).first()
+    if pref and pref.preferred_currency_code in SUPPORTED_CURRENCIES:
+        return pref.preferred_currency_code
+    return None
+
+
 @router.get("/recent-orders", tags=["Dashboard"])
 async def get_recent_orders(
     limit: int = 5,
     shop_id: int | None = None,
     shop_ids: str | None = None,
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
@@ -178,35 +192,69 @@ async def get_recent_orders(
         Order.created_at.desc()
     ).limit(limit).all()
 
+    target_ccy = _get_target_currency(context, target_currency, db)
+
     # Format orders for dashboard display
     formatted_orders = []
     for order in orders:
         # Prioritize Etsy-provided dates for accuracy
         order_date = order.etsy_created_at or order.created_at
         is_supplier = context.role.lower() == "supplier"
-        
+        order_currency = order.currency or "USD"
+
         # Get first item title if available
         item_title = "N/A"
         if order.line_items and isinstance(order.line_items, list) and len(order.line_items) > 0:
             first_item = order.line_items[0]
             if isinstance(first_item, dict):
                 item_title = first_item.get('title') or first_item.get('product_title') or "N/A"
-        
-        formatted_orders.append({
-            "id": order.id,  # Internal database ID for linking
-            "order_id": order.etsy_receipt_id or f"#{order.id}",  # Display ID
-            "buyer_name": order.buyer_name or "Unknown Customer",  # Frontend expects buyer_name
-            "customer": order.buyer_name or "Unknown Customer",  # Legacy field (keeping for compatibility)
-            "customer_email": order.buyer_email,
-            "item_title": item_title,  # First item in the order
-            "date": order_date.strftime("%Y-%m-%d") if order_date else "N/A",
-            "amount": "--" if is_supplier else f"${float(order.total_price or 0) / 100:.2f}",
-            "total_price": None if is_supplier else float(order.total_price or 0) / 100,
-            "status": derive_lifecycle_status(order),
-            "payment_status": order.payment_status or derive_payment_status(order)
-        })
 
-    return {
-        "orders": formatted_orders,
-        "total": len(formatted_orders)
-    }
+        total_price = None if is_supplier else float(order.total_price or 0) / 100
+        conv_price = None
+        conv_ccy = None
+        if not is_supplier and target_ccy and target_ccy != order_currency and order.total_price:
+            try:
+                conv_cents, rate, retrieved, stale = convert_amount(
+                    order.total_price, order_currency, target_ccy,
+                    order.etsy_created_at if order.etsy_created_at else None,
+                    db,
+                )
+                conv_price = conv_cents / 100
+                conv_ccy = target_ccy
+                amount_str = f"{conv_ccy} {conv_price:.2f}"
+                item_conv_rate = float(rate)
+                item_conv_stale = stale
+            except (ValueError, Exception):
+                amount_str = "--" if total_price is None else f"{order_currency} {total_price:.2f}"
+                item_conv_rate = None
+                item_conv_stale = False
+        else:
+            amount_str = "--" if is_supplier else (f"{order_currency} {total_price:.2f}" if total_price is not None else "--")
+            item_conv_rate = None
+            item_conv_stale = False
+
+        item = {
+            "id": order.id,
+            "order_id": order.etsy_receipt_id or f"#{order.id}",
+            "buyer_name": order.buyer_name or "Unknown Customer",
+            "customer": order.buyer_name or "Unknown Customer",
+            "customer_email": order.buyer_email,
+            "item_title": item_title,
+            "date": order_date.strftime("%Y-%m-%d") if order_date else "N/A",
+            "amount": amount_str,
+            "total_price": total_price,
+            "currency": order_currency,
+            "status": derive_lifecycle_status(order),
+            "payment_status": order.payment_status or derive_payment_status(order),
+        }
+        if conv_price is not None and conv_ccy:
+            item["converted_total_price"] = conv_price
+            item["converted_currency"] = conv_ccy
+            item["conversion_rate"] = item_conv_rate
+            item["conversion_rate_stale"] = item_conv_stale
+        formatted_orders.append(item)
+
+    result = {"orders": formatted_orders, "total": len(formatted_orders)}
+    if target_ccy:
+        result["target_currency"] = target_ccy
+    return result

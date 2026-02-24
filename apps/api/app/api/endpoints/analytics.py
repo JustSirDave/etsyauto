@@ -14,9 +14,25 @@ from app.core.database import get_db
 from app.core.query_helpers import ensure_shop_access
 from app.api.dependencies import require_analytics_access, require_revenue_access
 from app.services.analytics_service import AnalyticsService
+from app.services.currency_conversion import enrich_analytics_overview
+from app.models.user_preferences import UserPreference
 
 
 router = APIRouter()
+
+
+def _get_target_currency(
+    context: UserContext,
+    target_currency_param: Optional[str],
+    db: Session,
+) -> Optional[str]:
+    """Get target currency from query param or user preference."""
+    if target_currency_param:
+        return target_currency_param.upper().strip()
+    pref = db.query(UserPreference).filter(UserPreference.user_id == context.user_id).first()
+    if pref and pref.preferred_currency_code != "USD":
+        return pref.preferred_currency_code
+    return None
 
 
 def _parse_date(value: Optional[str]) -> Optional[datetime]:
@@ -59,6 +75,7 @@ async def get_overview_analytics(
     start_date: Optional[str] = Query(None, description="ISO start date for date range filter"),
     end_date: Optional[str] = Query(None, description="ISO end date for date range filter"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
@@ -67,7 +84,7 @@ async def get_overview_analytics(
     start_dt = _parse_date(start_date)
     end_dt = _parse_date(end_date)
     analytics = AnalyticsService(db)
-    return analytics.get_overview_analytics(
+    result = analytics.get_overview_analytics(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed else None,
         force_refresh=force_refresh,
@@ -75,6 +92,10 @@ async def get_overview_analytics(
         start_date=start_dt,
         end_date=end_dt,
     )
+    target = _get_target_currency(context, target_currency, db)
+    if target:
+        result = enrich_analytics_overview(result, target, db)
+    return result
 
 
 @router.get("/orders", tags=["Analytics"])
@@ -138,6 +159,7 @@ async def get_fulfillment_analytics(
 async def get_comparison_analytics(
     shop_ids: str = Query(..., description="Comma-separated shop IDs to compare"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
@@ -150,6 +172,7 @@ async def get_comparison_analytics(
         raise HTTPException(status_code=400, detail="At least one shop_id is required")
 
     analytics = AnalyticsService(db)
+    target = _get_target_currency(context, target_currency, db)
     per_shop = {}
     for sid in parsed:
         overview = analytics.get_overview_analytics(
@@ -157,6 +180,8 @@ async def get_comparison_analytics(
             shop_id=sid,
             force_refresh=force_refresh,
         )
+        if target:
+            overview = enrich_analytics_overview(overview, target, db)
         orders = analytics.get_order_analytics(
             tenant_id=context.tenant_id,
             shop_id=sid,

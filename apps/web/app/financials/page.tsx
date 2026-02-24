@@ -76,6 +76,18 @@ function formatCents(cents: number, currency = 'USD'): string {
   }).format(cents / 100);
 }
 
+/** Format amount, using converted value when available */
+function formatWithConversion(
+  amount: number,
+  currency: string,
+  convertedAmount?: number | null,
+  convertedCurrency?: string | null
+): string {
+  const amt = convertedAmount != null && convertedCurrency ? convertedAmount : amount;
+  const ccy = convertedAmount != null && convertedCurrency ? convertedCurrency : currency;
+  return formatCents(amt, ccy);
+}
+
 /** Short date display */
 function shortDate(iso: string | null): string {
   if (!iso) return '—';
@@ -357,23 +369,23 @@ function FinancialComparisonPanel({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.revenue')}</p>
-                  <p className="font-semibold text-green-600">${(summary.revenue / 100).toFixed(2)}</p>
+                  <p className="font-semibold text-green-600">{formatWithConversion(summary.revenue, summary.currency ?? 'USD', summary.converted_revenue, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.totalExpenses')}</p>
-                  <p className="font-semibold text-red-500">${(summary.total_expenses / 100).toFixed(2)}</p>
+                  <p className="font-semibold text-red-500">{formatWithConversion(summary.total_expenses, summary.currency ?? 'USD', summary.converted_total_expenses, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.netProfit')}</p>
-                  <p className="font-semibold text-blue-600">${(summary.net_profit / 100).toFixed(2)}</p>
+                  <p className="font-semibold text-blue-600">{formatWithConversion(summary.net_profit, summary.currency ?? 'USD', summary.converted_net_profit, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.etsyFees')}</p>
-                  <p className="font-semibold">${(summary.etsy_fees / 100).toFixed(2)}</p>
+                  <p className="font-semibold">{formatWithConversion(summary.etsy_fees, summary.currency ?? 'USD', summary.converted_etsy_fees, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.advertising')}</p>
-                  <p className="font-semibold">${(summary.advertising_expenses / 100).toFixed(2)}</p>
+                  <p className="font-semibold">{formatWithConversion(summary.advertising_expenses, summary.currency ?? 'USD', summary.converted_advertising_expenses, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">Margin</p>
@@ -787,7 +799,7 @@ export default function FinancialsPage() {
                     {t('financials.upcomingPayout')}
                   </p>
                   <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-                    {formatCents(payout.available_for_payout, payout.currency)}
+                    {formatWithConversion(payout.available_for_payout, payout.currency, payout.converted_available_for_payout, payout.converted_currency)}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                     {t('financials.availableForPayout')}
@@ -809,7 +821,7 @@ export default function FinancialsPage() {
             <p className="text-base text-gray-700 dark:text-gray-300 mb-4">
               {t('financials.yourCurrentBalance')}{' '}
               <strong className="text-gray-900 dark:text-gray-100">
-                {formatCents(payout.current_balance, payout.currency)}
+                {formatWithConversion(payout.current_balance, payout.currency, payout.converted_current_balance, payout.converted_currency)}
               </strong>
               .
             </p>
@@ -824,7 +836,7 @@ export default function FinancialsPage() {
                   summary.net_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
                 )}
               >
-                {formatCents(summary.net_profit, summary.currency)}
+                {formatWithConversion(summary.net_profit, summary.currency, summary.converted_net_profit, summary.converted_currency)}
               </strong>
               .
             </p>
@@ -835,7 +847,7 @@ export default function FinancialsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <ExpandableCard
                 title={t('financials.sales')}
-                totalValue={formatCents(summary.revenue, summary.currency)}
+                totalValue={formatWithConversion(summary.revenue, summary.currency, summary.converted_revenue, summary.converted_currency)}
                 totalPositive
                 icon={Receipt}
                 defaultExpanded
@@ -843,12 +855,12 @@ export default function FinancialsPage() {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">{t('financials.totalSales')}</span>
-                    <span className="font-medium">{formatCents(summary.revenue, summary.currency)}</span>
+                    <span className="font-medium">{formatWithConversion(summary.revenue, summary.currency, summary.converted_revenue, summary.converted_currency)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">{t('financials.refunds')}</span>
                     <span className="font-medium text-red-600">
-                      {summary.refunds > 0 ? `-${formatCents(summary.refunds, summary.currency)}` : '—'}
+                      {summary.refunds > 0 ? `-${formatWithConversion(summary.refunds, summary.currency, summary.converted_refunds, summary.converted_currency)}` : '—'}
                     </span>
                   </div>
                 </div>
@@ -856,7 +868,7 @@ export default function FinancialsPage() {
 
               <ExpandableCard
                 title={t('financials.fees')}
-                totalValue={`-${formatCents(summary.etsy_fees, summary.currency)}`}
+                totalValue={`-${formatWithConversion(summary.etsy_fees, summary.currency, summary.converted_etsy_fees, summary.converted_currency)}`}
                 totalPositive={false}
                 icon={CreditCard}
                 defaultExpanded
@@ -882,7 +894,7 @@ export default function FinancialsPage() {
 
               <ExpandableCard
                 title={t('financials.marketing')}
-                totalValue={`-${formatCents(summary.advertising_expenses, summary.currency)}`}
+                totalValue={`-${formatWithConversion(summary.advertising_expenses, summary.currency, summary.converted_advertising_expenses, summary.converted_currency)}`}
                 totalPositive={false}
                 icon={Megaphone}
                 defaultExpanded
@@ -891,7 +903,7 @@ export default function FinancialsPage() {
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">{t('financials.advertising')}</span>
                     <span className="font-medium text-red-600">
-                      -{formatCents(summary.advertising_expenses, summary.currency)}
+                      -{formatWithConversion(summary.advertising_expenses, summary.currency, summary.converted_advertising_expenses, summary.converted_currency)}
                     </span>
                   </div>
                 </div>
@@ -901,7 +913,7 @@ export default function FinancialsPage() {
               {discounts && (discounts.total_discounts > 0 || discounts.order_count_with_discounts > 0) && (
                 <ExpandableCard
                   title={t('financials.discounts')}
-                  totalValue={`-${formatCents(discounts.total_discounts, discounts.currency)}`}
+                  totalValue={`-${formatWithConversion(discounts.total_discounts, discounts.currency, discounts.converted_total_discounts, discounts.converted_currency)}`}
                   totalPositive={false}
                   icon={Percent}
                 >
@@ -925,28 +937,28 @@ export default function FinancialsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               title={t('financials.productCosts')}
-              value={formatCents(summary.product_costs, summary.currency)}
+              value={formatWithConversion(summary.product_costs, summary.currency, summary.converted_product_costs, summary.converted_currency)}
               icon={Package}
               positive={false}
               subtitle={t('financials.productCostsDescription')}
             />
             <StatCard
               title={t('financials.invoiceExpenses')}
-              value={formatCents(summary.invoice_expenses, summary.currency)}
+              value={formatWithConversion(summary.invoice_expenses, summary.currency, summary.converted_invoice_expenses, summary.converted_currency)}
               icon={FileUp}
               positive={false}
               subtitle={t('financials.invoiceExpensesDescription')}
             />
             <StatCard
               title={t('financials.totalExpenses')}
-              value={formatCents(summary.total_expenses, summary.currency)}
+              value={formatWithConversion(summary.total_expenses, summary.currency, summary.converted_total_expenses, summary.converted_currency)}
               icon={TrendingDown}
               positive={false}
               subtitle={t('financials.totalExpensesDescription')}
             />
             <StatCard
               title={t('financials.netProfit')}
-              value={formatCents(summary.net_profit, summary.currency)}
+              value={formatWithConversion(summary.net_profit, summary.currency, summary.converted_net_profit, summary.converted_currency)}
               icon={TrendingUp}
               positive={summary.net_profit >= 0}
               subtitle={summary.net_profit >= 0 ? t('financials.profitable') : t('financials.loss')}
@@ -1074,19 +1086,19 @@ export default function FinancialsPage() {
               <div>
                 <p className="text-sm text-gray-500">{t('financials.currentBalance')}</p>
                 <p className="text-xl font-bold mt-1">
-                  {formatCents(payout.current_balance, payout.currency)}
+                  {formatWithConversion(payout.current_balance, payout.currency, payout.converted_current_balance, payout.converted_currency)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">{t('financials.reserveHeld')}</p>
                 <p className="text-xl font-bold mt-1 text-amber-600">
-                  {formatCents(payout.reserve_held, payout.currency)}
+                  {formatWithConversion(payout.reserve_held, payout.currency, payout.converted_reserve_held, payout.converted_currency)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">{t('financials.availableForPayout')}</p>
                 <p className="text-xl font-bold mt-1 text-emerald-600">
-                  {formatCents(payout.available_for_payout, payout.currency)}
+                  {formatWithConversion(payout.available_for_payout, payout.currency, payout.converted_available_for_payout, payout.converted_currency)}
                 </p>
               </div>
             </div>
@@ -1118,7 +1130,7 @@ export default function FinancialsPage() {
             <div className="rounded-xl border bg-white dark:bg-gray-900 p-5 shadow-sm">
               <SectionHeader title={t('financials.feeBreakdown')}>
                 <span className="text-sm font-semibold text-gray-500">
-                  {formatCents(fees.total_fees)}
+                  {formatWithConversion(fees.total_fees, fees.currency, fees.converted_total_fees, fees.converted_currency)}
                 </span>
               </SectionHeader>
 
@@ -1132,7 +1144,7 @@ export default function FinancialsPage() {
                           {feeIcon(cat.category)}
                           {translateEntryType(cat.category)}
                         </span>
-                        <span className="font-medium">{formatCents(cat.amount)}</span>
+                        <span className="font-medium">{formatWithConversion(cat.amount, fees.currency, undefined, fees.converted_currency)}</span>
                       </div>
                       <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                         <div

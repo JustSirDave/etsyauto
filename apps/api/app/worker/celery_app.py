@@ -23,6 +23,7 @@ celery_app = Celery(
         "app.worker.tasks.audit_cleanup",
         "app.worker.tasks.product_sync_tasks",
         "app.worker.tasks.financial_tasks",
+        "app.worker.tasks.exchange_rate_tasks",
     ]
 )
 
@@ -98,5 +99,9 @@ celery_app.conf.beat_schedule = {
     "sync-payment-details-every-3-hours": {
         "task": "app.worker.tasks.financial_tasks.sync_payment_details",
         "schedule": 10800.0,  # Every 3 hours
+    },
+    "fetch-daily-exchange-rates": {
+        "task": "app.worker.tasks.exchange_rate_tasks.fetch_daily_exchange_rates",
+        "schedule": 86400.0,  # Every 24 hours (daily)
     },
 }

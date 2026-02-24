@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from app.core.sentry_config import initialize_sentry
 from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors, suppliers, analytics, financials
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors, suppliers, analytics, financials, user_preferences, currency
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
@@ -208,6 +208,8 @@ app.include_router(metrics_endpoint.router, prefix="/api", tags=["Observability"
 app.include_router(ingestion.router, prefix="/api/products/ingestion", tags=["Product Ingestion"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
 app.include_router(financials.router, prefix="/api/financials", tags=["Financials"])
+app.include_router(user_preferences.router, prefix="/api/user-preferences", tags=["User Preferences"])
+app.include_router(currency.router, prefix="/api/currency", tags=["Currency"])
 
 from app.api.endpoints import financial_invoices
 app.include_router(financial_invoices.router, prefix="/api/financials/invoices", tags=["Invoices"])

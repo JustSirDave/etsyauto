@@ -99,6 +99,9 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3001",
     ]
 
+    # Exchange Rate API (Frankfurter - free, no key, historical support)
+    EXCHANGE_RATE_API_URL: str = "https://api.frankfurter.dev/v1"
+
     # Etsy API
     ETSY_CLIENT_ID: str = ""
     ETSY_CLIENT_SECRET: str = ""

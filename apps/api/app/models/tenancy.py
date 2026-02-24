@@ -80,6 +80,7 @@ class User(Base):
     # Relationships
     memberships = relationship("Membership", back_populates="user")
     notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")
+    user_preference = relationship("UserPreference", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 class Membership(Base):

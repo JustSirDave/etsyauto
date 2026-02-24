@@ -4,6 +4,8 @@ Import all models to ensure they're registered with Base.metadata
 """
 # Import all models to ensure SQLAlchemy relationships can be resolved
 from app.models.tenancy import Tenant, User, Membership, SupplierProfile, Shop, OAuthToken
+from app.models.user_preferences import UserPreference
+from app.models.exchange_rates import ExchangeRate
 from app.models.listings import (
     Product, AIGeneration, ListingJob, Schedule, Order,
     UsageCost, AuditLog, WebhookEvent
@@ -16,6 +18,8 @@ __all__ = [
     # Tenancy models
     "Tenant",
     "User",
+    "UserPreference",
+    "ExchangeRate",
     "Membership",
     "SupplierProfile",
     "Shop",

@@ -3,7 +3,7 @@ Orders API Endpoints
 Manage Etsy orders and synchronization
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, and_, nullslast
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -15,7 +15,9 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
-from app.models.listings import Order, AuditLog, ShipmentEvent
+from app.models.listings import Order
+from app.models.user_preferences import UserPreference
+from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENCIES
 from app.models.tenancy import Shop, Membership, User
 from app.services.order_utils import build_shipping_address, derive_payment_status, derive_lifecycle_status
 from app.services.etsy_client import EtsyClient
@@ -135,6 +137,16 @@ async def get_order_stats(
     }
 
 
+def _get_target_currency(context: UserContext, target_param: Optional[str], db: Session) -> Optional[str]:
+    """Get target currency from query param or user preference."""
+    if target_param and target_param.upper().strip() in SUPPORTED_CURRENCIES:
+        return target_param.upper().strip()
+    pref = db.query(UserPreference).filter(UserPreference.user_id == context.user_id).first()
+    if pref and pref.preferred_currency_code in SUPPORTED_CURRENCIES:
+        return pref.preferred_currency_code
+    return None
+
+
 @router.get("/", tags=["Orders"])
 async def list_orders(
     skip: int = 0,
@@ -143,6 +155,7 @@ async def list_orders(
     payment_status: Optional[str] = None,
     shop_id: Optional[int] = None,
     shop_ids: Optional[str] = None,
+    target_currency: Optional[str] = Query(None, description="Target currency for conversion"),
     context: UserContext = Depends(require_permission(Permission.READ_ORDER)),
     db: Session = Depends(get_db)
 ):
@@ -260,6 +273,8 @@ async def list_orders(
         .all()
     )
 
+    target_ccy = _get_target_currency(context, target_currency, db)
+
     # Pre-fetch supplier names for all orders in one query
     supplier_ids = list({o.supplier_user_id for o in orders if o.supplier_user_id})
     supplier_map: dict = {}
@@ -296,7 +311,7 @@ async def list_orders(
                     tracking_code = shipment["tracking_code"]
                     break
 
-        formatted_orders.append({
+        item = {
             "id": order.id,
             "order_id": order.etsy_receipt_id or f"#{order.id}",
             "etsy_receipt_id": order.etsy_receipt_id,
@@ -325,14 +340,25 @@ async def list_orders(
                 if (order.etsy_updated_at or order.updated_at)
                 else None
             ),
-        })
+        }
+        if not is_supplier and target_ccy and target_ccy != (order.currency or "USD") and order.total_price:
+            try:
+                conv_cents, rate, retrieved, stale = convert_amount(
+                    order.total_price, order.currency or "USD", target_ccy,
+                    order.etsy_created_at if order.etsy_created_at else None,
+                    db,
+                )
+                item["converted_total_price"] = conv_cents / 100
+                item["converted_currency"] = target_ccy
+                item["conversion_rate_stale"] = stale
+            except (ValueError, Exception):
+                pass
+        formatted_orders.append(item)
 
-    return {
-        "orders": formatted_orders,
-        "total": total,
-        "skip": skip,
-        "limit": limit
-    }
+    result = {"orders": formatted_orders, "total": total, "skip": skip, "limit": limit}
+    if target_ccy:
+        result["target_currency"] = target_ccy
+    return result
 
 
 @router.get("/{order_id}", tags=["Orders"])

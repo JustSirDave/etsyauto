@@ -26,6 +26,7 @@ import {
   type Order,
   type Product,
 } from '@/lib/api';
+import { formatAmount, getDisplayAmount } from '@/lib/currency';
 import { cn } from '@/lib/utils';
 import {
   DollarSign,
@@ -78,6 +79,16 @@ function dateRangeToParams(preset: DateRangePreset): { start?: string; end?: str
     start: start.toISOString(),
     end: end.toISOString(),
   };
+}
+
+/** Format analytics revenue (dollars) - uses converted value when user prefers non-USD */
+function formatAnalyticsRevenue(
+  amount: number,
+  convertedAmount: number | undefined,
+  convertedCurrency: string | undefined
+): string {
+  const { value, currency } = getDisplayAmount(amount, 'USD', convertedAmount, convertedCurrency);
+  return formatAmount(value, currency);
 }
 
 /* ================================================================== */
@@ -393,11 +404,25 @@ function DetailDrawer({
   const renderContent = () => {
     /* ── Revenue detail ────────────────────────── */
     if (view.kind === 'revenue' && overview) {
+      const fmt = (amt: number, conv?: number, ccy?: string) =>
+        formatAnalyticsRevenue(amt, conv, ccy);
+      const daily30 = overview.converted_revenue_30d != null
+        ? overview.converted_revenue_30d / 30
+        : overview.revenue_30d / 30;
+      const daily7 = overview.converted_revenue_7d != null
+        ? overview.converted_revenue_7d / 7
+        : overview.revenue_7d / 7;
+      const daily30Str = overview.converted_currency
+        ? formatAmount(daily30, overview.converted_currency)
+        : `$${daily30.toFixed(2)}`;
+      const daily7Str = overview.converted_currency
+        ? formatAmount(daily7, overview.converted_currency)
+        : `$${daily7.toFixed(2)}`;
       return (
         <div className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
-            <StatTile label={t('analytics.totalRevenue')} value={`$${overview.total_revenue.toFixed(2)}`} />
-            <StatTile label={t('analytics.avgOrderValue')} value={`$${overview.avg_order_value.toFixed(2)}`} />
+            <StatTile label={t('analytics.totalRevenue')} value={fmt(overview.total_revenue, overview.converted_total_revenue, overview.converted_currency)} />
+            <StatTile label={t('analytics.avgOrderValue')} value={fmt(overview.avg_order_value, overview.converted_avg_order_value, overview.converted_currency)} />
             <StatTile label={t('analytics.totalOrders')} value={overview.total_orders.toLocaleString()} />
           </div>
 
@@ -405,7 +430,7 @@ function DetailDrawer({
             <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('analytics.performance7d')}</h4>
             <div className="grid grid-cols-2 gap-4">
               <TrendTile label={t('analytics.orders')} value={overview.orders_7d} trend={overview.orders_7d_trend} />
-              <TrendTile label={t('analytics.revenue')} value={`$${overview.revenue_7d.toFixed(2)}`} trend={overview.revenue_7d_trend} />
+              <TrendTile label={t('analytics.revenue')} value={fmt(overview.revenue_7d, overview.converted_revenue_7d, overview.converted_currency)} trend={overview.revenue_7d_trend} />
             </div>
           </div>
 
@@ -413,7 +438,7 @@ function DetailDrawer({
             <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('analytics.performance30d')}</h4>
             <div className="grid grid-cols-2 gap-4">
               <TrendTile label={t('analytics.orders')} value={overview.orders_30d} trend={overview.orders_30d_trend} />
-              <TrendTile label={t('analytics.revenue')} value={`$${overview.revenue_30d.toFixed(2)}`} trend={overview.revenue_30d_trend} />
+              <TrendTile label={t('analytics.revenue')} value={fmt(overview.revenue_30d, overview.converted_revenue_30d, overview.converted_currency)} trend={overview.revenue_30d_trend} />
             </div>
           </div>
 
@@ -421,8 +446,8 @@ function DetailDrawer({
             <div className="border-t border-[var(--border-color)] pt-4">
               <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">{t('analytics.insights')}</h4>
               <div className="space-y-2 text-sm text-[var(--text-secondary)]">
-                <p>{t('analytics.dailyAvg30d')} <strong className="text-[var(--text-primary)]">${(overview.revenue_30d / 30).toFixed(2)}</strong> {t('analytics.revenue').toLowerCase()}, <strong className="text-[var(--text-primary)]">{(overview.orders_30d / 30).toFixed(1)}</strong> {t('analytics.orders').toLowerCase()}</p>
-                <p>{t('analytics.dailyAvg7d')} <strong className="text-[var(--text-primary)]">${(overview.revenue_7d / 7).toFixed(2)}</strong> {t('analytics.revenue').toLowerCase()}, <strong className="text-[var(--text-primary)]">{(overview.orders_7d / 7).toFixed(1)}</strong> {t('analytics.orders').toLowerCase()}</p>
+                <p>{t('analytics.dailyAvg30d')} <strong className="text-[var(--text-primary)]">{daily30Str}</strong> {t('analytics.revenue').toLowerCase()}, <strong className="text-[var(--text-primary)]">{(overview.orders_30d / 30).toFixed(1)}</strong> {t('analytics.orders').toLowerCase()}</p>
+                <p>{t('analytics.dailyAvg7d')} <strong className="text-[var(--text-primary)]">{daily7Str}</strong> {t('analytics.revenue').toLowerCase()}, <strong className="text-[var(--text-primary)]">{(overview.orders_7d / 7).toFixed(1)}</strong> {t('analytics.orders').toLowerCase()}</p>
               </div>
             </div>
           )}
@@ -773,7 +798,7 @@ function ShopComparisonPanel({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-[var(--text-muted)] text-xs">{t('analytics.revenue')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">${data.overview.total_revenue.toFixed(2)}</p>
+                  <p className="text-[var(--text-primary)] font-semibold">{formatAnalyticsRevenue(data.overview.total_revenue, data.overview.converted_total_revenue, data.overview.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders')}</p>
@@ -781,11 +806,11 @@ function ShopComparisonPanel({
                 </div>
                 <div>
                   <p className="text-[var(--text-muted)] text-xs">{t('analytics.avgOrder')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">${data.overview.avg_order_value.toFixed(2)}</p>
+                  <p className="text-[var(--text-primary)] font-semibold">{formatAnalyticsRevenue(data.overview.avg_order_value, data.overview.converted_avg_order_value, data.overview.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-[var(--text-muted)] text-xs">{t('analytics.rev30d')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">${data.overview.revenue_30d.toFixed(2)}</p>
+                  <p className="text-[var(--text-primary)] font-semibold">{formatAnalyticsRevenue(data.overview.revenue_30d, data.overview.converted_revenue_30d, data.overview.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders7d')}</p>
@@ -988,8 +1013,7 @@ function AnalyticsContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
               title={t('analytics.totalRevenue')}
-              value={overview.total_revenue.toFixed(2)}
-              prefix="$"
+              value={formatAnalyticsRevenue(overview.total_revenue, overview.converted_total_revenue, overview.converted_currency)}
               icon={DollarSign}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
@@ -1001,15 +1025,13 @@ function AnalyticsContent() {
             />
             <KpiCard
               title={t('analytics.avgOrderValue')}
-              value={overview.avg_order_value.toFixed(2)}
-              prefix="$"
+              value={formatAnalyticsRevenue(overview.avg_order_value, overview.converted_avg_order_value, overview.converted_currency)}
               icon={BarChart3}
               onClick={() => handleKpiClick({ kind: 'revenue' })}
             />
             <KpiCard
               title={t('analytics.revenue30d')}
-              value={overview.revenue_30d.toFixed(2)}
-              prefix="$"
+              value={formatAnalyticsRevenue(overview.revenue_30d, overview.converted_revenue_30d, overview.converted_currency)}
               icon={DollarSign}
               trend={overview.revenue_30d_trend}
               trendLabel={t('analytics.vsPrev30d')}
@@ -1036,8 +1058,7 @@ function AnalyticsContent() {
             />
             <KpiCard
               title={t('analytics.revenue7d')}
-              value={overview.revenue_7d.toFixed(2)}
-              prefix="$"
+              value={formatAnalyticsRevenue(overview.revenue_7d, overview.converted_revenue_7d, overview.converted_currency)}
               icon={TrendingUp}
               trend={overview.revenue_7d_trend}
               trendLabel={t('analytics.vsPrev7d')}
@@ -1045,8 +1066,7 @@ function AnalyticsContent() {
             />
             <KpiCard
               title={t('analytics.revenue30d')}
-              value={overview.revenue_30d.toFixed(2)}
-              prefix="$"
+              value={formatAnalyticsRevenue(overview.revenue_30d, overview.converted_revenue_30d, overview.converted_currency)}
               icon={TrendingUp}
               trend={overview.revenue_30d_trend}
               trendLabel={t('analytics.vsPrev30d')}

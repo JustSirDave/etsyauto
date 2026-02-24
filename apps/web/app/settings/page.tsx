@@ -9,18 +9,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useLanguage } from '@/lib/language-context';
-import { shopsApi, teamApi, suppliersApi, type Shop, type ApiError, type TeamMember, type SupplierProfile } from '@/lib/api';
+import { shopsApi, teamApi, suppliersApi, userPreferencesApi, currencyApi, type Shop, type ApiError, type TeamMember, type SupplierProfile } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
   Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, CheckCircle2, XCircle,
-  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck,
+  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile';
+type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile' | 'currency';
 
 function SettingsContent() {
   const { user } = useAuth();
@@ -59,6 +59,11 @@ function SettingsContent() {
   const [shopToDelete, setShopToDelete] = useState<{ id: number; name: string } | null>(null);
   const [deletingShop, setDeletingShop] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [preferredCurrency, setPreferredCurrency] = useState<string>('USD');
+  const [loadingCurrency, setLoadingCurrency] = useState(false);
+  const [savingCurrency, setSavingCurrency] = useState(false);
+  const [supportedCurrencies, setSupportedCurrencies] = useState<string[]>([]);
+  const [currencyDropdownOpen, setCurrencyDropdownOpen] = useState(false);
   const [notification, setNotification] = useState<{
     show: boolean;
     type: 'success' | 'error' | 'warning' | 'info';
@@ -68,7 +73,47 @@ function SettingsContent() {
 
   useEffect(() => { loadShops(); }, []);
   useEffect(() => { if (activeTab === 'team') loadTeamMembers(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'currency') loadCurrencyPrefs(); }, [activeTab]);
   useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
+
+  const loadCurrencyPrefs = async () => {
+    try {
+      setLoadingCurrency(true);
+      const [prefs, supported] = await Promise.all([
+        userPreferencesApi.get(),
+        currencyApi.getSupported(),
+      ]);
+      setPreferredCurrency(prefs.preferred_currency_code);
+      setSupportedCurrencies(supported.currencies || []);
+    } catch {
+      setSupportedCurrencies(['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'ILS', 'JPY', 'MXN', 'BRL']);
+    } finally {
+      setLoadingCurrency(false);
+    }
+  };
+
+  const saveCurrencyPreference = async () => {
+    try {
+      setSavingCurrency(true);
+      const updated = await userPreferencesApi.update(preferredCurrency);
+      setPreferredCurrency(updated.preferred_currency_code);
+      setNotification({
+        show: true,
+        type: 'success',
+        title: t('settings.currencySaved'),
+        message: t('settings.currencySavedMessage').replace('{currency}', preferredCurrency),
+      });
+    } catch (err) {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: t('settings.saveFailed'),
+        message: (err as ApiError).detail || t('settings.currencySaveFailed'),
+      });
+    } finally {
+      setSavingCurrency(false);
+    }
+  };
   
   // Update active tab when URL parameter changes
   useEffect(() => {
@@ -392,6 +437,7 @@ function SettingsContent() {
     { id: 'connections' as TabType, label: t('settings.tabs.connections'), icon: LinkIcon },
     { id: 'shops' as TabType, label: t('settings.tabs.shops'), icon: Store },
     { id: 'team' as TabType, label: t('settings.tabs.team'), icon: Users },
+    { id: 'currency' as TabType, label: t('settings.tabs.currency'), icon: DollarSign },
     { id: 'notifications' as TabType, label: t('settings.tabs.notifications'), icon: Bell }
   ];
   if (user?.role === 'supplier') {
@@ -806,6 +852,77 @@ function SettingsContent() {
                 </div>
               </div>
             </div>
+          </DashboardCard>
+        </div>
+      )}
+
+      {activeTab === 'currency' && (
+        <div className="space-y-6">
+          <DashboardCard>
+            <div className="flex items-center gap-3 mb-4">
+              <DollarSign className="w-5 h-5 text-[var(--primary)]" />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.currencyPreferences')}</h2>
+            </div>
+            <p className="text-sm text-[var(--text-muted)] mb-6">{t('settings.currencyPreferencesDesc')}</p>
+            {loadingCurrency ? (
+              <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" /></div>
+            ) : (
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+                <div className="flex-1 max-w-xs">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">{t('settings.preferredCurrency')}</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setCurrencyDropdownOpen(!currencyDropdownOpen)}
+                      onBlur={() => setTimeout(() => setCurrencyDropdownOpen(false), 150)}
+                      className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] text-left hover:border-[var(--primary)]/50 focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent transition-colors"
+                    >
+                      <span className="font-medium">{preferredCurrency}</span>
+                      <ChevronDown className={cn('w-4 h-4 text-[var(--text-muted)] transition-transform', currencyDropdownOpen && 'rotate-180')} />
+                    </button>
+                    {currencyDropdownOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setCurrencyDropdownOpen(false)}
+                          aria-hidden="true"
+                        />
+                        <div className="absolute left-0 right-0 mt-1 z-50 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                          {(supportedCurrencies.length ? supportedCurrencies : ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'ILS', 'JPY', 'MXN', 'BRL']).map((ccy) => (
+                            <button
+                              key={ccy}
+                              type="button"
+                              onClick={() => {
+                                setPreferredCurrency(ccy);
+                                setCurrencyDropdownOpen(false);
+                              }}
+                              className={cn(
+                                'w-full flex items-center justify-between px-4 py-2.5 text-left transition-colors',
+                                preferredCurrency === ccy
+                                  ? 'bg-[var(--primary-bg)] text-[var(--primary)] font-medium'
+                                  : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                              )}
+                            >
+                              {ccy}
+                              {preferredCurrency === ccy && <CheckCircle className="w-4 h-4 text-[var(--primary)]" />}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="flex sm:pb-0.5">
+                  <button
+                    onClick={saveCurrencyPreference}
+                    disabled={savingCurrency}
+                    className="px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium transition-colors"
+                  >
+                    {savingCurrency ? t('common.saving') : t('common.save')}
+                  </button>
+                </div>
+              </div>
+            )}
           </DashboardCard>
         </div>
       )}

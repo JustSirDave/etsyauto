@@ -962,6 +962,10 @@ export interface DashboardOrder {
   date: string;
   amount: string;
   total_price?: number | null;
+  currency?: string;
+  converted_total_price?: number;
+  converted_currency?: string;
+  conversion_rate_stale?: boolean;
   status: string;
   payment_status: string;
   lifecycle_status?: string;
@@ -1150,6 +1154,12 @@ export interface OverviewAnalytics {
   revenue_7d_trend: number;
   revenue_30d_trend: number;
   computed_at: string;
+  /** Currency conversion (when user prefers non-USD) */
+  converted_currency?: string;
+  converted_total_revenue?: number;
+  converted_revenue_7d?: number;
+  converted_revenue_30d?: number;
+  converted_avg_order_value?: number;
 }
 
 export interface OrderAnalytics {
@@ -1291,14 +1301,20 @@ export interface PayoutEstimate {
   reserve_held: number;
   available_for_payout: number;
   currency: string;
+  converted_currency?: string;
+  converted_current_balance?: number;
+  converted_reserve_held?: number;
+  converted_available_for_payout?: number;
   recent_payouts: { amount: number; date: string | null }[];
   as_of: string;
 }
 
 export interface FeeBreakdown {
   total_fees: number;
+  converted_total_fees?: number;
   categories: { category: string; amount: number; count: number }[];
   currency: string;
+  converted_currency?: string;
   period_start: string;
   period_end: string;
 }
@@ -1371,6 +1387,16 @@ export interface FinancialSummary {
   total_expenses: number;
   net_profit: number;
   currency: string;
+  converted_currency?: string;
+  original_currency?: string;
+  converted_revenue?: number;
+  converted_refunds?: number;
+  converted_etsy_fees?: number;
+  converted_advertising_expenses?: number;
+  converted_product_costs?: number;
+  converted_invoice_expenses?: number;
+  converted_total_expenses?: number;
+  converted_net_profit?: number;
   period_start: string;
   period_end: string;
   /** When unmapped ledger types exist, profit may not match Etsy */
@@ -1395,8 +1421,10 @@ export interface SyncStatusResponse {
 
 export interface DiscountSummary {
   total_discounts: number;
+  converted_total_discounts?: number;
   order_count_with_discounts: number;
   currency: string;
+  converted_currency?: string;
   period_start: string;
   period_end: string;
 }
@@ -1631,5 +1659,54 @@ export const invoicesApi = {
 
   delete: async (invoiceId: number): Promise<{ message: string }> => {
     return apiRequest<{ message: string }>(`/api/financials/invoices/${invoiceId}`, { method: 'DELETE' });
+  },
+};
+
+/**
+ * User Preferences API (currency, etc.)
+ */
+export interface UserPreferences {
+  preferred_currency_code: string;
+  last_updated_at: string;
+}
+
+export const userPreferencesApi = {
+  get: async (): Promise<UserPreferences> => {
+    return apiRequest<UserPreferences>('/api/user-preferences');
+  },
+  update: async (preferred_currency_code: string): Promise<UserPreferences> => {
+    return apiRequest<UserPreferences>('/api/user-preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ preferred_currency_code }),
+    });
+  },
+};
+
+/**
+ * Currency API
+ */
+export const currencyApi = {
+  getSupported: async (): Promise<{ currencies: string[] }> => {
+    return apiRequest<{ currencies: string[] }>('/api/currency/supported');
+  },
+  convert: async (params: {
+    from_currency: string;
+    to_currency: string;
+    amount: number;
+    date?: string;
+  }): Promise<{
+    from: { value: number; currency: string };
+    to: { value: number; currency: string };
+    rate: number;
+    timestamp: string;
+    rate_stale?: boolean;
+  }> => {
+    const search = new URLSearchParams({
+      from_currency: params.from_currency,
+      to_currency: params.to_currency,
+      amount: String(params.amount),
+    });
+    if (params.date) search.append('date', params.date);
+    return apiRequest(`/api/currency/convert?${search.toString()}`);
   },
 };
