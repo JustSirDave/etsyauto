@@ -4,7 +4,14 @@
  */
 
 // Empty = same-origin; Next.js proxy forwards /api/* to backend
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+// In browser on localhost: always use same-origin (Docker hostname "api" doesn't resolve from host)
+const _raw = process.env.NEXT_PUBLIC_API_URL ?? '';
+const _useSameOrigin =
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    /^https?:\/\/api([:\/]|\.)/.test(_raw));
+export const API_BASE_URL = _useSameOrigin ? '' : _raw;
 
 export interface ApiError {
   detail: string;

@@ -35,7 +35,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       const data = await shopsApi.getAll();
-      setShops(data);
+      setShops(data ?? []);
 
       // Restore from localStorage (multi-store takes priority)
       const storedMulti = window.localStorage.getItem(MULTI_STORAGE_KEY);
@@ -70,6 +70,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         window.localStorage.removeItem(MULTI_STORAGE_KEY);
         window.localStorage.removeItem(STORAGE_KEY);
       }
+    } catch (err) {
+      console.error('Failed to load shops:', err);
+      setShops([]);
     } finally {
       setIsLoading(false);
     }

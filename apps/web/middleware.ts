@@ -5,7 +5,10 @@ import type { NextRequest } from 'next/server';
  * Next.js Edge Middleware — protects dashboard routes by checking
  * for the HttpOnly `access_token` cookie.  Runs at the Edge before
  * any page renders, preventing flash-of-protected-content.
+ * Also proxies /api/* to the backend when rewrites fail.
  */
+
+const API_TARGET = process.env.API_INTERNAL_URL || 'http://api:8080';
 
 /** Routes that do NOT require authentication */
 const PUBLIC_PATHS = new Set([
@@ -30,15 +33,45 @@ const PUBLIC_PREFIXES = [
   '/uploads/',
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Proxy /api/* to backend (rewrites can fail in some setups)
+  if (pathname.startsWith('/api/')) {
+    const url = `${API_TARGET}${pathname}${request.nextUrl.search}`;
+    const headers = new Headers(request.headers);
+    headers.delete('host');
+    const init: RequestInit = { method: request.method, headers };
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      try {
+        const body = await request.text();
+        if (body) {
+          init.body = body;
+          headers.set('Content-Type', request.headers.get('Content-Type') || 'application/json');
+        }
+      } catch { /* body may be empty */ }
+    }
+    try {
+      const res = await fetch(url, init);
+      const resHeaders = new Headers(res.headers);
+      resHeaders.set('x-middleware-cache', 'no-store');
+      return new NextResponse(res.body, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: resHeaders,
+      });
+    } catch (e) {
+      console.error('[middleware] API proxy error:', e);
+      return NextResponse.json({ detail: 'Backend unreachable' }, { status: 502 });
+    }
+  }
 
   // 1. Allow public paths
   if (PUBLIC_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 
-  // 2. Allow public prefixes
+  // 2. Allow public prefixes (api already handled above)
   for (const prefix of PUBLIC_PREFIXES) {
     if (pathname.startsWith(prefix)) {
       return NextResponse.next();

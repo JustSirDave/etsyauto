@@ -331,38 +331,34 @@ async def list_shops(
     """
     Get all shops for current user's tenant
     Filters by allowed shops based on role:
-    - Owner/Admin: All shops in tenant
+    - Owner/Admin: All shops in tenant (always; allowed_shop_ids can be stale)
     - Supplier/Creator/Viewer: Only allowed shop_ids
     """
     # Filter by tenant
     query = filter_by_tenant(db.query(Shop), context.tenant_id, Shop.tenant_id)
 
-    # Use allowed_shop_ids from context (already validated by get_user_context)
-    allowed_shop_ids = context.allowed_shop_ids or []
+    is_owner_or_admin = context.role.lower() in ('owner', 'admin')
 
-    # Backfill explicit links for owner/admin to preserve access
-    if not allowed_shop_ids and context.role.lower() in ('owner', 'admin'):
+    if is_owner_or_admin:
+        # Owner/Admin: always return all tenant shops (don't filter by allowed_shop_ids)
+        # Backfill membership.allowed_shop_ids for consistency
         all_shop_ids = [row[0] for row in db.query(Shop.id).filter(Shop.tenant_id == context.tenant_id).all()]
-        
-        # Update membership with backfilled shop IDs
         membership = db.query(Membership).filter(
             Membership.user_id == context.user_id,
             Membership.tenant_id == context.tenant_id,
             Membership.invitation_status == 'accepted'
         ).first()
-        
-        if membership:
+        if membership and (not membership.allowed_shop_ids or set(membership.allowed_shop_ids) != set(all_shop_ids)):
             membership.allowed_shop_ids = all_shop_ids
             db.commit()
-            allowed_shop_ids = all_shop_ids
+    else:
+        # Supplier/Creator/Viewer: filter by allowed shop IDs
+        allowed_shop_ids = context.allowed_shop_ids or []
+        if allowed_shop_ids:
+            query = query.filter(Shop.id.in_(allowed_shop_ids))
+        else:
+            query = query.filter(Shop.id == -1)
 
-    # Filter by allowed shops
-    if allowed_shop_ids:
-        query = query.filter(Shop.id.in_(allowed_shop_ids))
-    elif context.role.lower() not in ('owner', 'admin'):
-        # Non-owner/admin with no shops assigned = no access
-        query = query.filter(Shop.id == -1)
-    
     shops = query.all()
     
     return {

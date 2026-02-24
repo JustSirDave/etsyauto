@@ -175,17 +175,18 @@ services:
       - etsy-network
 
   # Next.js Frontend
+  # NEXT_PUBLIC_API_URL must be empty so browser uses same-origin; Next.js rewrites /api/* to backend
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        NEXT_PUBLIC_API_URL: ""
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
         API_INTERNAL_URL: http://api:8080
     container_name: etsy-web
     environment:
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+      NEXT_PUBLIC_API_URL: ""
       API_INTERNAL_URL: http://api:8080
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       NEXTAUTH_URL: http://localhost:3000
