@@ -200,6 +200,15 @@ async def get_payout_estimate(
     """
     parsed_shop_ids = _parse_shop_ids(shop_ids, shop_id, context, db)
 
+    # Reject tenant-wide payout when multiple shops exist (ambiguous)
+    if not parsed_shop_ids and not shop_id:
+        shop_count = db.query(Shop).filter(Shop.tenant_id == context.tenant_id).count()
+        if shop_count > 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Multiple shops exist. Specify shop_id or shop_ids to get payout estimate.",
+            )
+
     svc = FinancialService(db)
     result = svc.get_payout_estimate(
         tenant_id=context.tenant_id,
@@ -438,6 +447,7 @@ async def get_sync_status(
             "payment_last_sync_at": st.payment_last_sync_at.isoformat() if st.payment_last_sync_at else None,
             "ledger_last_error": st.ledger_last_error,
             "payment_last_error": st.payment_last_error,
+            "has_auth_error": bool(st.has_auth_error) if st.has_auth_error is not None else False,
         }
     return {
         "shops": result,

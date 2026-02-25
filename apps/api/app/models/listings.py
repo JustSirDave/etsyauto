@@ -4,7 +4,7 @@ SQLAlchemy Models - Products, AI Generations, Listing Jobs, Orders
 from datetime import datetime
 from sqlalchemy import (
     Column, BigInteger, String, Text, Integer, DateTime,
-    Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint
+    Boolean, ForeignKey, CheckConstraint, Index, UniqueConstraint, func
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -504,6 +504,22 @@ class LedgerEntry(Base):
     )
 
 
+class ShopFinancialState(Base):
+    """Shop payment account state from Etsy payment-account endpoint (or derived from ledger)."""
+    __tablename__ = "shop_financial_state"
+
+    shop_id = Column(BigInteger, ForeignKey("shops.id", ondelete="CASCADE"), primary_key=True)
+    balance = Column(Integer, nullable=False, server_default="0")  # cents
+    available_for_payout = Column(Integer, nullable=False, server_default="0")  # cents
+    currency_code = Column(String(3), nullable=False, server_default="USD")
+    reserve_amount = Column(Integer, nullable=True)  # cents
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        Index("idx_shop_financial_state_updated", "updated_at"),
+    )
+
+
 class PaymentDetail(Base):
     """Etsy Payment breakdown per order — finalized after shipping"""
     __tablename__ = "payment_details"
@@ -601,6 +617,7 @@ class FinancialSyncStatus(Base):
     payment_last_sync_at = Column(DateTime(timezone=True), nullable=True)
     ledger_last_error = Column(Text, nullable=True)
     payment_last_error = Column(Text, nullable=True)
+    has_auth_error = Column(Boolean, nullable=True, default=False)  # True when token refresh fails / 401
 
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

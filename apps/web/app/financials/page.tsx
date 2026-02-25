@@ -14,10 +14,12 @@ import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
+import { useCurrency } from '@/lib/currency-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
 import {
   financialsApi,
   invoicesApi,
+  shopsApi,
   type ProfitAndLoss,
   type PayoutEstimate,
   type FeeBreakdown,
@@ -44,9 +46,10 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
+  Calendar,
+  CheckCircle,
   Download,
   Filter,
-  Calendar,
   PieChart,
   BarChart3,
   Receipt,
@@ -193,6 +196,27 @@ function entryTypeBadgeClasses(t: string): string {
 type Period = '7d' | '30d' | '90d' | '12m';
 
 const PERIOD_OPTIONS: Period[] = ['7d', '30d', '90d', '12m'];
+const PERIOD_STORAGE_KEY = 'financials-period';
+
+function loadPersistedPeriod(): Period {
+  if (typeof window === 'undefined') return '30d';
+  try {
+    const stored = localStorage.getItem(PERIOD_STORAGE_KEY);
+    if (stored && PERIOD_OPTIONS.includes(stored as Period)) return stored as Period;
+  } catch {
+    /* ignore */
+  }
+  return '30d';
+}
+
+function persistPeriod(p: Period): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(PERIOD_STORAGE_KEY, p);
+  } catch {
+    /* ignore */
+  }
+}
 
 function periodToDates(p: Period): { start: string; end: string } {
   const end = new Date().toISOString();
@@ -200,18 +224,13 @@ function periodToDates(p: Period): { start: string; end: string } {
   return { start: daysAgo(days[p]), end };
 }
 
-/** Human-readable period label e.g. "Last 3 months: November 2025 - January 2026" */
+/** Human-readable period label (no date range) */
 function periodToLabel(p: Period): string {
-  const { start, end } = periodToDates(p);
-  const startDate = new Date(start);
-  const endDate = new Date(end);
-  const fmt = (d: Date) =>
-    d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const labels: Record<Period, string> = {
-    '7d': `Last 7 days: ${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`,
-    '30d': `Last 30 days: ${fmt(startDate)} – ${fmt(endDate)}`,
-    '90d': `Last 3 months: ${fmt(startDate)} – ${fmt(endDate)}`,
-    '12m': `Last 12 months: ${fmt(startDate)} – ${fmt(endDate)}`,
+    '7d': 'Last 7 days',
+    '30d': 'Last 30 days',
+    '90d': 'Last 3 months',
+    '12m': 'Last 12 months',
   };
   return labels[p];
 }
@@ -348,6 +367,7 @@ function FinancialComparisonPanel({
   onClose: () => void;
 }) {
   const { t } = useLanguage();
+  const { currency: displayCurrency } = useCurrency();
   const entries = Object.entries(comparisonData);
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-6 space-y-6">
@@ -369,23 +389,23 @@ function FinancialComparisonPanel({
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.revenue')}</p>
-                  <p className="font-semibold text-green-600">{formatWithConversion(summary.revenue, summary.currency ?? 'USD', summary.converted_revenue, summary.converted_currency)}</p>
+                  <p className="font-semibold text-green-600">{formatWithConversion(summary.revenue, summary.currency ?? displayCurrency, summary.converted_revenue, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.totalExpenses')}</p>
-                  <p className="font-semibold text-red-500">{formatWithConversion(summary.total_expenses, summary.currency ?? 'USD', summary.converted_total_expenses, summary.converted_currency)}</p>
+                  <p className="font-semibold text-red-500">{formatWithConversion(summary.total_expenses, summary.currency ?? displayCurrency, summary.converted_total_expenses, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.netProfit')}</p>
-                  <p className="font-semibold text-blue-600">{formatWithConversion(summary.net_profit, summary.currency ?? 'USD', summary.converted_net_profit, summary.converted_currency)}</p>
+                  <p className="font-semibold text-blue-600">{formatWithConversion(summary.net_profit, summary.currency ?? displayCurrency, summary.converted_net_profit, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.etsyFees')}</p>
-                  <p className="font-semibold">{formatWithConversion(summary.etsy_fees, summary.currency ?? 'USD', summary.converted_etsy_fees, summary.converted_currency)}</p>
+                  <p className="font-semibold">{formatWithConversion(summary.etsy_fees, summary.currency ?? displayCurrency, summary.converted_etsy_fees, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">{t('financials.advertising')}</p>
-                  <p className="font-semibold">{formatWithConversion(summary.advertising_expenses, summary.currency ?? 'USD', summary.converted_advertising_expenses, summary.converted_currency)}</p>
+                  <p className="font-semibold">{formatWithConversion(summary.advertising_expenses, summary.currency ?? displayCurrency, summary.converted_advertising_expenses, summary.converted_currency)}</p>
                 </div>
                 <div>
                   <p className="text-gray-500 text-xs">Margin</p>
@@ -405,11 +425,12 @@ export default function FinancialsPage() {
   const { selectedShop, selectedShopIds, selectedShops } = useShop();
   const { showToast } = useToast();
   const { t } = useLanguage();
+  const { currency: displayCurrency } = useCurrency();
 
-  const [period, setPeriod] = useState<Period>('30d');
+  const [period, setPeriod] = useState<Period>(() => loadPersistedPeriod());
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [showSyncMenu, setShowSyncMenu] = useState(false);
+  const [refreshingConnection, setRefreshingConnection] = useState(false);
   const [scopeStatus, setScopeStatus] = useState<BillingScopeStatus | null>(null);
   const [comparisonData, setComparisonData] = useState<Record<string, FinancialSummary> | null>(null);
   const [showComparison, setShowComparison] = useState(false);
@@ -424,6 +445,7 @@ export default function FinancialsPage() {
   const [ledger, setLedger] = useState<LedgerResponse | null>(null);
   const [ledgerPage, setLedgerPage] = useState(0);
   const [ledgerFilter, setLedgerFilter] = useState('');
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [invoices, setInvoices] = useState<InvoiceListResponse | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
@@ -485,11 +507,39 @@ export default function FinancialsPage() {
     fetchAll();
   }, [fetchAll]);
 
+  // ── Refresh connection (token refresh) ──
+  const handleRefreshConnection = async () => {
+    const targetShopId =
+      syncStatus?.shops &&
+      Object.entries(syncStatus.shops).find(([, s]) => s.has_auth_error)?.[0]
+        ? Number(Object.entries(syncStatus.shops).find(([, s]) => s.has_auth_error)?.[0])
+        : shopIds?.[0] ?? selectedShop?.id;
+    if (!targetShopId) return;
+    setRefreshingConnection(true);
+    try {
+      await shopsApi.refreshConnection(targetShopId);
+      showToast(t('financials.connectionRefreshed') || 'Connection refreshed successfully', 'success');
+      await financialsApi.triggerSync(targetShopId, false);
+      showToast(t('financials.syncStarted'), 'success');
+      setTimeout(() => fetchAll(true), 5000);
+    } catch (err: unknown) {
+      const e = err as { status?: number; detail?: string } | undefined;
+      if (e?.status === 401) {
+        showToast(t('financials.refreshTokenExpired') || 'Refresh token expired. Please reconnect your Etsy shop.', 'error');
+      } else {
+        showToast((e?.detail as string) || t('financials.refreshFailed') || 'Failed to refresh connection', 'error');
+      }
+    } finally {
+      setRefreshingConnection(false);
+    }
+  };
+
   // ── Sync trigger ──
   const handleSync = async (forceFull = false) => {
+    const targetShopId = shopIds && shopIds.length > 1 ? undefined : (shopIds?.[0] ?? shopId);
     setSyncing(true);
     try {
-      await financialsApi.triggerSync(shopId, forceFull);
+      await financialsApi.triggerSync(targetShopId, forceFull);
       showToast(t('financials.syncStarted'), 'success');
       setTimeout(() => fetchAll(true), forceFull ? 90000 : 5000);
     } catch {
@@ -600,18 +650,57 @@ export default function FinancialsPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Period dropdown (Etsy-style) */}
-            <select
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as Period)}
-              className="rounded-lg border dark:border-gray-700 px-4 py-2 text-sm bg-white dark:bg-gray-800 min-w-[240px]"
-            >
-              {PERIOD_OPTIONS.map((p) => (
-                <option key={p} value={p}>
-                  {periodToLabel(p)}
-                </option>
-              ))}
-            </select>
+            {/* Period dropdown (matches TopBar design) */}
+            <div className="relative">
+              <button
+                onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors min-w-[280px] shadow-sm"
+              >
+                <Calendar className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
+                <span className="text-sm font-medium flex-1 text-left truncate">
+                  {periodToLabel(period)}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showPeriodMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowPeriodMenu(false)}
+                  />
+                  <div className="absolute left-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        {t('financials.dateRange') || 'Date range'}
+                      </p>
+                    </div>
+                    <div className="py-1">
+                      {PERIOD_OPTIONS.map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => {
+                            setPeriod(p);
+                            persistPeriod(p);
+                            setShowPeriodMenu(false);
+                          }}
+                          className={`w-full flex items-center px-4 py-2.5 text-left transition-colors ${
+                            period === p
+                              ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
+                              : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          <span className="text-sm">{periodToLabel(p)}</span>
+                          {period === p && (
+                            <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Compare button (visible when multiple shops selected) */}
             {shopIds && shopIds.length > 1 && (
@@ -638,8 +727,8 @@ export default function FinancialsPage() {
 
             {/* Sync status and last updated */}
             {syncStatus && Object.keys(syncStatus.shops).length > 0 && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" />
+              <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600">
+                <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                 {(() => {
                   const timestamps = Object.values(syncStatus.shops).flatMap((s) => [
                     s.ledger_last_sync_at ? new Date(s.ledger_last_sync_at).getTime() : 0,
@@ -660,43 +749,14 @@ export default function FinancialsPage() {
 
             {/* Sync */}
             {user?.role && ['owner', 'admin'].includes(user.role.toLowerCase()) && (
-              <div className="relative">
-                <button
-                  onClick={() => setShowSyncMenu(!showSyncMenu)}
-                  disabled={syncing}
-                  className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
-                >
-                  <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
-                  {t('financials.sync')}
-                  <ChevronDown className={cn('w-4 h-4', showSyncMenu && 'rotate-180')} />
-                </button>
-                {showSyncMenu && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-10"
-                      aria-hidden="true"
-                      onClick={() => setShowSyncMenu(false)}
-                    />
-                    <div className="absolute right-0 top-full mt-1 z-20 min-w-[140px] rounded-lg border bg-white dark:bg-gray-900 shadow-lg py-1">
-                      <button
-                        onClick={() => { handleSync(false); setShowSyncMenu(false); }}
-                        disabled={syncing}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50"
-                      >
-                        {t('financials.sync')}
-                      </button>
-                      <button
-                        onClick={() => { handleSync(true); setShowSyncMenu(false); }}
-                        disabled={syncing}
-                        title={t('financials.fullSyncTooltip')}
-                        className="w-full px-3 py-2 text-left text-sm text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
-                      >
-                        {t('financials.fullSync')}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              <button
+                onClick={() => handleSync(false)}
+                disabled={syncing}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-slate-700/50 disabled:opacity-50 transition-colors shadow-sm"
+              >
+                <RefreshCw className={cn('w-4 h-4', syncing && 'animate-spin')} />
+                {t('financials.sync')}
+              </button>
             )}
           </div>
         </div>
@@ -741,6 +801,37 @@ export default function FinancialsPage() {
                     </span>
                   ))}
               </p>
+              {(Object.values(syncStatus.shops).some((s) => s.has_auth_error) ||
+                Object.values(syncStatus.shops).some(
+                  (s) =>
+                    (s.ledger_last_error?.toLowerCase().includes('reconnect') ||
+                      s.ledger_last_error?.toLowerCase().includes('authentication') ||
+                      s.ledger_last_error?.toLowerCase().includes('401') ||
+                      s.ledger_last_error?.toLowerCase().includes('token') ||
+                      s.payment_last_error?.toLowerCase().includes('reconnect') ||
+                      s.payment_last_error?.toLowerCase().includes('authentication') ||
+                      s.payment_last_error?.toLowerCase().includes('401') ||
+                      s.payment_last_error?.toLowerCase().includes('token'))
+                )) && (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={handleRefreshConnection}
+                    disabled={refreshingConnection}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-100/50 dark:bg-amber-900/30 px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-300 hover:bg-amber-200/50 dark:hover:bg-amber-800/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <RotateCcw className={cn('w-4 h-4', refreshingConnection && 'animate-spin')} />
+                    {refreshingConnection ? (t('financials.refreshing') || 'Refreshing...') : (t('financials.refreshConnection') || 'Refresh Connection')}
+                  </button>
+                  <a
+                    href="/settings?reconnect=etsy"
+                    className="inline-flex items-center gap-1 text-sm font-medium text-amber-800 dark:text-amber-300 hover:underline"
+                  >
+                    {t('financials.reconnectEtsy')}
+                    <ArrowUpRight className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1114,7 +1205,7 @@ export default function FinancialsPage() {
                       className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 px-3 py-1 text-xs text-blue-700 dark:text-blue-300"
                     >
                       <Banknote className="w-3 h-3" />
-                      {formatCents(p.amount)} — {shortDate(p.date)}
+                      {formatCents(p.amount, payout?.currency ?? displayCurrency)} — {shortDate(p.date)}
                     </span>
                   ))}
                 </div>
@@ -1187,9 +1278,9 @@ export default function FinancialsPage() {
                         {/* Tooltip */}
                         <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs rounded-lg px-3 py-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 shadow-lg">
                           <p>{shortDate(point.date)}</p>
-                          <p className="text-emerald-400">{t('financials.rev')} {formatCents(point.revenue)}</p>
-                          <p className="text-red-400">{t('financials.exp')} {formatCents(point.expenses)}</p>
-                          <p className="text-blue-400">{t('financials.net')} {formatCents(point.net)}</p>
+                          <p className="text-emerald-400">{t('financials.rev')} {formatCents(point.revenue, displayCurrency)}</p>
+                          <p className="text-red-400">{t('financials.exp')} {formatCents(point.expenses, displayCurrency)}</p>
+                          <p className="text-blue-400">{t('financials.net')} {formatCents(point.net, displayCurrency)}</p>
                         </div>
                         <div
                           className="w-full bg-emerald-400 dark:bg-emerald-500 rounded-t transition-all duration-300"

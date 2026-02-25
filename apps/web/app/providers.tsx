@@ -8,6 +8,7 @@
 import { AuthProvider } from '@/lib/auth-context';
 import { ToastProvider } from '@/lib/toast-context';
 import { LanguageProvider } from '@/lib/language-context';
+import { CurrencyProvider } from '@/lib/currency-context';
 import { ShopProvider } from '@/lib/shop-context';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 
@@ -17,11 +18,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <LanguageProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <ShopProvider>{children}</ShopProvider>
-          </AuthProvider>
-        </ToastProvider>
+        <CurrencyProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <ShopProvider>{children}</ShopProvider>
+            </AuthProvider>
+          </ToastProvider>
+        </CurrencyProvider>
       </LanguageProvider>
     </GoogleOAuthProvider>
   );

@@ -303,6 +303,12 @@ export const shopsApi = {
       body: JSON.stringify({ display_name: displayName }),
     });
   },
+
+  refreshConnection: async (
+    shopId: number,
+  ): Promise<{ message: string; expires_at?: string; refresh_count?: number }> => {
+    return apiRequest(`/api/shops/${shopId}/refresh-token`, { method: 'POST' });
+  },
 };
 
 /**
@@ -1410,6 +1416,8 @@ export interface SyncStatusPerShop {
   payment_last_sync_at: string | null;
   ledger_last_error: string | null;
   payment_last_error: string | null;
+  /** True when token refresh fails or 401; show Reconnect Etsy banner */
+  has_auth_error?: boolean;
 }
 
 export interface SyncStatusResponse {

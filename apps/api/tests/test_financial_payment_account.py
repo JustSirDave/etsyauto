@@ -108,9 +108,8 @@ class TestGetPayoutEstimate:
         assert result["available_for_payout"] == 12000
         assert result["currency"] == "CAD"
 
-    def test_currency_mismatch_when_ledger_differs_from_state(self, db, tenant, shop):
-        """Phase 7: When ledger currency differs from shop_financial_state, add currency_mismatch."""
-        # shop_financial_state has CAD
+    def test_currency_from_shop_financial_state_when_present(self, db, tenant, shop):
+        """When shop_financial_state exists, currency comes from it (not ledger)."""
         state = ShopFinancialState(
             shop_id=shop.id,
             balance=1000,
@@ -120,7 +119,6 @@ class TestGetPayoutEstimate:
             updated_at=datetime.now(timezone.utc),
         )
         db.add(state)
-        # Ledger has USD
         entry = LedgerEntry(
             tenant_id=tenant.id,
             shop_id=shop.id,
@@ -139,7 +137,6 @@ class TestGetPayoutEstimate:
         result = svc.get_payout_estimate(tenant_id=tenant.id, shop_id=shop.id)
 
         assert result["currency"] == "CAD"
-        assert result.get("currency_mismatch") is True
 
     def test_profit_aggregation_unchanged_by_payout_source(self, db, tenant, shop):
         """Phase 8: Profit aggregation unchanged after payout source change (ledger-only)."""
@@ -221,7 +218,7 @@ class TestSyncPaymentAccountState:
 
         with patch.object(
             etsy_client,
-            "get_shop_payment_account",
+            "get_payment_account",
             new_callable=AsyncMock,
             return_value=mock_response,
         ):

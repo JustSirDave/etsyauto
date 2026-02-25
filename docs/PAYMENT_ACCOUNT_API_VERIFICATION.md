@@ -50,6 +50,10 @@ Before production use with real Etsy shops:
 2. If field names differ (e.g. `available_for_payout` vs `availableForPayout`), update `_sync_shop_payment_account()` in `financial_tasks.py`.
 3. Confirm the endpoint exists in the current Etsy Open API v3 spec; the public docs emphasize ledger entries (`getShopPaymentAccountLedgerEntries`) over a standalone payment-account resource.
 
+## Verification Result
+
+The `get_payment_account()` method in `etsy_client.py` calls the endpoint and returns `None` on 404, 400, or 500. The Etsy Open API v3 public docs emphasize ledger entries (`getShopPaymentAccountLedgerEntries`) over a standalone payment-account resource. **If the endpoint returns 404** (as observed with some test shops), the system relies on the ledger-only approach: balance and available_for_payout are derived from the latest ledger entry and reserve totals.
+
 ## Fallback
 
 If the payment-account endpoint is unavailable or returns an error, `get_payout_estimate()` falls back to ledger-based balance with a logged warning.

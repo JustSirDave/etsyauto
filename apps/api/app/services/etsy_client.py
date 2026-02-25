@@ -146,8 +146,9 @@ class EtsyClient:
         headers["Authorization"] = f"Bearer {access_token}"
 
         url = f"{self.base_url}{endpoint}"
+        timeout = httpx.Timeout(30.0, connect=15.0)
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.request(
                 method=method,
                 url=url,
@@ -547,6 +548,62 @@ class EtsyClient:
             params=params,
         )
 
+    async def get_payment_account(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get shop payment account (balance, available_for_payout, reserve).
+        May not exist in Etsy API; returns None on 404/error.
+        Required scope: billing_r or transactions_r.
+        """
+        try:
+            data = await self._make_request(
+                shop_id,
+                "GET",
+                f"/application/shops/{etsy_shop_id}/payment-account",
+            )
+            if isinstance(data, dict) and "results" in data:
+                results = data.get("results", [])
+                return results[0] if results else None
+            return data if isinstance(data, dict) else None
+        except EtsyAPIError as exc:
+            if exc.status_code in (404, 400, 500):
+                return None
+            raise
+
+    async def get_ledger_entry_payments(
+        self,
+        shop_id: int,
+        etsy_shop_id: str,
+        ledger_entry_ids: List[int],
+    ) -> Dict[str, Any]:
+        """
+        Get payments for given ledger entry IDs (getPaymentAccountLedgerEntryPayments).
+
+        Etsy returns payment details for ledger entries that reference payments.
+        Required scope: ``transactions_r``.
+
+        Args:
+            shop_id: Internal shop ID
+            etsy_shop_id: Etsy shop ID
+            ledger_entry_ids: List of Etsy ledger entry IDs (entry_id)
+
+        Returns:
+            dict with ``results`` array and ``count``
+        """
+        if not ledger_entry_ids:
+            return {"count": 0, "results": []}
+        # Etsy expects comma-separated ledger_entry_ids
+        ids_str = ",".join(str(i) for i in ledger_entry_ids)
+        return await self._make_request(
+            shop_id,
+            "GET",
+            f"/application/shops/{etsy_shop_id}/payment-account/ledger-entries/payments",
+            params={"ledger_entry_ids": ids_str},
+        )
+
     async def get_shop_payments(
         self,
         shop_id: int,
@@ -557,16 +614,14 @@ class EtsyClient:
         max_created: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
-        Get payment records for a shop.
-
-        Payment records are finalized after the order is shipped and contain
-        the full fee breakdown (gross, processing fees, net, adjustments).
-        Required scope: ``transactions_r``.
+        Get shop-level payment records (getPayments).
+        Returns payment records with fee breakdown. Max 25 per page per Etsy docs.
+        Required scope: transactions_r.
 
         Args:
             shop_id: Internal shop ID
             etsy_shop_id: Etsy shop ID
-            limit: Results per page (max 25 per Etsy docs)
+            limit: Results per page (max 25)
             offset: Pagination offset
             min_created: Minimum created timestamp (Unix epoch)
             max_created: Maximum created timestamp (Unix epoch)

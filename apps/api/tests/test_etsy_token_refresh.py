@@ -9,8 +9,9 @@ from unittest.mock import patch, AsyncMock, MagicMock
 
 from app.core.database import SessionLocal
 from app.models.tenancy import Shop, OAuthToken
-from app.services.token_manager import TokenManager
+from app.services.token_manager import TokenManager, TokenRefreshError
 from app.services.encryption import token_encryptor
+from app.services.etsy_oauth import _parse_etsy_token_error
 
 
 @pytest.fixture
@@ -228,6 +229,75 @@ class TestTokenRefresh:
         db.refresh(token)
         decrypted = token_encryptor.decrypt(token.access_token)
         assert decrypted == "access_token_123"  # Original token unchanged
+
+    @pytest.mark.asyncio
+    async def test_refresh_failure_raises_token_refresh_error(self, db, redis_client, shop_with_token):
+        """Test that refresh failure raises TokenRefreshError with message containing 'refresh'"""
+        shop, token = shop_with_token
+        
+        token.expires_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        db.commit()
+        
+        redis_client.get.return_value = None
+        redis_client.set.return_value = True
+        redis_client.delete.return_value = True
+        
+        with patch('app.services.etsy_oauth.etsy_oauth.refresh_access_token') as mock_refresh:
+            mock_refresh.side_effect = Exception("Etsy token refresh failed: 400 invalid_grant")
+            
+            manager = TokenManager(db, redis_client)
+            
+            with pytest.raises(TokenRefreshError) as exc_info:
+                await manager.refresh_token(1, shop.id, 'etsy')
+        
+        assert "refresh" in str(exc_info.value).lower()
+
+    @pytest.mark.asyncio
+    async def test_refresh_invalid_grant_clear_message(self, db, redis_client, shop_with_token):
+        """Test that invalid_grant from Etsy produces user-friendly message"""
+        shop, token = shop_with_token
+        token.expires_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+        db.commit()
+        
+        redis_client.get.return_value = None
+        redis_client.set.return_value = True
+        redis_client.delete.return_value = True
+        
+        with patch('app.services.etsy_oauth.etsy_oauth.refresh_access_token') as mock_refresh:
+            mock_refresh.side_effect = Exception("Refresh token expired. Reconnect Etsy to grant permissions.")
+            
+            manager = TokenManager(db, redis_client)
+            
+            with pytest.raises(TokenRefreshError) as exc_info:
+                await manager.refresh_token(1, shop.id, 'etsy')
+        
+        msg = str(exc_info.value)
+        assert "reconnect" in msg.lower() or "expired" in msg.lower()
+
+
+class TestParseEtsyTokenError:
+    """Test Etsy token error parsing for user-friendly messages"""
+
+    def test_invalid_grant_returns_user_friendly_message(self):
+        """Test that invalid_grant produces Reconnect Etsy message"""
+        response = MagicMock()
+        response.status_code = 400
+        response.json.return_value = {"error": "invalid_grant", "error_description": "Token expired"}
+        response.text = ""
+
+        msg = _parse_etsy_token_error(response)
+        assert "Reconnect" in msg or "reconnect" in msg.lower()
+        assert "expired" in msg.lower() or "permissions" in msg.lower()
+
+    def test_error_description_used_when_not_invalid_grant(self):
+        """Test that error_description is used when available"""
+        response = MagicMock()
+        response.status_code = 401
+        response.json.return_value = {"error": "other", "error_description": "Custom error message"}
+        response.text = ""
+
+        msg = _parse_etsy_token_error(response)
+        assert "Custom error message" in msg
     
     @pytest.mark.asyncio
     async def test_cache_invalidation_after_refresh(self, db, redis_client, shop_with_token):

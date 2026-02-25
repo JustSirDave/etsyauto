@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useLanguage } from '@/lib/language-context';
+import { useCurrency, CURRENCIES, type CurrencyCode } from '@/lib/currency-context';
 import { useShop } from '@/lib/shop-context';
 import { ProfileSettingsModal } from '@/components/profile/ProfileSettingsModal';
 import { SearchModal } from '@/components/layout/SearchModal';
@@ -22,9 +23,9 @@ import {
   Globe,
   Bell,
   Store,
-  CheckSquare,
-  Square,
+  CheckCircle,
   WifiOff,
+  DollarSign,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -32,12 +33,14 @@ export function TopBar() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
+  const { currency, setCurrency } = useCurrency();
   const { shops, selectedShopIds, toggleShopId, selectAllShops, clearAllShops, isLoading: shopsLoading } = useShop();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [disconnectedPromptShopId, setDisconnectedPromptShopId] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [showShopMenu, setShowShopMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -104,15 +107,15 @@ export function TopBar() {
 
         {/* Right Side */}
         <div className="flex items-center gap-2">
-          {/* Multi-Store Selector */}
+          {/* Connected Shops Selector */}
           <div className="relative">
             <button
               onClick={() => setShowShopMenu(!showShopMenu)}
-              className="flex items-center gap-2 px-3 h-10 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors min-w-[180px] border border-[var(--border-color)]"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors min-w-[200px] shadow-sm"
               title={t('topbar.selectShop')}
               disabled={shopsLoading}
             >
-              <Store className="w-4 h-4 flex-shrink-0" />
+              <Store className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
               <span className="text-sm font-medium flex-1 text-left truncate">
                 {shopsLoading
                   ? t('topbar.loading')
@@ -124,7 +127,7 @@ export function TopBar() {
                         ? (shops.find((s) => s.id === selectedShopIds[0])?.display_name || `Shop ${selectedShopIds[0]}`)
                         : `${selectedShopIds.length} ${t('topbar.shopsCount')}`}
               </span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showShopMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showShopMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {showShopMenu && shops.length > 0 && (
@@ -133,24 +136,28 @@ export function TopBar() {
                   className="fixed inset-0 z-40"
                   onClick={() => setShowShopMenu(false)}
                 />
-                <div className="absolute right-0 mt-2 w-64 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden animate-fade-in">
-                  {/* Quick actions */}
-                  <div className="flex items-center gap-2 px-4 py-2 border-b border-[var(--border-color)]">
-                    <button
-                      onClick={selectAllShops}
-                      className="text-xs px-2 py-1 rounded bg-[var(--background)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                    >
-                      {t('topbar.selectAll')}
-                    </button>
-                    <button
-                      onClick={clearAllShops}
-                      className="text-xs px-2 py-1 rounded bg-[var(--background)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                    >
-                      {t('topbar.clear')}
-                    </button>
-                    <span className="ml-auto text-xs text-[var(--text-muted)]">
-                      {selectedShopIds.length}/{shops.length}
-                    </span>
+                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t('topbar.connectedShops')}
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={selectAllShops}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                      >
+                        {t('topbar.selectAll')}
+                      </button>
+                      <button
+                        onClick={clearAllShops}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                      >
+                        {t('topbar.clear')}
+                      </button>
+                      <span className="ml-auto text-xs text-slate-500 dark:text-slate-400">
+                        {selectedShopIds.length}/{shops.length}
+                      </span>
+                    </div>
                   </div>
                   <div className="py-1 max-h-60 overflow-y-auto">
                     {shops.map((shop) => {
@@ -167,20 +174,18 @@ export function TopBar() {
                             }}
                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                               isSelected
-                                ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
-                                : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                                ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
+                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
                             } ${isDisconnected ? 'opacity-60' : ''}`}
                           >
-                            {isSelected ? (
-                              <CheckSquare className="w-4 h-4 flex-shrink-0" />
-                            ) : (
-                              <Square className="w-4 h-4 flex-shrink-0" />
-                            )}
                             <span className={`font-medium truncate flex-1 ${isDisconnected ? 'line-through' : ''}`}>
                               {shop.display_name || `Shop ${shop.id}`}
                             </span>
                             {isDisconnected && (
                               <span title="Disconnected"><WifiOff className="w-3.5 h-3.5 text-red-400 flex-shrink-0" /></span>
+                            )}
+                            {isSelected && (
+                              <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
                             )}
                           </button>
                           {disconnectedPromptShopId === shop.id && isDisconnected && (
@@ -208,27 +213,83 @@ export function TopBar() {
             )}
           </div>
 
+          {/* Currency Selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowCurrencyMenu(!showCurrencyMenu)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors shadow-sm"
+              title={t('topbar.changeCurrency')}
+            >
+              <DollarSign className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
+              <span className="text-sm font-medium">{currency}</span>
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showCurrencyMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showCurrencyMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowCurrencyMenu(false)}
+                />
+                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t('topbar.changeCurrency')}
+                    </p>
+                  </div>
+                  <div className="py-1">
+                    {CURRENCIES.map((c) => (
+                      <button
+                        key={c.code}
+                        onClick={() => {
+                          setCurrency(c.code);
+                          setShowCurrencyMenu(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                          currency === c.code
+                            ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <span className="text-base font-medium">{c.symbol}</span>
+                        <span className="font-medium">{c.code}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{c.name}</span>
+                        {currency === c.code && (
+                          <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Language Selector */}
           <div className="relative">
             <button
               onClick={() => setShowLanguageMenu(!showLanguageMenu)}
-              className="flex items-center gap-2 px-3 h-10 rounded-lg text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors shadow-sm"
               title={t('topbar.changeLanguage')}
             >
-              <Globe className="w-5 h-5" />
+              <Globe className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
               <span className="text-sm font-medium">{currentLanguage.code.toUpperCase()}</span>
-              <ChevronDown className={`w-4 h-4 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showLanguageMenu ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Language Dropdown */}
             {showLanguageMenu && (
               <>
                 <div
                   className="fixed inset-0 z-40"
                   onClick={() => setShowLanguageMenu(false)}
                 />
-                <div className="absolute right-0 mt-2 w-48 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl shadow-xl z-50 overflow-hidden">
-                  <div className="py-2">
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t('topbar.changeLanguage')}
+                    </p>
+                  </div>
+                  <div className="py-1">
                     {languages.map((lang) => (
                       <button
                         key={lang.code}
@@ -238,14 +299,14 @@ export function TopBar() {
                         }}
                         className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
                           language === lang.code
-                            ? 'bg-[var(--primary-bg)] text-[var(--primary)]'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]'
+                            ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
                         }`}
                       >
                         <span className="text-xl">{lang.flag}</span>
                         <span className="font-medium">{lang.name}</span>
                         {language === lang.code && (
-                          <span className="ml-auto text-[var(--primary)]">✓</span>
+                          <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
                         )}
                       </button>
                     ))}

@@ -24,9 +24,10 @@ from app.core.query_helpers import filter_by_tenant, ensure_shop_access
 from app.models.tenancy import Shop, OAuthToken, Membership, ConnectLink
 from app.services.etsy_oauth import etsy_oauth, EtsyOAuthService
 from app.services.encryption import token_encryptor
-from app.services.token_manager import TokenManager
+from app.services.token_manager import TokenManager, TokenRefreshError
 from app.core.config import settings
 from app.core.security import check_rate_limit, rate_limit_key, SecurityHeaders
+from app.worker.tasks.financial_tasks import sync_ledger_entries, sync_payment_details
 import secrets
 
 # Redis client for PKCE state storage and token management
@@ -301,6 +302,21 @@ async def etsy_oauth_callback(
         db.commit()
         
         db.refresh(shop)
+
+        # Trigger financial sync so data is pulled after connect/reconnect
+        # #region agent log
+        try:
+            with open("debug-704a40.log", "a") as f:
+                f.write(json.dumps({"sessionId":"704a40","location":"shops.py:oauth_callback","message":"OAuth callback triggering sync","data":{"shop_id":shop.id,"tenant_id":context.tenant_id},"timestamp":__import__("time").time()*1000,"hypothesisId":"reconnect_sync"}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        sync_ledger_entries.delay(
+            shop_id=shop.id,
+            tenant_id=context.tenant_id,
+            force_full_sync=False,
+        )
+        sync_payment_details.delay(shop_id=shop.id, tenant_id=context.tenant_id)
         
         return {
             "message": "Shop connected successfully",
@@ -465,6 +481,12 @@ async def refresh_shop_token(
         
     except HTTPException:
         raise
+    except TokenRefreshError as e:
+        logger.warning(f"Token refresh failed for shop {shop_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token invalid or expired. Please reconnect your Etsy shop.",
+        )
     except Exception as e:
         logger.exception("Token refresh failed")
         raise HTTPException(

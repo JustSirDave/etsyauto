@@ -2,6 +2,7 @@
 Etsy OAuth 2.0 Service
 Handles authorization flow and token management
 """
+import json
 import httpx
 import secrets
 import hashlib
@@ -11,6 +12,26 @@ from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
 from app.core.config import settings
+
+
+def _parse_etsy_token_error(response: httpx.Response) -> str:
+    """
+    Parse Etsy token endpoint error response (RFC 6749 style).
+    Returns a user-friendly message when error/error_description are present.
+    """
+    try:
+        body = response.json()
+    except (json.JSONDecodeError, ValueError):
+        return f"Etsy token refresh failed: {response.status_code} {response.text}"
+    error = body.get("error", "")
+    desc = body.get("error_description", "")
+    if error == "invalid_grant" or "refresh" in (error + desc).lower():
+        return "Refresh token expired. Reconnect Etsy to grant permissions."
+    if desc:
+        return desc
+    if error:
+        return f"Etsy OAuth error: {error}"
+    return f"Etsy token refresh failed: {response.status_code} {response.text}"
 
 
 class EtsyOAuthService:
@@ -151,7 +172,8 @@ class EtsyOAuthService:
                 },
             )
             if response.status_code >= 400:
-                raise Exception(f"Etsy token refresh failed: {response.status_code} {response.text}")
+                msg = _parse_etsy_token_error(response)
+                raise Exception(msg)
             return response.json()
 
     async def get_shop_info(self, access_token: str) -> Dict:

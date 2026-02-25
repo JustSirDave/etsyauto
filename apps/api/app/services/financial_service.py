@@ -19,6 +19,7 @@ from app.models.listings import (
     Order,
     Product,
     ExpenseInvoice,
+    ShopFinancialState,
 )
 from app.core.redis import get_redis_client
 
@@ -150,6 +151,15 @@ class FinancialService:
         # Net = sales + fees + marketing + refunds (fees/marketing already negative)
         net_profit = sales + fees + marketing + refunds
 
+        # Currency from latest ledger entry in period
+        currency_row = (
+            self.db.query(LedgerEntry.currency)
+            .filter(and_(*filters))
+            .order_by(LedgerEntry.entry_created_at.desc())
+            .first()
+        )
+        currency = (currency_row[0] if currency_row and currency_row[0] else "USD") or "USD"
+
         unmapped_count, unmapped_types = self._get_unmapped_ledger_types()
         result = {
             "total_revenue": sales,
@@ -159,7 +169,7 @@ class FinancialService:
             "total_advertising": abs(marketing),
             "total_tax": abs(adjustments),
             "net_profit": net_profit,
-            "currency": "USD",
+            "currency": currency,
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
         }
@@ -181,47 +191,77 @@ class FinancialService:
         shop_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
         """
-        Return the latest ledger balance + recent payout entries.
-
-        The ledger balance approximates the next payout amount.
+        Return balance and available_for_payout.
+        Prefers shop_financial_state when present; falls back to ledger.
         """
         ck = self._cache_key(tenant_id, shop_id, "payout_estimate", shop_ids)
         cached = self._get_cached(ck)
         if cached:
             return cached
 
+        # Prefer shop_financial_state when available (from payment-account endpoint)
+        target_shops = shop_ids or ([shop_id] if shop_id else None)
+        if target_shops and len(target_shops) == 1:
+            state = (
+                self.db.query(ShopFinancialState)
+                .filter(ShopFinancialState.shop_id == target_shops[0])
+                .first()
+            )
+            if state:
+                recent_payouts = (
+                    self.db.query(LedgerEntry.amount, LedgerEntry.entry_created_at)
+                    .filter(
+                        LedgerEntry.tenant_id == tenant_id,
+                        LedgerEntry.shop_id == target_shops[0],
+                        LedgerEntry.entry_type.in_(["payout", "Payment", "Deposit"]),
+                        LedgerEntry.entry_created_at >= datetime.now(timezone.utc) - timedelta(days=30),
+                    )
+                    .order_by(LedgerEntry.entry_created_at.desc())
+                    .limit(10)
+                    .all()
+                )
+                result = {
+                    "current_balance": state.balance,
+                    "reserve_held": abs(state.reserve_amount or 0),
+                    "available_for_payout": state.available_for_payout,
+                    "currency": state.currency_code,
+                    "recent_payouts": [
+                        {"amount": abs(p[0]), "date": p[1].isoformat() if p[1] else None}
+                        for p in recent_payouts
+                    ],
+                    "as_of": datetime.now(timezone.utc).isoformat(),
+                }
+                self._set_cached(ck, result)
+                return result
+
+        # Fallback: ledger-based balance
         filters = [LedgerEntry.tenant_id == tenant_id]
         self._apply_shop_filter(filters, LedgerEntry.shop_id, shop_id, shop_ids)
 
-        # Latest balance
         latest = (
             self.db.query(LedgerEntry.balance, LedgerEntry.currency, LedgerEntry.entry_created_at)
             .filter(and_(*filters))
             .order_by(LedgerEntry.entry_created_at.desc())
             .first()
         )
-
         current_balance = latest[0] if latest else 0
         currency = latest[1] if latest else "USD"
 
-        # Recent payouts (last 30 days)
         payout_filters = filters + [
-            LedgerEntry.entry_type == "payout",
+            LedgerEntry.entry_type.in_(["payout", "Payment", "Deposit"]),
             LedgerEntry.entry_created_at >= datetime.now(timezone.utc) - timedelta(days=30),
         ]
         recent_payouts = (
-            self.db.query(
-                LedgerEntry.amount,
-                LedgerEntry.entry_created_at,
-            )
+            self.db.query(LedgerEntry.amount, LedgerEntry.entry_created_at)
             .filter(and_(*payout_filters))
             .order_by(LedgerEntry.entry_created_at.desc())
             .limit(10)
             .all()
         )
 
-        # Reserve estimate — sum of reserve-type entries
-        reserve_filters = filters + [LedgerEntry.entry_type == "reserve"]
+        reserve_filters = filters + [
+            LedgerEntry.entry_type.in_(["reserve", "Reserve"]),
+        ]
         reserve_total = (
             self.db.query(func.sum(LedgerEntry.amount))
             .filter(and_(*reserve_filters))
@@ -234,10 +274,7 @@ class FinancialService:
             "available_for_payout": current_balance - abs(reserve_total),
             "currency": currency,
             "recent_payouts": [
-                {
-                    "amount": abs(p[0]),
-                    "date": p[1].isoformat() if p[1] else None,
-                }
+                {"amount": abs(p[0]), "date": p[1].isoformat() if p[1] else None}
                 for p in recent_payouts
             ],
             "as_of": datetime.now(timezone.utc).isoformat(),
@@ -303,6 +340,19 @@ class FinancialService:
                 "count": count,
             })
 
+        # Optional augmentation: sum PaymentDetail.amount_fees for cross-check
+        pd_filters = [
+            PaymentDetail.tenant_id == tenant_id,
+            PaymentDetail.posted_at >= start_date,
+            PaymentDetail.posted_at <= end_date,
+        ]
+        self._apply_shop_filter(pd_filters, PaymentDetail.shop_id, shop_id, shop_ids)
+        payment_detail_fees = (
+            self.db.query(func.sum(PaymentDetail.amount_fees))
+            .filter(and_(*pd_filters))
+            .scalar()
+        ) or 0
+
         result = {
             "total_fees": total_fees,
             "categories": sorted(categories, key=lambda c: c["amount"], reverse=True),
@@ -310,6 +360,8 @@ class FinancialService:
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
         }
+        if payment_detail_fees > 0:
+            result["payment_detail_total_fees"] = payment_detail_fees
         self._set_cached(ck, result)
         return result
 
@@ -750,6 +802,15 @@ class FinancialService:
         refunds = abs(row[3] or 0)
         shipping_labels = 0  # Included in marketing category
 
+        # Currency from latest ledger entry in period
+        currency_row = (
+            self.db.query(LedgerEntry.currency)
+            .filter(and_(*ledger_filters))
+            .order_by(LedgerEntry.entry_created_at.desc())
+            .first()
+        )
+        currency = (currency_row[0] if currency_row and currency_row[0] else "USD") or "USD"
+
         # ── Product costs ──
         # Products have cost_usd_cents; orders store line_items as JSONB.
         # Sum all product costs for orders in the period. For orders without
@@ -797,7 +858,7 @@ class FinancialService:
             "total_discounts": total_discounts,
             "total_expenses": total_expenses,
             "net_profit": net_profit,
-            "currency": "USD",
+            "currency": currency,
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
         }
