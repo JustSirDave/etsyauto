@@ -549,6 +549,7 @@ async def trigger_financial_sync(
     if shop_id:
         ensure_shop_access(shop_id, context, db)
 
+    logger.info("trigger_financial_sync: shop_id=%s tenant_id=%s force_full=%s", shop_id, context.tenant_id, force_full_sync)
     sync_ledger_entries.delay(
         shop_id=shop_id,
         tenant_id=context.tenant_id,

@@ -138,6 +138,9 @@ services:
       - ./apps/api:/app
       - ../.cursor:/debug-logs
     command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     networks:
       - etsy-network
 

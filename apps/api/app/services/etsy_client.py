@@ -10,7 +10,7 @@ import redis
 from app.core.config import settings
 from app.models.tenancy import Shop, OAuthToken
 from app.services.rate_limiter import RateLimiter
-from app.services.token_manager import TokenManager
+from app.services.token_manager import TokenManager, TokenRefreshError
 from app.services.circuit_breaker import get_circuit_breaker, CircuitOpenError
 from app.core.redis import get_redis_client
 import logging
@@ -88,8 +88,14 @@ class EtsyClient:
             
             return token
             
+        except TokenRefreshError as e:
+            logger.error(f"Token refresh failed for shop {shop_id}: {e}")
+            raise EtsyAPIError("Reconnect your Etsy shop to restore access.")
         except Exception as e:
             logger.error(f"Failed to get access token for shop {shop_id}: {e}")
+            err_msg = str(e).lower()
+            if "token" in err_msg or "reconnect" in err_msg or "401" in err_msg or "expired" in err_msg:
+                raise EtsyAPIError("Reconnect your Etsy shop to restore access.")
             raise EtsyAPIError(f"Token retrieval failed: {str(e)}")
 
     async def _make_request(

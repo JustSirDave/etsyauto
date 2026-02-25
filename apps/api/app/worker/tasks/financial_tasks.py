@@ -305,18 +305,11 @@ def sync_ledger_entries(
     """
     db = SessionLocal()
     try:
-        # #region agent log
-        try:
-            import json
-            with open("debug-704a40.log", "a") as f:
-                f.write(json.dumps({"sessionId":"704a40","location":"financial_tasks.py:sync_ledger","message":"sync_ledger started","data":{"shop_id":shop_id,"tenant_id":tenant_id},"timestamp":__import__("time").time()*1000,"hypothesisId":"reconnect_sync"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
         # Seed ledger type registry with common Etsy types (idempotent)
         _seed_ledger_type_registry(db)
 
         shops = _get_shops(db, shop_id, tenant_id)
+        logger.info(f"sync_ledger_entries: shop_id={shop_id} tenant_id={tenant_id} shops_found={len(shops)}")
         results = {
             "shops_processed": 0,
             "entries_created": 0,
@@ -332,6 +325,7 @@ def sync_ledger_entries(
         for shop in shops:
             has_scope = _has_financial_scope(db, shop)
             if not has_scope:
+                logger.warning(f"sync_ledger: shop {shop.id} skipped (no billing_r/transactions_r scope)")
                 results["skipped_no_scope"] += 1
                 continue
 
@@ -346,7 +340,7 @@ def sync_ledger_entries(
                 # Try payment-account sync (may not exist in Etsy API)
                 asyncio.run(_sync_shop_payment_account(db, etsy_client, shop))
             except Exception as exc:
-                logger.exception(f"Ledger sync failed for shop {shop.id}")
+                logger.exception(f"Ledger sync failed for shop {shop.id}: {exc}")
                 results["errors"].append({"shop_id": shop.id, "error": str(exc)})
                 _upsert_ledger_sync_status(db, shop, success=False, error_msg=str(exc))
 
@@ -359,14 +353,7 @@ def sync_ledger_entries(
             except Exception:
                 pass
 
-        # #region agent log
-        try:
-            import json
-            with open("debug-704a40.log", "a") as f:
-                f.write(json.dumps({"sessionId":"704a40","location":"financial_tasks.py:sync_ledger","message":"sync_ledger finished","data":results,"timestamp":__import__("time").time()*1000,"hypothesisId":"reconnect_sync"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
+        logger.info(f"sync_ledger_entries complete: {results}")
         return results
     finally:
         db.close()
@@ -395,6 +382,7 @@ async def _sync_shop_ledger(
 
     created = updated = 0
     chunk_start = min_created
+    seen_entry_types: set[str] = set()
     while chunk_start < range_end:
         chunk_end = min(chunk_start + WINDOW_SECONDS, range_end)
         offset = 0
@@ -418,7 +406,9 @@ async def _sync_shop_ledger(
                     continue
 
                 entry_type_raw = _extract_entry_type(raw)
-                _upsert_registry(db, entry_type_raw, now_utc)
+                if entry_type_raw not in seen_entry_types:
+                    seen_entry_types.add(entry_type_raw)
+                    _upsert_registry(db, entry_type_raw, now_utc)
 
                 existing = (
                     db.query(LedgerEntry)
@@ -495,6 +485,7 @@ def sync_payment_details(
     db = SessionLocal()
     try:
         shops = _get_shops(db, shop_id, tenant_id)
+        logger.info(f"sync_payment_details: shop_id={shop_id} tenant_id={tenant_id} shops_found={len(shops)}")
         results = {
             "shops_processed": 0,
             "payments_created": 0,
@@ -518,6 +509,7 @@ def sync_payment_details(
                 results["errors"].append({"shop_id": shop.id, "error": str(exc)})
                 _upsert_payment_sync_status(db, shop, success=False, error_msg=str(exc))
 
+        logger.info(f"sync_payment_details complete: {results}")
         return results
     finally:
         db.close()

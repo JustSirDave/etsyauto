@@ -304,13 +304,6 @@ async def etsy_oauth_callback(
         db.refresh(shop)
 
         # Trigger financial sync so data is pulled after connect/reconnect
-        # #region agent log
-        try:
-            with open("debug-704a40.log", "a") as f:
-                f.write(json.dumps({"sessionId":"704a40","location":"shops.py:oauth_callback","message":"OAuth callback triggering sync","data":{"shop_id":shop.id,"tenant_id":context.tenant_id},"timestamp":__import__("time").time()*1000,"hypothesisId":"reconnect_sync"}) + "\n")
-        except Exception:
-            pass
-        # #endregion
         sync_ledger_entries.delay(
             shop_id=shop.id,
             tenant_id=context.tenant_id,

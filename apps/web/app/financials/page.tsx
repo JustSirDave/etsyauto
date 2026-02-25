@@ -784,22 +784,36 @@ export default function FinancialsPage() {
 
         {/* ── Sync error banner ── */}
         {syncStatus && Object.values(syncStatus.shops).some((s) => s.ledger_last_error || s.payment_last_error) && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 flex items-start gap-3">
-            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/50 dark:border-amber-600 p-4 flex items-start gap-4 shadow-sm">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/20 dark:bg-amber-500/30 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
                 {t('financials.syncError')}
               </p>
-              <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+              <p className="text-sm text-amber-900 dark:text-amber-200 mt-1">
                 {Object.entries(syncStatus.shops)
                   .filter(([, s]) => s.ledger_last_error || s.payment_last_error)
-                  .map(([sid, s]) => (
-                    <span key={sid} className="block">
-                      {[s.ledger_last_error && `Ledger: ${s.ledger_last_error}`, s.payment_last_error && `Payments: ${s.payment_last_error}`]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                  ))}
+                  .map(([sid, s]) => {
+                    const isAuthError = (msg: string) =>
+                      /reconnect|authentication|401|token|invalid_grant|refresh.*expired/i.test(msg);
+                    const hasAuthError =
+                      (s.ledger_last_error && isAuthError(s.ledger_last_error)) ||
+                      (s.payment_last_error && isAuthError(s.payment_last_error));
+                    if (hasAuthError) {
+                      return (
+                        <span key={sid} className="block">
+                          {t('financials.authErrorHint')}
+                        </span>
+                      );
+                    }
+                    const parts = [
+                      s.ledger_last_error && `${t('financials.ledgerLabel')}: ${s.ledger_last_error}`,
+                      s.payment_last_error && `${t('financials.paymentsLabel')}: ${s.payment_last_error}`,
+                    ].filter(Boolean);
+                    return <span key={sid} className="block">{parts.join(' · ')}</span>;
+                  })}
               </p>
               {(Object.values(syncStatus.shops).some((s) => s.has_auth_error) ||
                 Object.values(syncStatus.shops).some(
@@ -813,22 +827,22 @@ export default function FinancialsPage() {
                       s.payment_last_error?.toLowerCase().includes('401') ||
                       s.payment_last_error?.toLowerCase().includes('token'))
                 )) && (
-                <div className="flex flex-wrap items-center gap-2 mt-2">
+                <div className="flex flex-wrap items-center gap-3 mt-3">
                   <button
                     type="button"
                     onClick={handleRefreshConnection}
                     disabled={refreshingConnection}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 dark:border-amber-600 bg-amber-100/50 dark:bg-amber-900/30 px-3 py-1.5 text-sm font-medium text-amber-800 dark:text-amber-300 hover:bg-amber-200/50 dark:hover:bg-amber-800/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <RotateCcw className={cn('w-4 h-4', refreshingConnection && 'animate-spin')} />
                     {refreshingConnection ? (t('financials.refreshing') || 'Refreshing...') : (t('financials.refreshConnection') || 'Refresh Connection')}
                   </button>
                   <a
-                    href="/settings?reconnect=etsy"
-                    className="inline-flex items-center gap-1 text-sm font-medium text-amber-800 dark:text-amber-300 hover:underline"
+                    href="/settings?tab=shops"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
                   >
                     {t('financials.reconnectEtsy')}
-                    <ArrowUpRight className="w-3 h-3" />
+                    <ArrowUpRight className="w-3.5 h-3.5" />
                   </a>
                 </div>
               )}
