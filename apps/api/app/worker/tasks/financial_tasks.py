@@ -66,13 +66,16 @@ def _extract_entry_type(raw: dict) -> str:
     return (str(desc)[:255]) or "unknown"
 
 
-# Pre-populated Etsy ledger_type -> category mappings (from Etsy API docs / observed values)
+# Pre-populated Etsy ledger_type -> category mappings (from Etsy API docs / community findings)
 LEDGER_TYPE_SEED: Dict[str, str] = {
-    # Sales (revenue)
+    # Sales (revenue / credits)
     "transaction": "sales",
     "shipping_transaction": "sales",
     "sale": "sales",
     "Sale": "sales",
+    "gift_wrap_fees": "sales",
+    "DISBURSE2": "sales",
+    "PAYMENT_GROSS": "sales",
     # Fees (debits)
     "transaction_quantity": "fees",
     "transaction_fee": "fees",
@@ -83,13 +86,20 @@ LEDGER_TYPE_SEED: Dict[str, str] = {
     "renew_sold_auto": "fees",
     "renew_expired": "fees",
     "auto_renew_expired": "fees",
-    "gift_wrap_fees": "fees",
+    "PAYMENT_PROCESSING_FEE": "fees",
+    "payment_processing_fee": "fees",
+    "shipping_labels": "fees",
+    "seller_onboarding_fee_payment": "fees",
+    "vat_tax_ep": "fees",
+    "vat_seller_services": "fees",
+    "sales_tax": "fees",
     # Marketing / advertising
     "offsite_ads_fee": "marketing",
-    "shipping_labels": "marketing",
+    "prolist": "marketing",
     "Etsy Ads": "marketing",
     "etsy_ads": "marketing",
     # Refunds
+    "REFUND": "refunds",
     "transaction_refund": "refunds",
     "shipping_transaction_refund": "refunds",
     "transaction_quantity_refund": "refunds",
@@ -97,17 +107,15 @@ LEDGER_TYPE_SEED: Dict[str, str] = {
     "listing_refund": "refunds",
     "listing_private_refund": "refunds",
     "renew_sold_auto_refund": "refunds",
+    "shipping_label_refund": "refunds",
     "refund": "refunds",
     "Refund": "refunds",
-    # Adjustments / other
-    "sales_tax": "adjustments",
-    "DISBURSE2": "adjustments",
+    # Other
     "payout": "other",
     "Payment": "other",
     "Deposit": "other",
     "reserve": "other",
     "Reserve": "other",
-    "shipping_label_refund": "refunds",
 }
 
 
@@ -134,6 +142,16 @@ def _seed_ledger_type_registry(db) -> int:
                 mapped=True,
             )
             db.add(reg)
+            updated += 1
+    # Update existing unmapped rows that match our mapping (e.g. types discovered during sync)
+    unmapped = db.query(LedgerEntryTypeRegistry).filter(
+        LedgerEntryTypeRegistry.mapped.is_(False)
+    ).all()
+    for reg in unmapped:
+        if reg.entry_type in LEDGER_TYPE_SEED:
+            reg.category = LEDGER_TYPE_SEED[reg.entry_type]
+            reg.mapped = True
+            reg.last_seen_at = now
             updated += 1
     if updated:
         db.commit()
@@ -554,66 +572,11 @@ def _upsert_payment_from_raw(
     return True
 
 
-async def _sync_shop_payments_bulk(
-    db, etsy_client: EtsyClient, shop: Shop
-) -> int:
-    """
-    Bulk sync payments via getPayments (shop-level) with date-range pagination.
-    Merges with existing PaymentDetail by etsy_payment_id.
-    """
-    created = 0
-    WINDOW_SECONDS = 30 * 24 * 3600  # 30 days (Etsy max 31)
-    now_ts = int(datetime.now(timezone.utc).timestamp())
-    range_end = now_ts
-    range_start = int((datetime.now(timezone.utc) - timedelta(days=365)).timestamp())
-
-    chunk_start = range_start
-    while chunk_start < range_end:
-        chunk_end = min(chunk_start + WINDOW_SECONDS, range_end)
-        offset = 0
-        while True:
-            try:
-                data = await etsy_client.get_shop_payments(
-                    shop_id=shop.id,
-                    etsy_shop_id=shop.etsy_shop_id,
-                    limit=25,
-                    offset=offset,
-                    min_created=chunk_start,
-                    max_created=chunk_end,
-                )
-            except EtsyAPIError as exc:
-                logger.warning(f"getPayments bulk fetch failed for shop {shop.id}: {exc}")
-                break
-
-            payments = data.get("results", [])
-            if not payments:
-                break
-
-            for raw in payments:
-                if _upsert_payment_from_raw(db, shop, raw):
-                    created += 1
-            db.commit()
-
-            if len(payments) < 25:
-                break
-            offset += 25
-
-        chunk_start = chunk_end
-
-    return created
-
-
 async def _sync_shop_payments(
     db, etsy_client: EtsyClient, shop: Shop
 ) -> int:
-    """Fetch payment details via getPayments bulk + ledger-driven batch + receipt fallback."""
+    """Fetch payment details via ledger-driven batch + receipt fallback."""
     created = 0
-
-    # 0. Bulk: getPayments (shop-level) — most efficient, catches payments not yet in orders
-    try:
-        created += await _sync_shop_payments_bulk(db, etsy_client, shop)
-    except Exception as exc:
-        logger.warning(f"Bulk payment sync failed for shop {shop.id}: {exc}")
 
     # 1. Ledger-driven: get ledger entries, batch fetch payments via getPaymentAccountLedgerEntryPayments
     cutoff = datetime.now(timezone.utc) - timedelta(days=90)

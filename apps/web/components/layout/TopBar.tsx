@@ -7,11 +7,11 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useLanguage } from '@/lib/language-context';
-import { useCurrency, CURRENCIES, type CurrencyCode } from '@/lib/currency-context';
 import { useShop } from '@/lib/shop-context';
 import { ProfileSettingsModal } from '@/components/profile/ProfileSettingsModal';
 import { SearchModal } from '@/components/layout/SearchModal';
 import { NotificationPanel } from '@/components/layout/NotificationPanel';
+import { NotificationBanner } from '@/components/ui/NotificationBanner';
 import { notificationsApi } from '@/lib/api';
 import {
   Search,
@@ -25,7 +25,6 @@ import {
   Store,
   CheckCircle,
   WifiOff,
-  DollarSign,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -33,14 +32,12 @@ export function TopBar() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const { language, setLanguage, t } = useLanguage();
-  const { currency, setCurrency } = useCurrency();
   const { shops, selectedShopIds, toggleShopId, selectAllShops, clearAllShops, isLoading: shopsLoading } = useShop();
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [disconnectedPromptShopId, setDisconnectedPromptShopId] = useState<number | null>(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
-  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [showShopMenu, setShowShopMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -189,76 +186,31 @@ export function TopBar() {
                             )}
                           </button>
                           {disconnectedPromptShopId === shop.id && isDisconnected && (
-                            <div className="mx-4 mb-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
-                              <p className="text-amber-400 mb-1.5">{t('topbar.disconnectedWarning')}</p>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setShowShopMenu(false);
-                                  setDisconnectedPromptShopId(null);
-                                  router.push('/settings?tab=shops');
-                                }}
-                                className="text-amber-300 hover:text-amber-200 underline font-medium"
-                              >
-                                {t('topbar.reconnect')}
-                              </button>
+                            <div className="mx-2 mb-2">
+                              <NotificationBanner
+                                variant="warning"
+                                title="Warning"
+                                message={t('topbar.disconnectedWarning')}
+                                compact
+                                action={
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setShowShopMenu(false);
+                                      setDisconnectedPromptShopId(null);
+                                      router.push('/settings?tab=shops');
+                                    }}
+                                    className="inline-flex items-center gap-1 rounded-lg bg-amber-800 hover:bg-amber-700 px-2 py-1 text-xs font-semibold text-white transition-colors"
+                                  >
+                                    {t('topbar.reconnect')}
+                                  </button>
+                                }
+                              />
                             </div>
                           )}
                         </div>
                       );
                     })}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Currency Selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowCurrencyMenu(!showCurrencyMenu)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors shadow-sm"
-              title={t('topbar.changeCurrency')}
-            >
-              <DollarSign className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
-              <span className="text-sm font-medium">{currency}</span>
-              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showCurrencyMenu ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showCurrencyMenu && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setShowCurrencyMenu(false)}
-                />
-                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
-                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      {t('topbar.changeCurrency')}
-                    </p>
-                  </div>
-                  <div className="py-1">
-                    {CURRENCIES.map((c) => (
-                      <button
-                        key={c.code}
-                        onClick={() => {
-                          setCurrency(c.code);
-                          setShowCurrencyMenu(false);
-                        }}
-                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                          currency === c.code
-                            ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
-                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                        }`}
-                      >
-                        <span className="text-base font-medium">{c.symbol}</span>
-                        <span className="font-medium">{c.code}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{c.name}</span>
-                        {currency === c.code && (
-                          <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
-                        )}
-                      </button>
-                    ))}
                   </div>
                 </div>
               </>

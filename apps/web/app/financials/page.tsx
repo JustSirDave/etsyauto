@@ -16,6 +16,7 @@ import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
 import { useCurrency } from '@/lib/currency-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
+import { NotificationBanner } from '@/components/ui/NotificationBanner';
 import {
   financialsApi,
   invoicesApi,
@@ -64,6 +65,7 @@ import {
   FileUp,
   Percent,
   Clock,
+  XCircle,
 } from 'lucide-react';
 
 /* ================================================================== */
@@ -301,6 +303,154 @@ function ExpandableCard({
 }
 
 /* ================================================================== */
+/*  Entry Types Registry Modal                                          */
+/* ================================================================== */
+
+const REGISTRY_CATEGORIES = ['sales', 'fees', 'marketing', 'refunds', 'adjustments', 'other'] as const;
+
+function EntryTypesModal({
+  onClose,
+  onSaved,
+  t,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  t: (key: string) => string;
+}) {
+  const { showToast } = useToast();
+  const [entryTypes, setEntryTypes] = useState<Array<{ entry_type: string; category: string | null; mapped: boolean }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [selections, setSelections] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    financialsApi
+      .getEntryTypes()
+      .then((data) => {
+        setEntryTypes(data.entry_types);
+        const initial: Record<string, string> = {};
+        data.entry_types.filter((r) => !r.mapped).forEach((r) => {
+          initial[r.entry_type] = r.category || 'other';
+        });
+        setSelections(initial);
+      })
+      .catch(() => showToast(t('financials.loadFailed'), 'error'))
+      .finally(() => setLoading(false));
+  }, [t, showToast]);
+
+  const unmapped = entryTypes.filter((r) => !r.mapped);
+
+  const handleSave = async (entryType: string) => {
+    const category = selections[entryType] || 'other';
+    setSaving(entryType);
+    try {
+      await financialsApi.updateEntryTypeMapping(entryType, category);
+      showToast(t('financials.mappingSaved'), 'success');
+      setEntryTypes((prev) =>
+        prev.map((r) => (r.entry_type === entryType ? { ...r, category, mapped: true } : r))
+      );
+      setSelections((prev) => {
+        const next = { ...prev };
+        delete next[entryType];
+        return next;
+      });
+      if (unmapped.length <= 1) onSaved();
+    } catch {
+      showToast(t('financials.loadFailed'), 'error');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <div
+          className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden pointer-events-auto flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-6 py-4 border-b dark:border-gray-800 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {t('financials.entryTypesModalTitle')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                {t('financials.entryTypesModalDescription')}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+            >
+              <XCircle className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-6">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <RefreshCw className="w-8 h-8 animate-spin text-gray-400" />
+              </div>
+            ) : unmapped.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                {t('financials.allTypesMapped') || 'All entry types are mapped.'}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {unmapped.map((r) => (
+                  <div
+                    key={r.entry_type}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50"
+                  >
+                    <span className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100 flex-1 truncate">
+                      {r.entry_type}
+                    </span>
+                    <select
+                      value={selections[r.entry_type] || 'other'}
+                      onChange={(e) =>
+                        setSelections((prev) => ({ ...prev, [r.entry_type]: e.target.value }))
+                      }
+                      className="rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 min-w-[140px]"
+                    >
+                      {REGISTRY_CATEGORIES.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {t(`financials.registryCategory.${cat}`)}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleSave(r.entry_type)}
+                      disabled={saving === r.entry_type}
+                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {saving === r.entry_type ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : null}
+                      {t('financials.saveMapping')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-4 border-t dark:border-gray-800">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 px-4 py-2 text-sm font-medium text-gray-900 dark:text-gray-100"
+            >
+              {t('common.close') || 'Close'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ================================================================== */
 /*  Reusable mini-components                                           */
 /* ================================================================== */
 
@@ -451,6 +601,7 @@ export default function FinancialsPage() {
   const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [discounts, setDiscounts] = useState<DiscountSummary | null>(null);
+  const [showEntryTypesModal, setShowEntryTypesModal] = useState(false);
 
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
   const shopId = !shopIds ? selectedShop?.id : undefined;
@@ -539,9 +690,47 @@ export default function FinancialsPage() {
     const targetShopId = shopIds && shopIds.length > 1 ? undefined : (shopIds?.[0] ?? shopId);
     setSyncing(true);
     try {
+      // Capture baseline timestamp before sync
+      const baselineArr = syncStatus?.shops
+        ? Object.values(syncStatus.shops).flatMap((s) => [
+            s.ledger_last_sync_at ? new Date(s.ledger_last_sync_at).getTime() : 0,
+            s.payment_last_sync_at ? new Date(s.payment_last_sync_at).getTime() : 0,
+          ]).filter((t) => t > 0)
+        : [];
+      const baseline = baselineArr.length > 0 ? Math.max(...baselineArr) : 0;
+
       await financialsApi.triggerSync(targetShopId, forceFull);
       showToast(t('financials.syncStarted'), 'success');
-      setTimeout(() => fetchAll(true), forceFull ? 90000 : 5000);
+
+      // Poll sync status until we see a newer timestamp or hit timeout
+      const pollIntervalMs = 2000;
+      const maxWaitMs = forceFull ? 90000 : 60000;
+      let elapsed = 0;
+      const poll = async () => {
+        while (elapsed < maxWaitMs) {
+          await new Promise((r) => setTimeout(r, pollIntervalMs));
+          elapsed += pollIntervalMs;
+          try {
+            const next = await financialsApi.getSyncStatus(shopId, shopIds);
+            const timestamps = next?.shops
+              ? Object.values(next.shops).flatMap((s) => [
+                  s.ledger_last_sync_at ? new Date(s.ledger_last_sync_at).getTime() : 0,
+                  s.payment_last_sync_at ? new Date(s.payment_last_sync_at).getTime() : 0,
+                ]).filter((t) => t > 0)
+              : [];
+            const nextTs = timestamps.length > 0 ? Math.max(...timestamps) : 0;
+            setSyncStatus(next);
+            if (nextTs > baseline) {
+              await fetchAll(true);
+              return;
+            }
+          } catch {
+            /* ignore poll errors */
+          }
+        }
+        await fetchAll(true);
+      };
+      poll();
     } catch {
       showToast(t('financials.syncFailed'), 'error');
     } finally {
@@ -762,60 +951,41 @@ export default function FinancialsPage() {
         </div>
 
         {/* ── Unmapped ledger types warning ── */}
-        {(syncStatus?.unmapped_ledger_types || summary?.warning) && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 flex items-start gap-3">
-            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                {t('financials.unmappedLedgerTypes')}
-              </p>
-              <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
-                {t('financials.unmappedLedgerTypesMessage')}
-                {(syncStatus?.unmapped_types?.length || summary?.unmapped_types?.length) ? (
-                  <span className="block mt-1 font-mono text-xs">
-                    {((syncStatus?.unmapped_types || summary?.unmapped_types) ?? []).slice(0, 5).join(', ')}
-                    {((syncStatus?.unmapped_count ?? summary?.unmapped_count ?? 0) > 5) && ' ...'}
-                  </span>
-                ) : null}
-              </p>
-            </div>
-          </div>
-        )}
+        {(syncStatus?.unmapped_ledger_types || summary?.warning) && (() => {
+          const count = syncStatus?.unmapped_count ?? summary?.unmapped_count ?? ((syncStatus?.unmapped_types || summary?.unmapped_types) ?? []).length;
+          const message = count > 0
+            ? (t('financials.unmappedLedgerTypesMessageWithCount') || 'Profit may not match Etsy. {count} unmapped entry types need mapping in the registry.').replace('{count}', String(count))
+            : t('financials.unmappedLedgerTypesMessage');
+          return (
+            <NotificationBanner
+              variant="warning"
+              title={t('financials.unmappedLedgerTypes')}
+              message={message}
+              action={{ label: t('financials.mapInRegistry'), onClick: () => setShowEntryTypesModal(true) }}
+            />
+          );
+        })()}
 
         {/* ── Sync error banner ── */}
         {syncStatus && Object.values(syncStatus.shops).some((s) => s.ledger_last_error || s.payment_last_error) && (
-          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/50 dark:border-amber-600 p-4 flex items-start gap-4 shadow-sm">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/20 dark:bg-amber-500/30 flex items-center justify-center">
-              <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                {t('financials.syncError')}
-              </p>
-              <p className="text-sm text-amber-900 dark:text-amber-200 mt-1">
-                {Object.entries(syncStatus.shops)
-                  .filter(([, s]) => s.ledger_last_error || s.payment_last_error)
-                  .map(([sid, s]) => {
-                    const isAuthError = (msg: string) =>
-                      /reconnect|authentication|401|token|invalid_grant|refresh.*expired/i.test(msg);
-                    const hasAuthError =
-                      (s.ledger_last_error && isAuthError(s.ledger_last_error)) ||
-                      (s.payment_last_error && isAuthError(s.payment_last_error));
-                    if (hasAuthError) {
-                      return (
-                        <span key={sid} className="block">
-                          {t('financials.authErrorHint')}
-                        </span>
-                      );
-                    }
-                    const parts = [
-                      s.ledger_last_error && `${t('financials.ledgerLabel')}: ${s.ledger_last_error}`,
-                      s.payment_last_error && `${t('financials.paymentsLabel')}: ${s.payment_last_error}`,
-                    ].filter(Boolean);
-                    return <span key={sid} className="block">{parts.join(' · ')}</span>;
-                  })}
-              </p>
-              {(Object.values(syncStatus.shops).some((s) => s.has_auth_error) ||
+          <NotificationBanner
+            variant="error"
+            title={t('financials.syncError')}
+            message={
+              Object.values(syncStatus.shops).some((s) => {
+                const isAuthError = (msg: string) =>
+                  /reconnect|authentication|401|token|invalid_grant|refresh.*expired/i.test(msg);
+                return (
+                  (s.ledger_last_error && isAuthError(s.ledger_last_error)) ||
+                  (s.payment_last_error && isAuthError(s.payment_last_error)) ||
+                  s.has_auth_error
+                );
+              })
+                ? t('financials.authErrorHint')
+                : t('financials.syncErrorGeneric')
+            }
+            action={
+              (Object.values(syncStatus.shops).some((s) => s.has_auth_error) ||
                 Object.values(syncStatus.shops).some(
                   (s) =>
                     (s.ledger_last_error?.toLowerCase().includes('reconnect') ||
@@ -826,54 +996,44 @@ export default function FinancialsPage() {
                       s.payment_last_error?.toLowerCase().includes('authentication') ||
                       s.payment_last_error?.toLowerCase().includes('401') ||
                       s.payment_last_error?.toLowerCase().includes('token'))
-                )) && (
-                <div className="flex flex-wrap items-center gap-3 mt-3">
+                )) ? (
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleRefreshConnection}
                     disabled={refreshingConnection}
-                    className="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg bg-red-800 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     <RotateCcw className={cn('w-4 h-4', refreshingConnection && 'animate-spin')} />
                     {refreshingConnection ? (t('financials.refreshing') || 'Refreshing...') : (t('financials.refreshConnection') || 'Refresh Connection')}
                   </button>
                   <a
                     href="/settings?tab=shops"
-                    className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-800 dark:text-amber-200 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
                   >
                     {t('financials.reconnectEtsy')}
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </a>
                 </div>
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
         )}
 
         {/* ── Scope warning banner ── */}
         {scopeStatus && !scopeStatus.has_billing_scope && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4 flex items-start gap-3">
-            <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                {t('financials.billingScopeNotGranted')}
-              </p>
-              <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+          <NotificationBanner
+            variant="warning"
+            title={t('financials.billingScopeNotGranted')}
+            message={
+              <>
                 {t('financials.billingScopeMessage')}{' '}
-                <code className="font-mono text-xs bg-amber-100 dark:bg-amber-800/50 px-1 rounded">{t('financials.billingScopeCode')}</code>{' '}
+                <code className="font-mono text-xs bg-white/20 px-1 rounded">{t('financials.billingScopeCode')}</code>{' '}
                 {t('financials.billingScopeEnd')}
-              </p>
-              {scopeStatus.reconnect_url && (
-                <a
-                  href={scopeStatus.reconnect_url}
-                  className="inline-flex items-center gap-1 mt-2 text-sm font-medium text-amber-800 dark:text-amber-300 hover:underline"
-                >
-                  {t('financials.reconnectEtsy')}
-                  <ArrowUpRight className="w-3 h-3" />
-                </a>
-              )}
-            </div>
-          </div>
+              </>
+            }
+            action={scopeStatus.reconnect_url ? { label: t('financials.reconnectEtsy'), href: scopeStatus.reconnect_url } : undefined}
+          />
         )}
 
         {/* ── Financial Comparison Panel ── */}
@@ -1440,6 +1600,18 @@ export default function FinancialsPage() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ── Entry Types Registry Modal ── */}
+        {showEntryTypesModal && (
+          <EntryTypesModal
+            onClose={() => setShowEntryTypesModal(false)}
+            onSaved={() => {
+              setShowEntryTypesModal(false);
+              fetchAll(true);
+            }}
+            t={t}
+          />
         )}
       </div>
     </DashboardLayout>

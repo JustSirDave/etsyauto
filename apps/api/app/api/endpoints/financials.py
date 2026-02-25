@@ -64,7 +64,7 @@ async def get_billing_scope_status(
 
     return {
         "has_billing_scope": has_scope,
-        "reconnect_url": "/settings?reconnect=etsy" if not has_scope else None,
+        "reconnect_url": "/settings?tab=shops" if not has_scope else None,
     }
 
 

@@ -621,7 +621,9 @@ class EtsyClient:
     ) -> Dict[str, Any]:
         """
         Get shop-level payment records (getPayments).
-        Returns payment records with fee breakdown. Max 25 per page per Etsy docs.
+        NOTE: Etsy's getPayments endpoint requires payment_ids and does NOT support
+        min_created/max_created date filtering. Use get_shop_ledger_entries or
+        get_ledger_entry_payments for date-range payment data.
         Required scope: transactions_r.
 
         Args:
