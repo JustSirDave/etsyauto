@@ -204,7 +204,7 @@ function ProductsContent() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="w-full min-w-0 max-w-full mx-auto space-y-6 overflow-x-hidden">
       <DisconnectedShopBanner />
 
       {/* Header Stats */}
@@ -226,7 +226,7 @@ function ProductsContent() {
       {/* Filters */}
       <DashboardCard title={t('products.filter')} noPadding>
         <div className="p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 flex-wrap">
             <div className="w-full sm:w-80">
               <SearchInput
                 placeholder={t('products.searchPlaceholder')}
@@ -234,7 +234,7 @@ function ProductsContent() {
                 onChange={setSearchQuery}
               />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap min-w-0">
               <PageSizeDropdown value={pageSize} onChange={setPageSize} />
               {isSupplier ? (
                 <button
@@ -288,7 +288,7 @@ function ProductsContent() {
 
       {/* Table */}
       <DashboardCard noPadding>
-        <div className="overflow-x-auto">
+        <div className="w-full min-w-0 overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
@@ -313,10 +313,10 @@ function ProductsContent() {
             </div>
           ) : (
             <>
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead>
                   <tr className="border-b border-[var(--border-color)]">
-                    <th className="text-left py-4 px-5 w-12">
+                    <th className="text-left py-4 px-5 w-12 shrink-0">
                       <TableCheckbox
                         checked={selectedProducts.length === filteredProducts.length}
                         indeterminate={
@@ -326,25 +326,25 @@ function ProductsContent() {
                         onChange={toggleSelectAll}
                       />
                     </th>
-                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[28%] min-w-0">
                       {t('products.table.product')}
                     </th>
-                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[8%] min-w-0">
                       {t('products.table.source')}
                     </th>
-                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[8%] min-w-0">
                       {t('products.table.price')}
                     </th>
-                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[8%] min-w-0">
                       {t('products.table.cost')}
                     </th>
-                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[7%] min-w-0">
                       {t('products.table.images')}
                     </th>
-                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-left py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[20%] min-w-0">
                       {t('products.table.tags')}
                     </th>
-                    <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                    <th className="text-right py-4 px-5 text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider w-[15%] min-w-0 shrink-0">
                       {t('products.table.actions')}
                     </th>
                   </tr>
@@ -361,9 +361,9 @@ function ProductsContent() {
                           onChange={() => toggleSelect(product.id)}
                         />
                       </td>
-                      <td className="py-4 px-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-[var(--background)] flex items-center justify-center overflow-hidden">
+                      <td className="py-4 px-5 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 shrink-0 rounded-lg bg-[var(--background)] flex items-center justify-center overflow-hidden">
                             {product.images && product.images.length > 0 ? (
                               <img
                                 src={product.images[0]}
@@ -374,11 +374,11 @@ function ProductsContent() {
                               <Package className="w-5 h-5 text-[var(--text-muted)]" />
                             )}
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 overflow-hidden">
                             <p className="font-medium text-[var(--text-primary)] truncate">
                               {product.title_raw || 'Untitled Product'}
                             </p>
-                            <p className="text-sm text-[var(--text-muted)] truncate max-w-md">
+                            <p className="text-sm text-[var(--text-muted)] truncate">
                               {product.description_raw || 'No description'}
                             </p>
                           </div>
@@ -398,8 +398,8 @@ function ProductsContent() {
                       <td className="py-4 px-5 text-[var(--text-primary)]">
                         {product.images?.length || 0}
                       </td>
-                      <td className="py-4 px-5">
-                        <div className="flex flex-wrap gap-1 max-w-xs">
+                      <td className="py-4 px-5 min-w-0 overflow-hidden">
+                        <div className="flex flex-wrap gap-1 min-w-0">
                           {product.tags_raw && product.tags_raw.length > 0 ? (
                             product.tags_raw.slice(0, 3).map((tag, idx) => (
                               <span
@@ -419,7 +419,7 @@ function ProductsContent() {
                           )}
                         </div>
                       </td>
-                      <td className="py-4 px-5">
+                      <td className="py-4 px-5 shrink-0">
                         <div className="flex items-center justify-end gap-2">
                           {!isSupplier && (
                             <button
