@@ -38,6 +38,32 @@ class FinancialService:
 
     CACHE_TTL = 300  # 5 minutes
 
+    # Maps raw Etsy entry_type values to normalized frontend category names
+    FEE_CATEGORY_MAP: dict = {
+        # Transaction fees
+        "transaction":                   "transaction_fee",
+        "transaction_quantity":          "transaction_fee",
+        "transaction_fee":                "transaction_fee",
+        # Processing fees
+        "PAYMENT_PROCESSING_FEE":        "processing_fee",
+        "payment_processing_fee":        "processing_fee",
+        "processing_fee":                "processing_fee",
+        # Listing renewal fees
+        "listing":                       "listing_renewal",
+        "listing_private":               "listing_renewal",
+        "renew_sold":                    "listing_renewal",
+        "renew_sold_auto":               "listing_renewal",
+        "renew_expired":                 "listing_renewal",
+        "auto_renew_expired":            "listing_renewal",
+        # Deposit / other fees
+        "DEPOSIT_FEE":                   "deposit_fee",
+        "seller_onboarding_fee":         "subscription",
+        "seller_onboarding_fee_payment": "subscription",
+        "vat_tax_ep":                    "vat_fee",
+        "vat_seller_services":           "vat_fee",
+        "shipping_labels":               "shipping_label",
+    }
+
     def __init__(self, db: Session):
         self.db = db
         self.redis = get_redis_client()
@@ -106,7 +132,9 @@ class FinancialService:
         Aggregate P&L from ledger entries by category (registry join).
         Net Profit = sales + fees + marketing + refunds (fees/marketing already negative).
         """
-        ck = self._cache_key(tenant_id, shop_id, f"pnl:{start_date}:{end_date}", shop_ids)
+        start_key = start_date.strftime("%Y-%m-%d") if start_date else "none"
+        end_key = end_date.strftime("%Y-%m-%d") if end_date else "none"
+        ck = self._cache_key(tenant_id, shop_id, f"pnl:{start_key}:{end_key}", shop_ids)
         cached = self._get_cached(ck)
         if cached:
             return cached
@@ -241,7 +269,7 @@ class FinancialService:
         latest = (
             self.db.query(LedgerEntry.balance, LedgerEntry.currency, LedgerEntry.entry_created_at)
             .filter(and_(*filters))
-            .order_by(LedgerEntry.entry_created_at.desc())
+            .order_by(LedgerEntry.entry_created_at.desc(), LedgerEntry.id.desc())
             .first()
         )
         current_balance = latest[0] if latest else 0
@@ -300,7 +328,9 @@ class FinancialService:
         Categories: transaction_fee, processing_fee, listing_renewal,
         advertising, shipping_label, subscription, other.
         """
-        ck = self._cache_key(tenant_id, shop_id, f"fees:{start_date}:{end_date}", shop_ids)
+        start_key = start_date.strftime("%Y-%m-%d") if start_date else "none"
+        end_key = end_date.strftime("%Y-%m-%d") if end_date else "none"
+        ck = self._cache_key(tenant_id, shop_id, f"fees:{start_key}:{end_key}", shop_ids)
         cached = self._get_cached(ck)
         if cached:
             return cached
@@ -314,7 +344,8 @@ class FinancialService:
             LedgerEntry.tenant_id == tenant_id,
             LedgerEntry.entry_created_at >= start_date,
             LedgerEntry.entry_created_at <= end_date,
-            LedgerEntry.amount < 0,  # Fees are debits (negative)
+            LedgerEntry.amount < 0,
+            LedgerEntryTypeRegistry.category == "fees",  # Only real fee entries
         ]
         self._apply_shop_filter(filters, LedgerEntry.shop_id, shop_id, shop_ids)
 
@@ -324,21 +355,36 @@ class FinancialService:
                 func.sum(LedgerEntry.amount).label("total"),
                 func.count(LedgerEntry.id).label("count"),
             )
+            .join(
+                LedgerEntryTypeRegistry,
+                LedgerEntry.entry_type == LedgerEntryTypeRegistry.entry_type,
+            )
             .filter(and_(*filters))
             .group_by(LedgerEntry.entry_type)
             .all()
         )
 
-        categories = []
+        # Aggregate by normalized category name
+        category_totals: dict = {}
         total_fees = 0
         for entry_type, total, count in rows:
             abs_total = abs(total or 0)
             total_fees += abs_total
-            categories.append({
-                "category": entry_type or "other",
-                "amount": abs_total,
-                "count": count,
-            })
+            normalized = self.FEE_CATEGORY_MAP.get(entry_type, "other")
+            if normalized in category_totals:
+                category_totals[normalized]["amount"] += abs_total
+                category_totals[normalized]["count"] += count
+            else:
+                category_totals[normalized] = {
+                    "category": normalized,
+                    "amount": abs_total,
+                    "count": count,
+                }
+        categories = sorted(
+            category_totals.values(),
+            key=lambda c: c["amount"],
+            reverse=True,
+        )
 
         # Optional augmentation: sum PaymentDetail.amount_fees for cross-check
         pd_filters = [
@@ -450,9 +496,11 @@ class FinancialService:
 
         ``granularity`` is one of ``daily``, ``weekly``, ``monthly``.
         """
+        start_key = start_date.strftime("%Y-%m-%d") if start_date else "none"
+        end_key = end_date.strftime("%Y-%m-%d") if end_date else "none"
         ck = self._cache_key(
             tenant_id, shop_id,
-            f"timeline:{granularity}:{start_date}:{end_date}",
+            f"timeline:{granularity}:{start_key}:{end_key}",
             shop_ids,
         )
         cached = self._get_cached(ck)
@@ -757,9 +805,11 @@ class FinancialService:
         7. Net Profit after all expenses
         All monetary values in cents.
         """
+        start_key = start_date.strftime("%Y-%m-%d") if start_date else "none"
+        end_key = end_date.strftime("%Y-%m-%d") if end_date else "none"
         ck = self._cache_key(
             tenant_id, shop_id,
-            f"full_summary:{start_date}:{end_date}",
+            f"full_summary:{start_key}:{end_key}",
             shop_ids,
         )
         if not force_refresh:

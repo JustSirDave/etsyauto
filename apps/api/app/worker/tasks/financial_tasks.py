@@ -68,15 +68,15 @@ def _extract_entry_type(raw: dict) -> str:
 
 # Pre-populated Etsy ledger_type -> category mappings (from Etsy API docs / community findings)
 LEDGER_TYPE_SEED: Dict[str, str] = {
-    # Sales (revenue / credits)
+    # Sales (revenue credits)
     "transaction": "sales",
     "shipping_transaction": "sales",
     "sale": "sales",
     "Sale": "sales",
+    "SALE": "sales",
     "gift_wrap_fees": "sales",
-    "DISBURSE2": "sales",
-    "PAYMENT_GROSS": "sales",
-    # Fees (debits)
+    "Transaction": "sales",
+    # Fees (debits — subtracted from profit)
     "transaction_quantity": "fees",
     "transaction_fee": "fees",
     "processing_fee": "fees",
@@ -92,14 +92,22 @@ LEDGER_TYPE_SEED: Dict[str, str] = {
     "seller_onboarding_fee_payment": "fees",
     "vat_tax_ep": "fees",
     "vat_seller_services": "fees",
-    "sales_tax": "fees",
-    # Marketing / advertising
+    "DEPOSIT_FEE": "fees",
+    "Fee": "fees",
+    "FEE": "fees",
+    # Marketing / advertising (debits — subtracted from profit)
     "offsite_ads_fee": "marketing",
     "prolist": "marketing",
     "Etsy Ads": "marketing",
     "etsy_ads": "marketing",
-    # Refunds
+    "EtsyAds": "marketing",
+    "OffsiteAds": "marketing",
+    "ShippingLabel": "marketing",
+    "Marketing": "marketing",
+    # Refunds (debits — subtracted from profit)
     "REFUND": "refunds",
+    "REFUND_GROSS": "refunds",
+    "REFUND_PROCESSING_FEE": "refunds",
     "transaction_refund": "refunds",
     "shipping_transaction_refund": "refunds",
     "transaction_quantity_refund": "refunds",
@@ -110,12 +118,27 @@ LEDGER_TYPE_SEED: Dict[str, str] = {
     "shipping_label_refund": "refunds",
     "refund": "refunds",
     "Refund": "refunds",
-    # Other
-    "payout": "other",
-    "Payment": "other",
-    "Deposit": "other",
-    "reserve": "other",
-    "Reserve": "other",
+    # Adjustments — EXCLUDED from profit calculation entirely
+    # These are balance movements, pass-throughs, and tax collection
+    # that Etsy handles on the seller's behalf
+    "DISBURSE": "adjustments",
+    "DISBURSE2": "adjustments",  # bank payout — NOT revenue
+    "PAYMENT_GROSS": "adjustments",
+    "sales_tax": "adjustments",  # Etsy collects/remits, not seller income
+    "Tax": "adjustments",
+    "Adjustment": "adjustments",
+    "RECOUP": "adjustments",
+    "payout": "adjustments",
+    "Payment": "adjustments",
+    "Deposit": "adjustments",
+    "reserve": "adjustments",
+    "Reserve": "adjustments",
+    "Reserve_release": "adjustments",
+    # Discovered during live sync
+    "billing_payment":       "adjustments",
+    "seller_onboarding_fee": "fees",
+    "VAT_REFUND_EP":         "refunds",
+    "seller_credit":         "adjustments",
 }
 
 
@@ -159,19 +182,27 @@ def _seed_ledger_type_registry(db) -> int:
 
 
 def _upsert_registry(db, entry_type: str, now: datetime) -> None:
-    """Register or update entry_type in ledger_entry_type_registry."""
-    reg = db.query(LedgerEntryTypeRegistry).filter(
-        LedgerEntryTypeRegistry.entry_type == entry_type
-    ).first()
+    """Register or update entry_type in ledger_entry_type_registry.
+    If the type is known in LEDGER_TYPE_SEED, map it immediately."""
+    known_category = LEDGER_TYPE_SEED.get(entry_type)
+    reg = (
+        db.query(LedgerEntryTypeRegistry)
+        .filter(LedgerEntryTypeRegistry.entry_type == entry_type)
+        .first()
+    )
     if reg:
         reg.last_seen_at = now
+        # If it was unmapped but we now know the category, fix it
+        if not reg.mapped and known_category:
+            reg.category = known_category
+            reg.mapped = True
     else:
         reg = LedgerEntryTypeRegistry(
             entry_type=entry_type,
-            category=None,
+            category=known_category,        # map immediately if known
             first_seen_at=now,
             last_seen_at=now,
-            mapped=False,
+            mapped=known_category is not None,  # True if known, False if truly new
         )
         db.add(reg)
 
@@ -256,7 +287,7 @@ async def _sync_shop_payment_account(
     db, etsy_client: EtsyClient, shop: Shop
 ) -> bool:
     """
-    Try to fetch payment-account from Etsy and upsert shop_financial_state.
+    Fetch payment-account from Etsy and upsert shop_financial_state.
     Returns True if updated, False if endpoint unavailable or error.
     """
     try:
@@ -265,43 +296,69 @@ async def _sync_shop_payment_account(
             etsy_shop_id=shop.etsy_shop_id,
         )
         if not data:
+            logger.warning(
+                f"Payment account returned no data for shop {shop.id} "
+                f"(etsy_shop_id={shop.etsy_shop_id})"
+            )
             return False
+
         balance = _normalize_etsy_money(data.get("balance"))
         available = _normalize_etsy_money(data.get("available_for_payout"))
         reserve = _normalize_etsy_money(data.get("reserve_amount"))
+
+        # Extract currency from the balance object (Etsy money dict)
         currency = (
             (data.get("balance") or {}).get("currency_code")
-            or (data.get("currency_code"))
+            or data.get("currency_code")
             or "USD"
         )
         if isinstance(currency, dict):
             currency = currency.get("currency_code", "USD")
+        currency = str(currency)[:3] if currency else "USD"
+
+        logger.info(
+            f"Payment account for shop {shop.id}: "
+            f"balance={balance} available={available} "
+            f"reserve={reserve} currency={currency}"
+        )
+
         now = datetime.now(timezone.utc)
-        state = db.query(ShopFinancialState).filter(
-            ShopFinancialState.shop_id == shop.id
-        ).first()
+        state = (
+            db.query(ShopFinancialState)
+            .filter(ShopFinancialState.shop_id == shop.id)
+            .first()
+        )
         if state:
             state.balance = balance
             state.available_for_payout = available
-            state.reserve_amount = reserve
-            state.currency_code = str(currency)[:3] if currency else "USD"
+            state.reserve_amount = reserve if reserve else None
+            state.currency_code = currency
             state.updated_at = now
         else:
             state = ShopFinancialState(
                 shop_id=shop.id,
+                tenant_id=shop.tenant_id,
                 balance=balance,
                 available_for_payout=available,
-                currency_code=str(currency)[:3] if currency else "USD",
                 reserve_amount=reserve if reserve else None,
+                currency_code=currency,
                 updated_at=now,
             )
             db.add(state)
+
         db.commit()
+        logger.info(f"Saved shop_financial_state for shop {shop.id}")
         return True
-    except EtsyAPIError:
+
+    except EtsyAPIError as exc:
+        logger.warning(
+            f"EtsyAPIError fetching payment account for shop {shop.id}: {exc}"
+        )
         return False
     except Exception as exc:
-        logger.debug(f"Payment account sync skipped for shop {shop.id}: {exc}")
+        logger.warning(
+            f"Payment account sync failed for shop {shop.id}: {exc}"
+        )
         return False
 
 
@@ -438,21 +495,30 @@ async def _sync_shop_ledger(
                 balance_obj = raw.get("balance")
                 amount_cents = _normalize_etsy_money(amount_obj)
                 balance_cents = _normalize_etsy_money(balance_obj)
-                currency = "USD"
-                if isinstance(amount_obj, dict):
-                    currency = amount_obj.get("currency_code", "USD") or "USD"
-                elif isinstance(balance_obj, dict):
-                    currency = balance_obj.get("currency_code", "USD") or "USD"
-                ts = raw.get("create_timestamp")
+                # Try top-level currency first (most Etsy ledger entries use this)
+                currency = raw.get("currency") or raw.get("currency_code")
+                # Fall back to nested dict formats
+                if not currency:
+                    if isinstance(amount_obj, dict):
+                        currency = amount_obj.get("currency_code") or amount_obj.get("currency")
+                    elif isinstance(balance_obj, dict):
+                        currency = balance_obj.get("currency_code") or balance_obj.get("currency")
+                # Final fallback
+                if not currency:
+                    currency = "USD"
+                currency = str(currency).upper()[:3]
+                ts = raw.get("created_timestamp") or raw.get("create_timestamp") or raw.get("create_date")
                 created_ts = int(ts) if ts is not None else None
-                entry_dt = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else now_utc
+                entry_dt = datetime.fromtimestamp(int(ts), tz=timezone.utc) if ts else now_utc
 
                 if existing:
                     existing.amount = amount_cents
                     existing.description = description
                     existing.entry_type = entry_type_raw
                     existing.balance = balance_cents
+                    existing.currency = currency
                     existing.created_timestamp = created_ts
+                    existing.entry_created_at = entry_dt
                     existing.raw_payload = _serialize_raw_payload(raw)
                     existing.synced_at = now_utc
                     updated += 1

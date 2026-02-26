@@ -8,7 +8,7 @@
  * Owner / Admin / Viewer only (via require_revenue_access on backend).
  */
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
@@ -504,6 +504,333 @@ function SectionHeader({ title, children }: { title: string; children?: React.Re
 }
 
 /* ================================================================== */
+/*  Financial Summary Cards & Drawer                                    */
+/* ================================================================== */
+
+function FinancialSummaryCards({
+  payout,
+  summary,
+  loading,
+  onCardClick,
+}: {
+  payout: PayoutEstimate | null;
+  summary: FinancialSummary | null;
+  loading: boolean;
+  onCardClick: (drawer: 'payout' | 'balance' | 'profit') => void;
+}) {
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="rounded-xl border bg-white dark:bg-gray-900 p-5 shadow-sm animate-pulse">
+            <div className="h-4 w-28 bg-gray-200 dark:bg-gray-700 rounded mb-3" />
+            <div className="h-8 w-36 bg-gray-200 dark:bg-gray-700 rounded mb-2" />
+            <div className="h-3 w-24 bg-gray-100 dark:bg-gray-800 rounded" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const payoutValue = payout
+    ? formatWithConversion(
+        payout.available_for_payout,
+        payout.currency,
+        payout.converted_available_for_payout,
+        payout.converted_currency
+      )
+    : '—';
+  const payoutPositive = payout ? payout.available_for_payout >= 0 : true;
+
+  const balanceValue = payout
+    ? formatWithConversion(
+        payout.current_balance,
+        payout.currency,
+        payout.converted_current_balance,
+        payout.converted_currency
+      )
+    : '—';
+  const balancePositive = payout ? payout.current_balance >= 0 : true;
+
+  const profitValue = summary
+    ? formatWithConversion(
+        summary.net_profit,
+        summary.currency,
+        summary.converted_net_profit,
+        summary.converted_currency
+      )
+    : '—';
+  const profitPositive = summary ? summary.net_profit >= 0 : undefined;
+
+  const cards: {
+    id: 'payout' | 'balance' | 'profit';
+    title: string;
+    value: string;
+    subtitle: string;
+    positive: boolean | undefined;
+    icon: React.ComponentType<{ className?: string }>;
+    accentClass: string;
+  }[] = [
+    {
+      id: 'payout',
+      title: 'Upcoming Payout',
+      value: payoutValue,
+      subtitle: 'Available for payout',
+      positive: payoutPositive,
+      icon: Banknote,
+      accentClass: 'border-emerald-200 dark:border-emerald-800',
+    },
+    {
+      id: 'balance',
+      title: 'Current Balance',
+      value: balanceValue,
+      subtitle: payout?.reserve_held
+        ? `Reserve held: ${formatWithConversion(payout.reserve_held, payout.currency, payout.converted_reserve_held, payout.converted_currency)}`
+        : 'Etsy Payments wallet',
+      positive: balancePositive,
+      icon: Wallet,
+      accentClass: 'border-blue-200 dark:border-blue-800',
+    },
+    {
+      id: 'profit',
+      title: 'Net Profit',
+      value: profitValue,
+      subtitle: 'After all fees & refunds',
+      positive: profitPositive,
+      icon: profitPositive !== false ? TrendingUp : TrendingDown,
+      accentClass:
+        profitPositive === false
+          ? 'border-red-200 dark:border-red-800'
+          : 'border-purple-200 dark:border-purple-800',
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {cards.map((card) => {
+        const Icon = card.icon;
+        return (
+          <button
+            key={card.id}
+            type="button"
+            onClick={() => onCardClick(card.id)}
+            className={cn(
+              'rounded-xl border-2 bg-white dark:bg-gray-900 p-5 shadow-sm text-left',
+              'hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 cursor-pointer',
+              'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500',
+              card.accentClass
+            )}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                {card.title}
+              </span>
+              <Icon className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+            </div>
+            <p
+              className={cn(
+                'text-2xl font-bold tracking-tight',
+                card.positive === true && 'text-emerald-600 dark:text-emerald-400',
+                card.positive === false && 'text-red-600 dark:text-red-400',
+                card.positive === undefined && 'text-gray-900 dark:text-gray-100'
+              )}
+            >
+              {card.value}
+            </p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              {card.subtitle}
+              <ArrowUpRight className="w-3 h-3 opacity-50" />
+            </p>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FinancialDrawer({
+  drawer,
+  payout,
+  summary,
+  period,
+  onClose,
+}: {
+  drawer: 'payout' | 'balance' | 'profit' | null;
+  payout: PayoutEstimate | null;
+  summary: FinancialSummary | null;
+  period: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  if (!drawer) return null;
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 bg-black/40 z-40 transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={cn(
+          'fixed top-0 right-0 h-full w-full sm:w-[480px] bg-white dark:bg-gray-900',
+          'border-l border-gray-200 dark:border-gray-800 shadow-2xl z-50',
+          'flex flex-col overflow-hidden',
+          'translate-x-0 transition-transform duration-300'
+        )}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {drawer === 'payout' && 'Upcoming Payout'}
+            {drawer === 'balance' && 'Current Balance'}
+            {drawer === 'profit' && `Net Profit — ${period}`}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 transition-colors"
+            aria-label="Close"
+          >
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+          {drawer === 'payout' && payout && (
+            <>
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-5">
+                <p className="text-sm text-emerald-700 dark:text-emerald-400 font-medium mb-1">Available for Payout</p>
+                <p className="text-3xl font-bold text-emerald-700 dark:text-emerald-300">
+                  {formatWithConversion(payout.available_for_payout, payout.currency, payout.converted_available_for_payout, payout.converted_currency)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                {[
+                  { label: 'Current Balance', value: formatWithConversion(payout.current_balance, payout.currency, payout.converted_current_balance, payout.converted_currency), note: 'Total in your Etsy Payments account' },
+                  { label: 'Reserve Held', value: formatWithConversion(payout.reserve_held, payout.currency, payout.converted_reserve_held, payout.converted_currency), note: 'Funds temporarily withheld by Etsy', valueClass: payout.reserve_held > 0 ? 'text-amber-600 dark:text-amber-400' : undefined },
+                  { label: 'Available for Payout', value: formatWithConversion(payout.available_for_payout, payout.currency, payout.converted_available_for_payout, payout.converted_currency), note: 'Next scheduled disbursement', valueClass: 'text-emerald-600 dark:text-emerald-400 font-bold' },
+                ].map((row, i) => (
+                  <div key={i} className={cn('flex items-center justify-between px-4 py-3', i > 0 && 'border-t border-gray-100 dark:border-gray-800')}>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{row.label}</p>
+                      {row.note && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{row.note}</p>}
+                    </div>
+                    <p className={cn('text-sm font-semibold', row.valueClass ?? 'text-gray-900 dark:text-gray-100')}>{row.value}</p>
+                  </div>
+                ))}
+              </div>
+              {payout.recent_payouts?.length ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Recent Payouts</p>
+                  <div className="space-y-2">
+                    {payout.recent_payouts.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between rounded-lg bg-gray-50 dark:bg-gray-800/50 px-4 py-2.5">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">{shortDate(p.date)}</span>
+                        <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">{formatCents(p.amount, payout.currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
+                Etsy disburses available funds on your configured payout schedule (daily or weekly). Reserve-held funds are released automatically once eligibility criteria are met.
+              </p>
+            </>
+          )}
+          {drawer === 'balance' && payout && (
+            <>
+              <div className="rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-5">
+                <p className="text-sm text-blue-700 dark:text-blue-400 font-medium mb-1">Current Balance</p>
+                <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                  {formatWithConversion(payout.current_balance, payout.currency, payout.converted_current_balance, payout.converted_currency)}
+                </p>
+                {payout.as_of && <p className="text-xs text-blue-500 dark:text-blue-500 mt-1">As of {shortDate(payout.as_of)}</p>}
+              </div>
+              <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                {[
+                  { label: 'Available for Payout', value: formatWithConversion(payout.available_for_payout, payout.currency, payout.converted_available_for_payout, payout.converted_currency), note: 'Ready to be disbursed', valueClass: 'text-emerald-600 dark:text-emerald-400' },
+                  { label: 'Reserve Held', value: formatWithConversion(payout.reserve_held, payout.currency, payout.converted_reserve_held, payout.converted_currency), note: 'Temporarily withheld by Etsy', valueClass: payout.reserve_held > 0 ? 'text-amber-600 dark:text-amber-400' : undefined },
+                  { label: 'Total Balance', value: formatWithConversion(payout.current_balance, payout.currency, payout.converted_current_balance, payout.converted_currency), note: 'Available + Reserve', valueClass: 'font-bold text-gray-900 dark:text-gray-100' },
+                ].map((row, i) => (
+                  <div key={i} className={cn('flex items-center justify-between px-4 py-3', i > 0 && 'border-t border-gray-100 dark:border-gray-800', i === 2 && 'bg-gray-50 dark:bg-gray-800/50')}>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{row.label}</p>
+                      {row.note && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{row.note}</p>}
+                    </div>
+                    <p className={cn('text-sm font-semibold', row.valueClass ?? 'text-gray-900 dark:text-gray-100')}>{row.value}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed">
+                <strong className="text-gray-500">Pending</strong> means funds from recent sales that haven&apos;t cleared yet — typically 3–7 days after the sale. They&apos;re included in your balance but not yet available for payout.
+              </p>
+            </>
+          )}
+          {drawer === 'profit' && summary && (
+            <>
+              <div className={cn('rounded-xl p-5 border', summary.net_profit >= 0 ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800')}>
+                <p className={cn('text-sm font-medium mb-1', summary.net_profit >= 0 ? 'text-purple-700 dark:text-purple-400' : 'text-red-700 dark:text-red-400')}>Net Profit — {period}</p>
+                <p className={cn('text-3xl font-bold', summary.net_profit >= 0 ? 'text-purple-700 dark:text-purple-300' : 'text-red-700 dark:text-red-300')}>
+                  {formatWithConversion(summary.net_profit, summary.currency, summary.converted_net_profit, summary.converted_currency)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+                {[
+                  { label: 'Gross Revenue', value: formatWithConversion(summary.revenue, summary.currency, summary.converted_revenue, summary.converted_currency), valueClass: 'text-emerald-600 dark:text-emerald-400', note: 'Sales + shipping collected' },
+                  { label: 'Etsy Fees', value: `−${formatWithConversion(summary.etsy_fees, summary.currency, summary.converted_etsy_fees, summary.converted_currency)}`, valueClass: 'text-red-500', note: 'Transaction, processing, listing fees' },
+                  { label: 'Marketing Spend', value: `−${formatWithConversion(summary.advertising_expenses, summary.currency, summary.converted_advertising_expenses, summary.converted_currency)}`, valueClass: 'text-red-500', note: 'Etsy Ads + Offsite Ads' },
+                  { label: 'Refunds', value: summary.refunds > 0 ? `−${formatWithConversion(summary.refunds, summary.currency, summary.converted_refunds, summary.converted_currency)}` : '—', valueClass: summary.refunds > 0 ? 'text-red-500' : 'text-gray-400', note: 'Orders refunded to buyers' },
+                  { label: 'Net Profit', value: formatWithConversion(summary.net_profit, summary.currency, summary.converted_net_profit, summary.converted_currency), valueClass: summary.net_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-red-600 dark:text-red-400 font-bold', note: 'Revenue minus all costs', highlight: true },
+                ].map((row, i) => (
+                  <div key={i} className={cn('flex items-center justify-between px-4 py-3', i > 0 && 'border-t border-gray-100 dark:border-gray-800', (row as { highlight?: boolean }).highlight && 'bg-gray-50 dark:bg-gray-800/50')}>
+                    <div>
+                      <p className={cn('text-sm font-medium', (row as { highlight?: boolean }).highlight ? 'text-gray-900 dark:text-gray-100 font-semibold' : 'text-gray-700 dark:text-gray-300')}>{row.label}</p>
+                      {row.note && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{row.note}</p>}
+                    </div>
+                    <p className={cn('text-sm', row.valueClass ?? 'text-gray-900 dark:text-gray-100')}>{row.value}</p>
+                  </div>
+                ))}
+              </div>
+              {summary.revenue > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">Revenue Breakdown</p>
+                  <div className="w-full h-3 rounded-full overflow-hidden flex">
+                    {[
+                      { pct: Math.max(0, (summary.net_profit / summary.revenue) * 100), cls: 'bg-emerald-400', label: 'Profit' },
+                      { pct: (summary.etsy_fees / summary.revenue) * 100, cls: 'bg-purple-400', label: 'Fees' },
+                      { pct: (summary.advertising_expenses / summary.revenue) * 100, cls: 'bg-pink-400', label: 'Ads' },
+                      { pct: (summary.refunds / summary.revenue) * 100, cls: 'bg-red-400', label: 'Refunds' },
+                    ].map((seg) => (
+                      <div key={seg.label} className={cn('h-full transition-all duration-500', seg.cls)} style={{ width: `${Math.max(0, Math.min(100, seg.pct))}%` }} />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-3 mt-2">
+                    {[{ label: 'Profit', cls: 'bg-emerald-400' }, { label: 'Fees', cls: 'bg-purple-400' }, { label: 'Ads', cls: 'bg-pink-400' }, { label: 'Refunds', cls: 'bg-red-400' }].map((item) => (
+                      <span key={item.label} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                        <span className={cn('w-2.5 h-2.5 rounded-sm inline-block', item.cls)} />
+                        {item.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ================================================================== */
 /*  Main Page                                                          */
 /* ================================================================== */
 
@@ -602,6 +929,7 @@ export default function FinancialsPage() {
   const [syncStatus, setSyncStatus] = useState<SyncStatusResponse | null>(null);
   const [discounts, setDiscounts] = useState<DiscountSummary | null>(null);
   const [showEntryTypesModal, setShowEntryTypesModal] = useState(false);
+  const [activeDrawer, setActiveDrawer] = useState<'payout' | 'balance' | 'profit' | null>(null);
 
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
   const shopId = !shopIds ? selectedShop?.id : undefined;
@@ -1051,29 +1379,22 @@ export default function FinancialsPage() {
           ) : null
         )}
 
-        {/* ── Upcoming Payout (prominent card) ── */}
-        {payout && payout.available_for_payout !== undefined && (
-          <div className="rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
-                  <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                    {t('financials.upcomingPayout')}
-                  </p>
-                  <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">
-                    {formatWithConversion(payout.available_for_payout, payout.currency, payout.converted_available_for_payout, payout.converted_currency)}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    {t('financials.availableForPayout')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* ── Financial Summary Cards ── */}
+        <FinancialSummaryCards
+          payout={payout}
+          summary={summary}
+          loading={loading && !payout}
+          onCardClick={(drawer) => setActiveDrawer(drawer)}
+        />
+
+        {/* ── Financial Detail Drawer ── */}
+        <FinancialDrawer
+          drawer={activeDrawer}
+          payout={payout}
+          summary={summary}
+          period={periodToLabel(period)}
+          onClose={() => setActiveDrawer(null)}
+        />
 
         {/* ── Activity Summary (Etsy-style) ── */}
         <div className="rounded-xl border bg-white dark:bg-gray-900 p-6 shadow-sm">

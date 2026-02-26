@@ -90,6 +90,11 @@ backup.sql
 *-backup.*
 *_backup.*
 
+# Windows reserved names (NUL, CON, PRN, etc.)
+NUL
+CON
+PRN
+
 # Misc
 .cache/
 tmp/

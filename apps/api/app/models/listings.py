@@ -509,6 +509,7 @@ class ShopFinancialState(Base):
     __tablename__ = "shop_financial_state"
 
     shop_id = Column(BigInteger, ForeignKey("shops.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id = Column(BigInteger, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     balance = Column(Integer, nullable=False, server_default="0")  # cents
     available_for_payout = Column(Integer, nullable=False, server_default="0")  # cents
     currency_code = Column(String(3), nullable=False, server_default="USD")
