@@ -251,7 +251,7 @@ class FinancialService:
                 result = {
                     "current_balance": state.balance,
                     "reserve_held": abs(state.reserve_amount or 0),
-                    "available_for_payout": state.available_for_payout,
+                    "available_for_payout": max(0, state.available_for_payout),
                     "currency": state.currency_code,
                     "recent_payouts": [
                         {"amount": abs(p[0]), "date": p[1].isoformat() if p[1] else None}
@@ -303,7 +303,7 @@ class FinancialService:
         result = {
             "current_balance": current_balance,
             "reserve_held": abs(reserve_total),
-            "available_for_payout": current_balance - abs(reserve_total),
+            "available_for_payout": max(0, current_balance - abs(reserve_total)),
             "currency": currency,
             "recent_payouts": [
                 {"amount": abs(p[0]), "date": p[1].isoformat() if p[1] else None}
