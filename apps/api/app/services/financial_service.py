@@ -262,7 +262,11 @@ class FinancialService:
                 self._set_cached(ck, result)
                 return result
 
-        # Fallback: ledger-based balance
+        # Fallback: derive balance from most recent ledger entry's running balance.
+        # This is the primary code path since Etsy's payment-account API endpoint
+        # is not available for all shops. The ledger's running `balance` field
+        # is updated with every transaction and accurately reflects the current
+        # account balance.
         filters = [LedgerEntry.tenant_id == tenant_id]
         self._apply_shop_filter(filters, LedgerEntry.shop_id, shop_id, shop_ids)
 
@@ -386,6 +390,19 @@ class FinancialService:
             reverse=True,
         )
 
+        # Get currency from ledger entries for this period
+        fee_currency_row = (
+            self.db.query(LedgerEntry.currency)
+            .join(
+                LedgerEntryTypeRegistry,
+                LedgerEntry.entry_type == LedgerEntryTypeRegistry.entry_type,
+            )
+            .filter(and_(*filters))
+            .order_by(LedgerEntry.entry_created_at.desc())
+            .first()
+        )
+        fee_currency = (fee_currency_row[0] if fee_currency_row and fee_currency_row[0] else "ILS") or "ILS"
+
         # Optional augmentation: sum PaymentDetail.amount_fees for cross-check
         pd_filters = [
             PaymentDetail.tenant_id == tenant_id,
@@ -402,7 +419,7 @@ class FinancialService:
         result = {
             "total_fees": total_fees,
             "categories": sorted(categories, key=lambda c: c["amount"], reverse=True),
-            "currency": "USD",
+            "currency": fee_currency,
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
         }

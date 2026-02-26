@@ -69,76 +69,77 @@ def _extract_entry_type(raw: dict) -> str:
 # Pre-populated Etsy ledger_type -> category mappings (from Etsy API docs / community findings)
 LEDGER_TYPE_SEED: Dict[str, str] = {
     # Sales (revenue credits)
-    "transaction": "sales",
-    "shipping_transaction": "sales",
-    "sale": "sales",
-    "Sale": "sales",
-    "SALE": "sales",
-    "gift_wrap_fees": "sales",
-    "Transaction": "sales",
+    "transaction":                   "sales",
+    "shipping_transaction":          "sales",
+    "sale":                          "sales",
+    "Sale":                          "sales",
+    "SALE":                          "sales",
+    "gift_wrap_fees":                "sales",
+    "Transaction":                   "sales",
+    "PAYMENT_GROSS":                 "sales",
+
     # Fees (debits — subtracted from profit)
-    "transaction_quantity": "fees",
-    "transaction_fee": "fees",
-    "processing_fee": "fees",
-    "listing": "fees",
-    "listing_private": "fees",
-    "renew_sold": "fees",
-    "renew_sold_auto": "fees",
-    "renew_expired": "fees",
-    "auto_renew_expired": "fees",
-    "PAYMENT_PROCESSING_FEE": "fees",
-    "payment_processing_fee": "fees",
-    "shipping_labels": "fees",
+    "transaction_quantity":          "fees",
+    "transaction_fee":               "fees",
+    "processing_fee":                "fees",
+    "listing":                       "fees",
+    "listing_private":               "fees",
+    "renew_sold":                    "fees",
+    "renew_sold_auto":               "fees",
+    "renew_expired":                 "fees",
+    "auto_renew_expired":            "fees",
+    "PAYMENT_PROCESSING_FEE":        "fees",
+    "payment_processing_fee":        "fees",
+    "shipping_labels":               "fees",
+    "seller_onboarding_fee":         "fees",
     "seller_onboarding_fee_payment": "fees",
-    "vat_tax_ep": "fees",
-    "vat_seller_services": "fees",
-    "DEPOSIT_FEE": "fees",
-    "Fee": "fees",
-    "FEE": "fees",
-    # Marketing / advertising (debits — subtracted from profit)
-    "offsite_ads_fee": "marketing",
-    "prolist": "marketing",
-    "Etsy Ads": "marketing",
-    "etsy_ads": "marketing",
-    "EtsyAds": "marketing",
-    "OffsiteAds": "marketing",
-    "ShippingLabel": "marketing",
-    "Marketing": "marketing",
-    # Refunds (debits — subtracted from profit)
-    "REFUND": "refunds",
-    "REFUND_GROSS": "refunds",
-    "REFUND_PROCESSING_FEE": "refunds",
-    "transaction_refund": "refunds",
-    "shipping_transaction_refund": "refunds",
-    "transaction_quantity_refund": "refunds",
-    "offsite_ads_fee_refund": "refunds",
-    "listing_refund": "refunds",
-    "listing_private_refund": "refunds",
-    "renew_sold_auto_refund": "refunds",
-    "shipping_label_refund": "refunds",
-    "refund": "refunds",
-    "Refund": "refunds",
-    # Adjustments — EXCLUDED from profit calculation entirely
-    # These are balance movements, pass-throughs, and tax collection
-    # that Etsy handles on the seller's behalf
-    "DISBURSE": "adjustments",
-    "DISBURSE2": "adjustments",  # bank payout — NOT revenue
-    "PAYMENT_GROSS": "adjustments",
-    "sales_tax": "adjustments",  # Etsy collects/remits, not seller income
-    "Tax": "adjustments",
-    "Adjustment": "adjustments",
-    "RECOUP": "adjustments",
-    "payout": "adjustments",
-    "Payment": "adjustments",
-    "Deposit": "adjustments",
-    "reserve": "adjustments",
-    "Reserve": "adjustments",
-    "Reserve_release": "adjustments",
-    # Discovered during live sync
-    "billing_payment":       "adjustments",
-    "seller_onboarding_fee": "fees",
-    "VAT_REFUND_EP":         "refunds",
-    "seller_credit":         "adjustments",
+    "vat_tax_ep":                    "fees",
+    "vat_seller_services":           "fees",
+    "DEPOSIT_FEE":                   "fees",
+    "Fee":                           "fees",
+    "FEE":                           "fees",
+
+    # Marketing / advertising (debited from profit)
+    "offsite_ads_fee":               "marketing",
+    "prolist":                       "marketing",
+    "Etsy Ads":                      "marketing",
+    "etsy_ads":                      "marketing",
+    "EtsyAds":                       "marketing",
+    "OffsiteAds":                    "marketing",
+    "ShippingLabel":                 "marketing",
+    "Marketing":                     "marketing",
+
+    # Refunds
+    "REFUND":                        "refunds",
+    "REFUND_GROSS":                  "refunds",
+    "REFUND_PROCESSING_FEE":         "refunds",
+    "transaction_refund":            "refunds",
+    "shipping_transaction_refund":   "refunds",
+    "transaction_quantity_refund":   "refunds",
+    "offsite_ads_fee_refund":        "refunds",
+    "listing_refund":                "refunds",
+    "listing_private_refund":        "refunds",
+    "renew_sold_auto_refund":        "refunds",
+    "shipping_label_refund":         "refunds",
+    "refund":                        "refunds",
+    "Refund":                        "refunds",
+    "VAT_REFUND_EP":                 "refunds",
+
+    # Adjustments — excluded from profit calculation entirely
+    "DISBURSE":                      "adjustments",
+    "DISBURSE2":                     "adjustments",
+    "sales_tax":                     "adjustments",
+    "Tax":                           "adjustments",
+    "Adjustment":                    "adjustments",
+    "RECOUP":                        "adjustments",
+    "payout":                        "adjustments",
+    "Payment":                       "adjustments",
+    "Deposit":                       "adjustments",
+    "reserve":                       "adjustments",
+    "Reserve":                       "adjustments",
+    "Reserve_release":               "adjustments",
+    "billing_payment":               "adjustments",
+    "seller_credit":                 "adjustments",
 }
 
 
@@ -287,8 +288,12 @@ async def _sync_shop_payment_account(
     db, etsy_client: EtsyClient, shop: Shop
 ) -> bool:
     """
-    Fetch payment-account from Etsy and upsert shop_financial_state.
+    Try to fetch payment-account from Etsy and upsert shop_financial_state.
     Returns True if updated, False if endpoint unavailable or error.
+
+    NOTE: As of 2026, Etsy's payment-account endpoint is not available for
+    all shops. When unavailable, get_payout_estimate() falls back to the
+    most recent ledger entry's running balance field, which is accurate.
     """
     try:
         data = await etsy_client.get_payment_account(
