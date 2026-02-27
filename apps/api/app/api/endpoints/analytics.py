@@ -102,18 +102,24 @@ async def get_overview_analytics(
 async def get_order_analytics(
     shop_id: Optional[int] = None,
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    start_date: Optional[str] = Query(None, description="ISO start date for date range filter"),
+    end_date: Optional[str] = Query(None, description="ISO end date for date range filter"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """Get order analytics with multi-store support."""
+    """Get order analytics with multi-store and date range support."""
     parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date)
     analytics = AnalyticsService(db)
     return analytics.get_order_analytics(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed else None,
         force_refresh=force_refresh,
         shop_ids=parsed,
+        start_date=start_dt,
+        end_date=end_dt,
     )
 
 
@@ -121,18 +127,24 @@ async def get_order_analytics(
 async def get_product_analytics(
     shop_id: Optional[int] = None,
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    start_date: Optional[str] = Query(None, description="ISO start date for date range filter"),
+    end_date: Optional[str] = Query(None, description="ISO end date for date range filter"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """Get product analytics with multi-store support."""
+    """Get product analytics with multi-store and date range support."""
     parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date)
     analytics = AnalyticsService(db)
     return analytics.get_product_analytics(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed else None,
         force_refresh=force_refresh,
         shop_ids=parsed,
+        start_date=start_dt,
+        end_date=end_dt,
     )
 
 
@@ -140,18 +152,24 @@ async def get_product_analytics(
 async def get_fulfillment_analytics(
     shop_id: Optional[int] = None,
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
+    start_date: Optional[str] = Query(None, description="ISO start date for date range filter"),
+    end_date: Optional[str] = Query(None, description="ISO end date for date range filter"),
     force_refresh: bool = Query(False, description="Force cache refresh"),
     context: UserContext = Depends(require_analytics_access()),
     db: Session = Depends(get_db)
 ):
-    """Get fulfillment analytics with multi-store support."""
+    """Get fulfillment analytics with multi-store and date range support."""
     parsed = _parse_analytics_shop_ids(shop_ids, shop_id, context, db)
+    start_dt = _parse_date(start_date)
+    end_dt = _parse_date(end_date)
     analytics = AnalyticsService(db)
     return analytics.get_fulfillment_analytics(
         tenant_id=context.tenant_id,
         shop_id=shop_id if not parsed else None,
         force_refresh=force_refresh,
         shop_ids=parsed,
+        start_date=start_dt,
+        end_date=end_dt,
     )
 
 

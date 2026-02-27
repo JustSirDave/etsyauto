@@ -226,11 +226,21 @@ class AnalyticsService:
         shop_id: Optional[int] = None,
         force_refresh: bool = False,
         shop_ids: Optional[List[int]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Get order analytics: status breakdown, volume trends
+        When start_date and end_date are provided, filters orders by created_at.
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "orders", shop_ids)
+        if start_date and end_date:
+            date_filter = [Order.created_at >= start_date, Order.created_at <= end_date]
+            date_suffix = f":{start_date.date()}:{end_date.date()}"
+        else:
+            date_filter = []
+            date_suffix = ""
+
+        cache_key = self._cache_key(tenant_id, shop_id, f"orders{date_suffix}", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -243,6 +253,8 @@ class AnalyticsService:
             base_query = base_query.filter(Order.shop_id.in_(shop_ids))
         elif shop_id:
             base_query = base_query.filter(Order.shop_id == shop_id)
+        for f in date_filter:
+            base_query = base_query.filter(f)
         
         # Order status breakdown
         status_counts = {}
@@ -332,11 +344,23 @@ class AnalyticsService:
         shop_id: Optional[int] = None,
         force_refresh: bool = False,
         shop_ids: Optional[List[int]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Get product analytics: listing performance, publish stats
+        When start_date and end_date are provided, filters products and listing jobs by created_at.
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "products", shop_ids)
+        if start_date and end_date:
+            date_filter = [Product.created_at >= start_date, Product.created_at <= end_date]
+            job_date_filter = [ListingJob.created_at >= start_date, ListingJob.created_at <= end_date]
+            date_suffix = f":{start_date.date()}:{end_date.date()}"
+        else:
+            date_filter = []
+            job_date_filter = []
+            date_suffix = ""
+
+        cache_key = self._cache_key(tenant_id, shop_id, f"products{date_suffix}", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -349,6 +373,8 @@ class AnalyticsService:
             product_query = product_query.filter(or_(Product.shop_id.in_(shop_ids), Product.shop_id.is_(None)))
         elif shop_id:
             product_query = product_query.filter(or_(Product.shop_id == shop_id, Product.shop_id.is_(None)))
+        for f in date_filter:
+            product_query = product_query.filter(f)
         
         total_products = product_query.count()
         published_products = product_query.filter(Product.etsy_listing_id.isnot(None)).count()
@@ -360,6 +386,8 @@ class AnalyticsService:
             job_query = job_query.filter(ListingJob.shop_id.in_(shop_ids))
         elif shop_id:
             job_query = job_query.filter(ListingJob.shop_id == shop_id)
+        for f in job_date_filter:
+            job_query = job_query.filter(f)
         
         total_jobs = job_query.count()
         successful_jobs = job_query.filter(ListingJob.status == "completed").count()
@@ -388,11 +416,21 @@ class AnalyticsService:
         shop_id: Optional[int] = None,
         force_refresh: bool = False,
         shop_ids: Optional[List[int]] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         """
         Get fulfillment analytics: shipment timing, delivery rates, supplier performance
+        When start_date and end_date are provided, filters shipment events by event_timestamp.
         """
-        cache_key = self._cache_key(tenant_id, shop_id, "fulfillment", shop_ids)
+        if start_date and end_date:
+            date_filter = [ShipmentEvent.event_timestamp >= start_date, ShipmentEvent.event_timestamp <= end_date]
+            date_suffix = f":{start_date.date()}:{end_date.date()}"
+        else:
+            date_filter = []
+            date_suffix = ""
+
+        cache_key = self._cache_key(tenant_id, shop_id, f"fulfillment{date_suffix}", shop_ids)
         
         if not force_refresh:
             cached = self._get_cached(cache_key)
@@ -405,6 +443,8 @@ class AnalyticsService:
             event_query = event_query.filter(ShipmentEvent.shop_id.in_(shop_ids))
         elif shop_id:
             event_query = event_query.filter(ShipmentEvent.shop_id == shop_id)
+        for f in date_filter:
+            event_query = event_query.filter(f)
         
         # State counts
         state_counts = {}
@@ -418,29 +458,46 @@ class AnalyticsService:
         auto_count = event_query.filter(ShipmentEvent.source == "auto").count()
         
         # Average fulfillment time (order created to shipped)
+        avg_filters = [
+            ShipmentEvent.tenant_id == tenant_id,
+            ShipmentEvent.state == "shipped",
+            ShipmentEvent.shipped_at.isnot(None),
+        ]
+        if shop_ids:
+            avg_filters.append(ShipmentEvent.shop_id.in_(shop_ids))
+        elif shop_id:
+            avg_filters.append(ShipmentEvent.shop_id == shop_id)
+        avg_filters.extend(date_filter)
+
         avg_fulfillment_query = self.db.query(
             func.avg(
                 func.extract('epoch', ShipmentEvent.shipped_at - Order.created_at)
             )
-        ).join(Order, ShipmentEvent.order_id == Order.id).filter(
-            ShipmentEvent.tenant_id == tenant_id,
-            ShipmentEvent.shop_id == shop_id if shop_id else True,
-            ShipmentEvent.state == "shipped",
-            ShipmentEvent.shipped_at.isnot(None)
-        )
+        ).join(Order, ShipmentEvent.order_id == Order.id).filter(*avg_filters)
         
         avg_fulfillment_seconds = avg_fulfillment_query.scalar() or 0
         avg_fulfillment_hours = avg_fulfillment_seconds / 3600 if avg_fulfillment_seconds else 0
         
         # Supplier performance (owner-only metric)
         supplier_stats = {}
+        supplier_filters = [
+            Order.tenant_id == tenant_id,
+            Order.supplier_user_id.isnot(None),
+        ]
+        if shop_ids:
+            supplier_filters.append(Order.shop_id.in_(shop_ids))
+        elif shop_id:
+            supplier_filters.append(Order.shop_id == shop_id)
+        # Filter by ShipmentEvent date when date range provided
+        if date_filter:
+            supplier_filters.append(ShipmentEvent.event_timestamp >= start_date)
+            supplier_filters.append(ShipmentEvent.event_timestamp <= end_date)
+
         supplier_query = self.db.query(
             Order.supplier_user_id,
             func.count(ShipmentEvent.id).label('shipment_count'),
         ).join(ShipmentEvent, Order.id == ShipmentEvent.order_id).filter(
-            Order.tenant_id == tenant_id,
-            Order.shop_id == shop_id if shop_id else True,
-            Order.supplier_user_id.isnot(None)
+            *supplier_filters
         ).group_by(Order.supplier_user_id).all()
         
         for supplier_id, shipment_count in supplier_query:

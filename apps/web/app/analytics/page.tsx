@@ -3,7 +3,7 @@
 /**
  * Analytics Page
  * Comprehensive analytics dashboard for Owner, Admin, and Viewer roles.
- * Pulls data from 4 backend endpoints: overview, orders, products, fulfillment.
+ * Pulls data from 3 backend endpoints: overview, orders, products.
  * Cards are clickable — opening a slide-over detail panel with the underlying data.
  */
 
@@ -14,7 +14,6 @@ import { useShop } from '@/lib/shop-context';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
 import { DisconnectedShopBanner } from '@/components/ui/DisconnectedShopBanner';
-import { API_BASE_URL } from '@/lib/api';
 import {
   analyticsApi,
   ordersApi,
@@ -34,22 +33,20 @@ import {
   TrendingUp,
   TrendingDown,
   Package,
-  Truck,
-  Clock,
   RefreshCw,
   BarChart3,
   CheckCircle,
   XCircle,
   AlertTriangle,
   FileText,
-  Layers,
-  Timer,
   ArrowUpRight,
   ArrowDownRight,
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   ExternalLink,
+  Calendar,
 } from 'lucide-react';
 
 /* ================================================================== */
@@ -79,6 +76,17 @@ function dateRangeToParams(preset: DateRangePreset): { start?: string; end?: str
     start: start.toISOString(),
     end: end.toISOString(),
   };
+}
+
+function dateRangeToLabel(preset: DateRangePreset, t: (k: string) => string): string {
+  const labels: Record<DateRangePreset, string> = {
+    '7d': t('analytics.last7d'),
+    '30d': t('analytics.last30d'),
+    '90d': t('analytics.last90d'),
+    '12m': t('analytics.last12m'),
+    all: t('analytics.allTime'),
+  };
+  return labels[preset];
 }
 
 /** Format analytics revenue (dollars) - uses converted value when user prefers non-USD */
@@ -765,88 +773,6 @@ function EmptyState({ message }: { message: string }) {
 /*  Main page                                                          */
 /* ================================================================== */
 
-function ShopComparisonPanel({
-  comparisonData,
-  shops,
-  onClose,
-}: {
-  comparisonData: Record<string, { overview: OverviewAnalytics; orders: OrderAnalytics }>;
-  shops: { id: number; display_name: string }[];
-  onClose: () => void;
-}) {
-  const { t } = useLanguage();
-  const shopEntries = Object.entries(comparisonData);
-
-  return (
-    <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-[var(--text-primary)]">{t('analytics.shopComparison')}</h3>
-        <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm">
-          {t('common.close')}
-        </button>
-      </div>
-
-      <div className={`grid gap-4 ${shopEntries.length === 2 ? 'grid-cols-2' : shopEntries.length >= 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
-        {shopEntries.map(([shopId, data]) => {
-          const shop = shops.find((s) => s.id === Number(shopId));
-          const shopName = shop?.display_name || `Shop ${shopId}`;
-          return (
-            <div key={shopId} className="bg-[var(--background)] rounded-xl border border-[var(--border-color)] p-4 space-y-3">
-              <h4 className="font-semibold text-[var(--text-primary)] text-sm border-b border-[var(--border-color)] pb-2">
-                {shopName}
-              </h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.revenue')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">{formatAnalyticsRevenue(data.overview.total_revenue, data.overview.converted_total_revenue, data.overview.converted_currency)}</p>
-                </div>
-                <div>
-                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">{data.overview.total_orders}</p>
-                </div>
-                <div>
-                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.avgOrder')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">{formatAnalyticsRevenue(data.overview.avg_order_value, data.overview.converted_avg_order_value, data.overview.converted_currency)}</p>
-                </div>
-                <div>
-                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.rev30d')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">{formatAnalyticsRevenue(data.overview.revenue_30d, data.overview.converted_revenue_30d, data.overview.converted_currency)}</p>
-                </div>
-                <div>
-                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders7d')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">{data.overview.orders_7d}</p>
-                </div>
-                <div>
-                  <p className="text-[var(--text-muted)] text-xs">{t('analytics.orders30d')}</p>
-                  <p className="text-[var(--text-primary)] font-semibold">{data.overview.orders_30d}</p>
-                </div>
-              </div>
-              <div className="text-xs space-y-1 pt-2 border-t border-[var(--border-color)]">
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">{t('analytics.processing')}</span>
-                  <span className="text-yellow-400">{data.orders.status_breakdown.processing}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">{t('analytics.inTransit')}</span>
-                  <span className="text-blue-400">{data.orders.status_breakdown.in_transit}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">{t('analytics.completed')}</span>
-                  <span className="text-green-400">{data.orders.status_breakdown.completed}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[var(--text-muted)]">{t('analytics.cancelled')}</span>
-                  <span className="text-red-400">{data.orders.status_breakdown.cancelled}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function AnalyticsContent() {
   const { user } = useAuth();
   const { selectedShop, selectedShopIds, selectedShops, isLoading: shopLoading } = useShop();
@@ -856,20 +782,10 @@ function AnalyticsContent() {
   const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
   const [orders, setOrders] = useState<OrderAnalytics | null>(null);
   const [products, setProducts] = useState<ProductAnalytics | null>(null);
-  const [fulfillment, setFulfillment] = useState<FulfillmentAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [detailView, setDetailView] = useState<DetailView>(null);
-  const [comparisonData, setComparisonData] = useState<Record<string, { overview: OverviewAnalytics; orders: OrderAnalytics }> | null>(null);
-  const [showComparison, setShowComparison] = useState(false);
-  const [loadingComparison, setLoadingComparison] = useState(false);
   const [dateRange, setDateRange] = useState<DateRangePreset>('30d');
-
-  // #region agent log
-  const loadCountRef = useRef(0);
-  const renderCountRef = useRef(0);
-  const hasContentRef = useRef(false);
-  // #endregion
+  const [showDateRangeMenu, setShowDateRangeMenu] = useState(false);
 
   const isOwner = user?.role?.toLowerCase() === 'owner';
   const shopIds = selectedShopIds && selectedShopIds.length > 0 ? selectedShopIds : undefined;
@@ -881,74 +797,28 @@ function AnalyticsContent() {
   );
 
   const loadAnalytics = useCallback(async (forceRefresh = false) => {
-    // #region agent log
-    loadCountRef.current += 1;
-    const callId = loadCountRef.current;
-    if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:loadAnalytics', message: 'loadAnalytics invoked', data: { callId, shopId, shopIdsLen: shopIds?.length ?? 0 }, timestamp: Date.now() }) }).catch(() => {});
-    // #endregion
+    setLoading(true);
     try {
-      if (forceRefresh) {
-        setRefreshing(true);
-      } else if (hasContentRef.current) {
-        if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:loadAnalytics', message: 'BLINK AVOIDED', data: { callId }, timestamp: Date.now() }) }).catch(() => {});
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-
-      const [overviewData, ordersData, productsData, fulfillmentData] = await Promise.all([
+      const [overviewData, ordersData, productsData] = await Promise.all([
         analyticsApi.getOverview(shopId, forceRefresh, shopIds, startDate, endDate),
-        analyticsApi.getOrders(shopId, forceRefresh, shopIds),
-        analyticsApi.getProducts(shopId, forceRefresh, shopIds),
-        analyticsApi.getFulfillment(shopId, forceRefresh, shopIds),
+        analyticsApi.getOrders(shopId, forceRefresh, shopIds, startDate, endDate),
+        analyticsApi.getProducts(shopId, forceRefresh, shopIds, startDate, endDate),
       ]);
-
       setOverview(overviewData);
       setOrders(ordersData);
       setProducts(productsData);
-      setFulfillment(fulfillmentData);
     } catch (err: unknown) {
       const error = err as { detail?: string };
       showToast(error?.detail || t('analytics.loadFailed'), 'error');
     } finally {
-      // #region agent log
-      if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:loadAnalytics', message: 'loadAnalytics done', data: { callId }, timestamp: Date.now() }) }).catch(() => {});
-      // #endregion
       setLoading(false);
-      setRefreshing(false);
     }
   }, [shopId, shopIds, startDate, endDate, showToast, t]);
 
   useEffect(() => {
-    // #region agent log
-    if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:useEffect', message: 'useEffect', data: { shopLoading, shopIdsLen: shopIds?.length ?? 0 }, timestamp: Date.now() }) }).catch(() => {});
-    // #endregion
     if (shopLoading) return;
     loadAnalytics();
   }, [loadAnalytics, shopLoading]);
-
-  const handleKpiClick = useCallback(async (detailViewValue: DetailView) => {
-    setDetailView(detailViewValue);
-    // If multiple shops are selected, also load comparison
-    if (shopIds && shopIds.length > 1) {
-      setLoadingComparison(true);
-      setShowComparison(true);
-      try {
-        const data = await analyticsApi.getComparison(shopIds);
-        setComparisonData(data.shops);
-      } catch {
-        setComparisonData(null);
-      } finally {
-        setLoadingComparison(false);
-      }
-    }
-  }, [shopIds]);
-
-  // #region agent log
-  renderCountRef.current += 1;
-  hasContentRef.current = !!(overview && !loading && !shopLoading);
-  if (typeof window !== 'undefined') fetch(`${API_BASE_URL}/api/debug/log`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'analytics:render', message: 'render', data: { render: renderCountRef.current, loading, shopLoading, hasOverview: !!overview }, timestamp: Date.now() }) }).catch(() => {});
-  // #endregion
 
   if (loading || shopLoading) {
     return (
@@ -964,44 +834,79 @@ function AnalyticsContent() {
   const paymentTotal = orders
     ? orders.payment_breakdown.paid + orders.payment_breakdown.unpaid
     : 0;
-  const fulfillmentTotal = fulfillment
-    ? Object.values(fulfillment.state_breakdown).reduce((a, b) => a + b, 0)
-    : 0;
-  const sourceTotal = fulfillment
-    ? Object.values(fulfillment.source_breakdown).reduce((a, b) => a + b, 0)
-    : 0;
-
   return (
     <div className="max-w-[1400px] mx-auto space-y-8">
       <DisconnectedShopBanner />
-      {/* Page header */}
-      <div className="flex items-center justify-between">
+
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text-primary)]">{t('analytics.title')}</h1>
-          <p className="text-[var(--text-muted)] mt-1">
-            {t('analytics.performanceOverview')}{shopIds && shopIds.length > 1 ? ` ${t('analytics.forShops')} ${shopIds.length} ${t('analytics.shops')}` : selectedShop ? ` ${t('analytics.forShops')} ${selectedShop.display_name}` : ''}
+          <h1 className="text-2xl font-bold text-[var(--text-primary)]">
+            {t('analytics.title')}
+          </h1>
+          <p className="text-[var(--text-muted)] mt-1 text-sm">
+            {selectedShop ? `Performance overview for ${selectedShop.display_name}` : 'Performance overview'}
             <span className="ml-2 text-xs">— {t('analytics.clickCardDetails')}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as DateRangePreset)}
-            className="rounded-lg border border-[var(--border-color)] px-3 py-2 text-sm bg-[var(--card-bg)] text-[var(--text-primary)] min-w-[140px]"
-          >
-            <option value="7d">{t('analytics.last7d')}</option>
-            <option value="30d">{t('analytics.last30d')}</option>
-            <option value="90d">{t('analytics.last90d')}</option>
-            <option value="12m">{t('analytics.last12m')}</option>
-            <option value="all">{t('analytics.allTime')}</option>
-          </select>
+          {/* Date range dropdown (matches financials page style) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowDateRangeMenu(!showDateRangeMenu)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors min-w-[180px] shadow-sm"
+            >
+              <Calendar className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
+              <span className="text-sm font-medium flex-1 text-left truncate">
+                {dateRangeToLabel(dateRange, t)}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showDateRangeMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showDateRangeMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setShowDateRangeMenu(false)}
+                />
+                <div className="absolute left-0 mt-2 w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {t('financials.dateRange') || 'Date range'}
+                    </p>
+                  </div>
+                  <div className="py-1">
+                    {(['7d', '30d', '90d', '12m', 'all'] as const).map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => {
+                          setDateRange(preset);
+                          setShowDateRangeMenu(false);
+                        }}
+                        className={`w-full flex items-center px-4 py-2.5 text-left transition-colors ${
+                          dateRange === preset
+                            ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
+                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <span className="text-sm">{dateRangeToLabel(preset, t)}</span>
+                        {dateRange === preset && (
+                          <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
           <button
             onClick={() => loadAnalytics(true)}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--card-bg)] border border-[var(--border-color)] text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--card-hover)] transition disabled:opacity-50"
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--background)] transition disabled:opacity-50"
           >
-            <RefreshCw className={cn('w-4 h-4', refreshing && 'animate-spin')} />
-            {refreshing ? t('analytics.refreshing') : t('analytics.refresh')}
+            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            {loading ? t('analytics.refreshing') : t('analytics.refresh')}
           </button>
         </div>
       </div>
@@ -1015,46 +920,18 @@ function AnalyticsContent() {
               title={t('analytics.totalRevenue')}
               value={formatAnalyticsRevenue(overview.total_revenue, overview.converted_total_revenue, overview.converted_currency)}
               icon={DollarSign}
-              onClick={() => handleKpiClick({ kind: 'revenue' })}
+              onClick={() => setDetailView({ kind: 'revenue' })}
             />
             <KpiCard
               title={t('analytics.totalOrders')}
               value={overview.total_orders}
               icon={ShoppingCart}
-              onClick={() => handleKpiClick({ kind: 'orders' })}
+              onClick={() => setDetailView({ kind: 'orders' })}
             />
             <KpiCard
               title={t('analytics.avgOrderValue')}
               value={formatAnalyticsRevenue(overview.avg_order_value, overview.converted_avg_order_value, overview.converted_currency)}
               icon={BarChart3}
-              onClick={() => handleKpiClick({ kind: 'revenue' })}
-            />
-            <KpiCard
-              title={t('analytics.revenue30d')}
-              value={formatAnalyticsRevenue(overview.revenue_30d, overview.converted_revenue_30d, overview.converted_currency)}
-              icon={DollarSign}
-              trend={overview.revenue_30d_trend}
-              trendLabel={t('analytics.vsPrev30d')}
-              onClick={() => handleKpiClick({ kind: 'revenue' })}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <KpiCard
-              title={t('analytics.orders7d')}
-              value={overview.orders_7d}
-              icon={ShoppingCart}
-              trend={overview.orders_7d_trend}
-              trendLabel={t('analytics.vsPrev7d')}
-              onClick={() => handleKpiClick({ kind: 'orders' })}
-            />
-            <KpiCard
-              title={t('analytics.orders30d')}
-              value={overview.orders_30d}
-              icon={ShoppingCart}
-              trend={overview.orders_30d_trend}
-              trendLabel={t('analytics.vsPrev30d')}
-              onClick={() => handleKpiClick({ kind: 'orders' })}
             />
             <KpiCard
               title={t('analytics.revenue7d')}
@@ -1062,33 +939,10 @@ function AnalyticsContent() {
               icon={TrendingUp}
               trend={overview.revenue_7d_trend}
               trendLabel={t('analytics.vsPrev7d')}
-              onClick={() => handleKpiClick({ kind: 'revenue' })}
-            />
-            <KpiCard
-              title={t('analytics.revenue30d')}
-              value={formatAnalyticsRevenue(overview.revenue_30d, overview.converted_revenue_30d, overview.converted_currency)}
-              icon={TrendingUp}
-              trend={overview.revenue_30d_trend}
-              trendLabel={t('analytics.vsPrev30d')}
-              onClick={() => handleKpiClick({ kind: 'revenue' })}
+              onClick={() => setDetailView({ kind: 'revenue' })}
             />
           </div>
         </>
-      )}
-
-      {/* ── Shop Comparison (when multiple shops selected) ──── */}
-      {showComparison && shopIds && shopIds.length > 1 && (
-        loadingComparison ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--primary)]" />
-          </div>
-        ) : comparisonData ? (
-          <ShopComparisonPanel
-            comparisonData={comparisonData}
-            shops={selectedShops}
-            onClose={() => { setShowComparison(false); setComparisonData(null); }}
-          />
-        ) : null
       )}
 
       {/* ── Order Status & Payment ───────────────────────────── */}
@@ -1098,9 +952,9 @@ function AnalyticsContent() {
           <ClickableCard>
             <SectionHeader title={t('analytics.orderStatus')} subtitle={`${orderTotal} total orders`} />
             <div className="space-y-4">
-              <BarItem label={t('analytics.processing')} value={orders.status_breakdown.processing} total={orderTotal} color="bg-yellow-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'processing' })} />
-              <BarItem label={t('analytics.inTransit')} value={orders.status_breakdown.in_transit} total={orderTotal} color="bg-blue-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'in_transit' })} />
               <BarItem label={t('analytics.completed')} value={orders.status_breakdown.completed} total={orderTotal} color="bg-emerald-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'completed' })} />
+              <BarItem label={t('analytics.processing')} value={orders.status_breakdown.processing} total={orderTotal} color="bg-amber-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'processing' })} />
+              <BarItem label={t('analytics.inTransit')} value={orders.status_breakdown.in_transit} total={orderTotal} color="bg-blue-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'in_transit' })} />
               <BarItem label={t('analytics.cancelled')} value={orders.status_breakdown.cancelled} total={orderTotal} color="bg-red-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'cancelled' })} />
               <BarItem label={t('analytics.refunded')} value={orders.status_breakdown.refunded} total={orderTotal} color="bg-orange-500" onClick={() => setDetailView({ kind: 'orders', statusFilter: 'refunded' })} />
             </div>
@@ -1148,130 +1002,74 @@ function AnalyticsContent() {
         </div>
       )}
 
-      {/* ── Products & Listings ──────────────────────────────── */}
+      {/* ── Products ─────────────────────────────────────────── */}
       {products && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Product overview */}
+        <>
+          <SectionHeader title={t('analytics.products')} subtitle={t('analytics.inventoryOverview')} />
           <ClickableCard onClick={() => setDetailView({ kind: 'products' })}>
-            <SectionHeader title={t('analytics.products')} subtitle={t('analytics.inventoryOverview')} />
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-3 gap-6 mb-6">
               <div className="text-center p-4 rounded-lg bg-[var(--background)]">
                 <Package className="w-6 h-6 text-[var(--primary)] mx-auto mb-2" />
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{products.total_products}</p>
-                <p className="text-xs text-[var(--text-muted)]">{t('analytics.total')}</p>
+                <p className="text-3xl font-bold text-[var(--text-primary)]">{products.total_products}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{t('analytics.total')}</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-[var(--background)]">
                 <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{products.published_products}</p>
-                <p className="text-xs text-[var(--text-muted)]">{t('analytics.published')}</p>
+                <p className="text-3xl font-bold text-[var(--text-primary)]">{products.published_products}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{t('analytics.published')}</p>
               </div>
               <div className="text-center p-4 rounded-lg bg-[var(--background)]">
-                <FileText className="w-6 h-6 text-yellow-500 mx-auto mb-2" />
-                <p className="text-2xl font-bold text-[var(--text-primary)]">{products.draft_products}</p>
-                <p className="text-xs text-[var(--text-muted)]">{t('analytics.drafts')}</p>
+                <FileText className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+                <p className="text-3xl font-bold text-[var(--text-primary)]">{products.draft_products}</p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">{t('analytics.drafts')}</p>
               </div>
             </div>
-
             {products.total_products > 0 && (
-              <div className="h-3 rounded-full overflow-hidden flex bg-[var(--background)]">
-                <div
-                  className="bg-emerald-500 transition-all duration-500"
-                  style={{ width: `${(products.published_products / products.total_products) * 100}%` }}
-                />
-                <div
-                  className="bg-yellow-400 transition-all duration-500"
-                  style={{ width: `${(products.draft_products / products.total_products) * 100}%` }}
-                />
-              </div>
+              <>
+                <div className="h-3 rounded-full overflow-hidden flex bg-[var(--background)] mb-2">
+                  <div className="bg-emerald-500 transition-all duration-700" style={{ width: `${(products.published_products / products.total_products) * 100}%` }} />
+                  <div className="bg-amber-400 transition-all duration-700" style={{ width: `${(products.draft_products / products.total_products) * 100}%` }} />
+                </div>
+                <div className="flex justify-between text-xs text-[var(--text-muted)]">
+                  <span>Published ({((products.published_products / products.total_products) * 100).toFixed(0)}%)</span>
+                  <span>Drafts ({((products.draft_products / products.total_products) * 100).toFixed(0)}%)</span>
+                </div>
+              </>
             )}
           </ClickableCard>
-
-          {/* Listing jobs */}
-          <ClickableCard onClick={() => setDetailView({ kind: 'listings' })}>
-            <SectionHeader title={t('analytics.listingJobs')} subtitle={t('analytics.publishingPipeline')} />
-            <div className="space-y-4">
-              <BarItem label={t('analytics.successful')} value={products.listing_jobs.successful} total={products.listing_jobs.total} color="bg-emerald-500" />
-              <BarItem label={t('analytics.pending')} value={products.listing_jobs.pending} total={products.listing_jobs.total} color="bg-blue-500" />
-              <BarItem label={t('analytics.failed')} value={products.listing_jobs.failed} total={products.listing_jobs.total} color="bg-red-500" />
-            </div>
-            <div className="mt-4 p-3 rounded-lg bg-[var(--background)] text-center">
-              <p className="text-sm text-[var(--text-muted)]">{t('analytics.totalJobs')}</p>
-              <p className="text-xl font-bold text-[var(--text-primary)]">{products.listing_jobs.total}</p>
-            </div>
-          </ClickableCard>
-        </div>
+        </>
       )}
 
-      {/* ── Fulfillment ──────────────────────────────────────── */}
-      {fulfillment && (
-        <>
-          <SectionHeader title={t('analytics.fulfillment')} subtitle={t('analytics.shippingPerformance')} />
-
-          {/* Fulfillment KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <KpiCard
-              title={t('analytics.avgFulfillmentTime')}
-              value={fulfillment.avg_fulfillment_time_hours > 0 ? fulfillment.avg_fulfillment_time_hours.toFixed(1) : '—'}
-              suffix={fulfillment.avg_fulfillment_time_hours > 0 ? t('analytics.hours') : ''}
-              icon={Timer}
-              onClick={() => setDetailView({ kind: 'fulfillment' })}
-            />
-            <KpiCard
-              title={t('analytics.delivered')}
-              value={fulfillment.state_breakdown.delivered}
-              icon={CheckCircle}
-              onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delivered' })}
-            />
-            <KpiCard
-              title={t('analytics.inTransit')}
-              value={fulfillment.state_breakdown.in_transit + fulfillment.state_breakdown.shipped}
-              icon={Truck}
-              onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'in_transit' })}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Fulfillment states */}
-            <ClickableCard>
-              <SectionHeader title={t('analytics.fulfillmentStatus')} subtitle={`${fulfillmentTotal} ${t('analytics.shipments')}`} />
-              <div className="space-y-3">
-                <DonutStat label={t('analytics.processing')} value={fulfillment.state_breakdown.processing} total={fulfillmentTotal} color="bg-yellow-100 text-yellow-600" icon={Clock} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'processing' })} />
-                <DonutStat label={t('analytics.shipped')} value={fulfillment.state_breakdown.shipped} total={fulfillmentTotal} color="bg-blue-100 text-blue-600" icon={Truck} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'shipped' })} />
-                <DonutStat label={t('analytics.inTransit')} value={fulfillment.state_breakdown.in_transit} total={fulfillmentTotal} color="bg-indigo-100 text-indigo-600" icon={Truck} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'in_transit' })} />
-                <DonutStat label={t('analytics.delivered')} value={fulfillment.state_breakdown.delivered} total={fulfillmentTotal} color="bg-emerald-100 text-emerald-600" icon={CheckCircle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delivered' })} />
-                <DonutStat label={t('analytics.delayed')} value={fulfillment.state_breakdown.delayed} total={fulfillmentTotal} color="bg-orange-100 text-orange-600" icon={AlertTriangle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'delayed' })} />
-                <DonutStat label={t('analytics.cancelled')} value={fulfillment.state_breakdown.cancelled} total={fulfillmentTotal} color="bg-red-100 text-red-600" icon={XCircle} onClick={() => setDetailView({ kind: 'fulfillment', stateFilter: 'cancelled' })} />
-              </div>
-            </ClickableCard>
-
-            {/* Shipment source + supplier performance */}
-            <div className="space-y-6">
-              <ClickableCard onClick={() => setDetailView({ kind: 'sources' })}>
-                <SectionHeader title={t('analytics.shipmentSource')} subtitle={t('analytics.howShipmentsCreated')} />
-                <div className="space-y-4">
-                  <BarItem label={t('analytics.manual')} value={fulfillment.source_breakdown.manual} total={sourceTotal} color="bg-violet-500" />
-                  <BarItem label={t('analytics.etsySync')} value={fulfillment.source_breakdown.etsy_sync} total={sourceTotal} color="bg-blue-500" />
-                  <BarItem label={t('analytics.automatic')} value={fulfillment.source_breakdown.auto} total={sourceTotal} color="bg-emerald-500" />
-                </div>
-              </ClickableCard>
-
-              {/* Supplier performance (owner only) */}
-              {isOwner && fulfillment.supplier_performance && Object.keys(fulfillment.supplier_performance).length > 0 && (
-                <ClickableCard onClick={() => setDetailView({ kind: 'suppliers' })}>
-                  <SectionHeader title={t('analytics.supplierPerformance')} subtitle={t('analytics.shipmentsPerSupplier')} />
-                  <div className="space-y-3">
-                    {Object.entries(fulfillment.supplier_performance).map(([supplierId, data]) => (
-                      <div key={supplierId} className="flex items-center justify-between p-3 rounded-lg bg-[var(--background)]">
-                        <span className="text-sm text-[var(--text-secondary)]">{t('analytics.supplier')} #{supplierId}</span>
-                        <span className="font-semibold text-[var(--text-primary)]">{data.shipment_count} {t('analytics.shipments')}</span>
-                      </div>
-                    ))}
+      {/* ── Revenue Breakdown ───────────────────────────────── */}
+      {overview && (
+        <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] p-6">
+          <h3 className="text-base font-semibold text-[var(--text-primary)] mb-5">Revenue Breakdown</h3>
+          <div className="space-y-5">
+            {[
+              { label: 'Last 7 days', value: overview.revenue_7d, converted: overview.converted_revenue_7d, color: 'bg-blue-500' },
+              { label: 'Last 30 days', value: overview.revenue_30d, converted: overview.converted_revenue_30d, color: 'bg-indigo-500' },
+              { label: `Total (${dateRangeToLabel(dateRange, t)})`, value: overview.total_revenue, converted: overview.converted_total_revenue, color: 'bg-emerald-500' },
+            ].map((item) => {
+              const max = Math.max(overview.total_revenue, 1);
+              return (
+                <div key={item.label}>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-[var(--text-secondary)]">{item.label}</span>
+                    <span className="font-semibold text-[var(--text-primary)]">
+                      {formatAnalyticsRevenue(item.value, item.converted, overview.converted_currency)}
+                    </span>
                   </div>
-                </ClickableCard>
-              )}
-            </div>
+                  <div className="h-2.5 rounded-full bg-[var(--background)] overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${item.color}`}
+                      style={{ width: `${Math.max((item.value / max) * 100, 2)}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </>
+        </div>
       )}
 
       {/* Cache timestamp */}
@@ -1289,7 +1087,7 @@ function AnalyticsContent() {
           overview={overview}
           orders={orders}
           products={products}
-          fulfillment={fulfillment}
+          fulfillment={null}
           shopId={shopId}
           isOwner={isOwner}
         />
