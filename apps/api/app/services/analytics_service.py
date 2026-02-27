@@ -109,7 +109,7 @@ class AnalyticsService:
             last_30_days = max(last_30_days, start_date)
             prev_7_days = last_7_days - timedelta(days=7)
             prev_30_days = last_30_days - timedelta(days=30)
-            date_filter = [Order.created_at >= start_date, Order.created_at <= end_date]
+            date_filter = [Order.etsy_created_at >= start_date, Order.etsy_created_at <= end_date]
         else:
             last_7_days = now - timedelta(days=7)
             last_30_days = now - timedelta(days=30)
@@ -130,17 +130,17 @@ class AnalyticsService:
         total_orders = base_query.count()
 
         # Last 7/30 days orders (within range or rolling)
-        orders_7d = base_query.filter(Order.created_at >= last_7_days).count()
-        orders_30d = base_query.filter(Order.created_at >= last_30_days).count()
+        orders_7d = base_query.filter(Order.etsy_created_at >= last_7_days).count()
+        orders_30d = base_query.filter(Order.etsy_created_at >= last_30_days).count()
 
         # Previous period for trends
         prev_orders_7d = base_query.filter(
-            Order.created_at >= prev_7_days,
-            Order.created_at < last_7_days
+            Order.etsy_created_at >= prev_7_days,
+            Order.etsy_created_at < last_7_days
         ).count()
         prev_orders_30d = base_query.filter(
-            Order.created_at >= prev_30_days,
-            Order.created_at < last_30_days
+            Order.etsy_created_at >= prev_30_days,
+            Order.etsy_created_at < last_30_days
         ).count()
 
         # Revenue (in cents, convert to dollars)
@@ -163,27 +163,27 @@ class AnalyticsService:
 
         revenue_7d_cents = self.db.query(func.sum(Order.total_price)).filter(
             *rev_filters,
-            Order.created_at >= last_7_days
+            Order.etsy_created_at >= last_7_days
         ).scalar() or 0
         revenue_7d = float(revenue_7d_cents) / 100
 
         revenue_30d_cents = self.db.query(func.sum(Order.total_price)).filter(
             *rev_filters,
-            Order.created_at >= last_30_days
+            Order.etsy_created_at >= last_30_days
         ).scalar() or 0
         revenue_30d = float(revenue_30d_cents) / 100
 
         prev_revenue_7d_cents = self.db.query(func.sum(Order.total_price)).filter(
             *rev_filters,
-            Order.created_at >= prev_7_days,
-            Order.created_at < last_7_days
+            Order.etsy_created_at >= prev_7_days,
+            Order.etsy_created_at < last_7_days
         ).scalar() or 0
         prev_revenue_7d = float(prev_revenue_7d_cents) / 100
 
         prev_revenue_30d_cents = self.db.query(func.sum(Order.total_price)).filter(
             *rev_filters,
-            Order.created_at >= prev_30_days,
-            Order.created_at < last_30_days
+            Order.etsy_created_at >= prev_30_days,
+            Order.etsy_created_at < last_30_days
         ).scalar() or 0
         prev_revenue_30d = float(prev_revenue_30d_cents) / 100
 
@@ -234,7 +234,7 @@ class AnalyticsService:
         When start_date and end_date are provided, filters orders by created_at.
         """
         if start_date and end_date:
-            date_filter = [Order.created_at >= start_date, Order.created_at <= end_date]
+            date_filter = [Order.etsy_created_at >= start_date, Order.etsy_created_at <= end_date]
             date_suffix = f":{start_date.date()}:{end_date.date()}"
         else:
             date_filter = []
@@ -471,7 +471,7 @@ class AnalyticsService:
 
         avg_fulfillment_query = self.db.query(
             func.avg(
-                func.extract('epoch', ShipmentEvent.shipped_at - Order.created_at)
+                func.extract('epoch', ShipmentEvent.shipped_at - Order.etsy_created_at)
             )
         ).join(Order, ShipmentEvent.order_id == Order.id).filter(*avg_filters)
         
