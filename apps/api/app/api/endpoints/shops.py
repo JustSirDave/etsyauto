@@ -2,6 +2,7 @@
 Shops API Endpoints - Etsy OAuth Integration
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
@@ -15,6 +16,7 @@ from app.core.database import get_db
 from app.api.dependencies import get_current_user
 from app.api.dependencies import (
     get_user_context,
+    get_optional_user_context,
     UserContext,
     require_permission,
     require_shop_access
@@ -203,133 +205,126 @@ async def connect_etsy_shop(
 @router.post("/etsy/callback", tags=["Shops"])
 async def etsy_oauth_callback(
     request: OAuthCallbackRequest,
-    context: UserContext = Depends(require_permission(Permission.CONNECT_SHOP)),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    context: Optional[UserContext] = Depends(get_optional_user_context),
 ):
     """
-    Step 2: Handle OAuth callback from Etsy
-    Requires: CONNECT_SHOP permission (Owner, Admin)
-
-    Exchange authorization code for access token and save shop
+    Step 2: Handle OAuth callback from Etsy.
+    Works both for authenticated users (direct connect) and
+    unauthenticated users (connection link flow).
     """
-    try:
-        # Retrieve code_verifier from Redis using state
-        state_data_json = redis_client.get(f"etsy_oauth_state:{request.state}")
-        if not state_data_json:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired OAuth state. Please try connecting again."
-            )
+    # Look up PKCE state from Redis
+    state_key = f"etsy_oauth_state:{request.state}"
+    state_data_raw = redis_client.get(state_key)
 
-        state_data = json.loads(state_data_json)
-        code_verifier = state_data.get("code_verifier")
-        stored_user_id = state_data.get("user_id")
-        stored_tenant_id = state_data.get("tenant_id")
-
-        if stored_user_id != context.user_id or stored_tenant_id != context.tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OAuth state does not match the current user. Please try again."
-            )
-
-        # Clean up Redis entry
-        redis_client.delete(f"etsy_oauth_state:{request.state}")
-
-        # Exchange code for tokens with PKCE verifier
-        token_data = await etsy_oauth.exchange_code_for_token(request.code, code_verifier)
-
-        # Get shop information
-        shop_info = await etsy_oauth.get_shop_info(token_data["access_token"])
-        preferred_name = state_data.get("shop_name") or shop_info.get("shop_name")
-        
-        # Check if shop already exists
-        existing_shop = db.query(Shop).filter(
-            Shop.etsy_shop_id == str(shop_info["shop_id"])
-        ).first()
-        
-        if existing_shop:
-            # Update existing shop
-            shop = existing_shop
-            shop.display_name = preferred_name
-            shop.status = "connected"
-        else:
-            # Create new shop
-            shop = Shop(
-                tenant_id=context.tenant_id,
-                etsy_shop_id=str(shop_info["shop_id"]),
-                display_name=preferred_name,
-                status="connected"
-            )
-            db.add(shop)
-            db.flush()
-
-        # Link shop to the connecting user
-        membership = db.query(Membership).filter(
-            Membership.user_id == context.user_id,
-            Membership.tenant_id == context.tenant_id,
-            Membership.invitation_status == 'accepted'
-        ).first()
-        if membership:
-            allowed_shop_ids = membership.allowed_shop_ids or []
-            if shop.id not in allowed_shop_ids:
-                allowed_shop_ids.append(shop.id)
-                membership.allowed_shop_ids = allowed_shop_ids
-        
-        # Use TokenManager to save encrypted tokens
-        token_manager = TokenManager(db, redis_client)
-        await token_manager.save_token(
-            tenant_id=context.tenant_id,
-            shop_id=shop.id,
-            access_token=token_data["access_token"],
-            refresh_token=token_data.get("refresh_token", ""),
-            expires_in=token_data["expires_in"],
-            provider="etsy",
-            scopes=" ".join(EtsyOAuthService.SCOPES)
-        )
-
-        # Link shop to the connecting user (per-user shop access)
-        membership = db.query(Membership).filter(
-            Membership.user_id == context.user_id,
-            Membership.tenant_id == context.tenant_id,
-            Membership.invitation_status == 'accepted'
-        ).first()
-        if membership:
-            allowed_shop_ids = membership.allowed_shop_ids or []
-            if shop.id not in allowed_shop_ids:
-                allowed_shop_ids.append(shop.id)
-                membership.allowed_shop_ids = allowed_shop_ids
-
-        db.commit()
-        
-        db.refresh(shop)
-
-        # Trigger financial sync so data is pulled after connect/reconnect
-        sync_ledger_entries.delay(
-            shop_id=shop.id,
-            tenant_id=context.tenant_id,
-            force_full_sync=False,
-        )
-        sync_payment_details.delay(shop_id=shop.id, tenant_id=context.tenant_id)
-        
-        return {
-            "message": "Shop connected successfully",
-            "shop": {
-                "id": shop.id,
-                "etsy_shop_id": shop.etsy_shop_id,
-                "display_name": shop.display_name,
-                "status": shop.status
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.exception("Failed to connect shop")
+    if not state_data_raw:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Failed to connect shop. Please try again."
+            detail="OAuth session expired or invalid. Please generate a new connection link.",
         )
+
+    state_data = json.loads(state_data_raw)
+    redis_client.delete(state_key)  # consume it — one time use
+
+    code_verifier = state_data.get("code_verifier")
+    tenant_id = state_data.get("tenant_id")
+    user_id = state_data.get("user_id")
+    shop_name = state_data.get("shop_name")
+    from_connect_link = state_data.get("from_connect_link", False)
+
+    # If not from connect link, require authenticated context
+    if not from_connect_link:
+        if not context:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+            )
+        tenant_id = context.tenant_id
+        user_id = context.user_id
+
+    if not tenant_id or not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing tenant or user context in OAuth state.",
+        )
+
+    try:
+        # Exchange code for tokens
+        token_data = await etsy_oauth.exchange_code_for_token(request.code, code_verifier)
+    except Exception as e:
+        logger.error(f"Etsy token exchange failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to exchange authorization code: {str(e)}",
+        )
+
+    # Get shop information
+    shop_info = await etsy_oauth.get_shop_info(token_data["access_token"])
+    preferred_name = shop_name or shop_info.get("shop_name")
+
+    # Check if shop already exists
+    existing_shop = db.query(Shop).filter(
+        Shop.etsy_shop_id == str(shop_info["shop_id"])
+    ).first()
+
+    if existing_shop:
+        shop = existing_shop
+        shop.display_name = preferred_name
+        shop.status = "connected"
+    else:
+        shop = Shop(
+            tenant_id=tenant_id,
+            etsy_shop_id=str(shop_info["shop_id"]),
+            display_name=preferred_name,
+            status="connected"
+        )
+        db.add(shop)
+        db.flush()
+
+    # Link shop to the connecting user
+    membership = db.query(Membership).filter(
+        Membership.user_id == user_id,
+        Membership.tenant_id == tenant_id,
+        Membership.invitation_status == 'accepted'
+    ).first()
+    if membership:
+        allowed_shop_ids = membership.allowed_shop_ids or []
+        if shop.id not in allowed_shop_ids:
+            allowed_shop_ids.append(shop.id)
+            membership.allowed_shop_ids = allowed_shop_ids
+
+    # Use TokenManager to save encrypted tokens
+    token_manager = TokenManager(db, redis_client)
+    await token_manager.save_token(
+        tenant_id=tenant_id,
+        shop_id=shop.id,
+        access_token=token_data["access_token"],
+        refresh_token=token_data.get("refresh_token", ""),
+        expires_in=token_data["expires_in"],
+        provider="etsy",
+        scopes=" ".join(EtsyOAuthService.SCOPES)
+    )
+
+    db.commit()
+    db.refresh(shop)
+
+    # Trigger financial sync so data is pulled after connect/reconnect
+    sync_ledger_entries.delay(
+        shop_id=shop.id,
+        tenant_id=tenant_id,
+        force_full_sync=False,
+    )
+    sync_payment_details.delay(shop_id=shop.id, tenant_id=tenant_id)
+
+    return {
+        "message": "Shop connected successfully",
+        "shop": {
+            "id": shop.id,
+            "etsy_shop_id": shop.etsy_shop_id,
+            "display_name": shop.display_name,
+            "status": shop.status
+        }
+    }
 
 
 @router.get("/", tags=["Shops"])

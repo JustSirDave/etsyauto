@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     # Etsy API
     ETSY_CLIENT_ID: str = ""
     ETSY_CLIENT_SECRET: str = ""
-    ETSY_REDIRECT_URI: str = "http://localhost:3000/api/auth/callback/etsy"
+    ETSY_REDIRECT_URI: str = "http://localhost:3000/oauth/etsy/callback"
     ETSY_API_BASE_URL: str = "https://openapi.etsy.com/v3"
     ETSY_WEBHOOK_SECRET: str = ""  # Secret for verifying webhook signatures
     ETSY_RATE_LIMIT_CAPACITY: int = 100

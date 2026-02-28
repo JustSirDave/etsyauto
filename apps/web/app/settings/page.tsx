@@ -76,6 +76,18 @@ function SettingsContent() {
   useEffect(() => { if (activeTab === 'currency') loadCurrencyPrefs(); }, [activeTab]);
   useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
 
+  useEffect(() => {
+    if (searchParams.get('etsy') === 'connected') {
+      setNotification({
+        show: true,
+        type: 'success',
+        title: t('settings.shopConnected') || 'Shop Connected',
+        message: t('settings.shopConnectedMsg') || 'Your Etsy shop has been successfully connected.',
+      });
+      window.history.replaceState({}, '', '/settings?tab=shops');
+    }
+  }, [searchParams]);
+
   const loadCurrencyPrefs = async () => {
     try {
       setLoadingCurrency(true);

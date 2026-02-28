@@ -320,6 +320,59 @@ def require_shop_access(
     return shop_checker
 
 
+def get_current_user_optional(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+) -> Optional[dict]:
+    """Returns JWT payload if authenticated, None otherwise. Does not raise."""
+    token = request.cookies.get("access_token")
+    if not token and credentials:
+        token = credentials.credentials
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+        if payload.get("type") == "refresh":
+            return None
+        return payload
+    except Exception:
+        return None
+
+
+def get_optional_user_context(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
+) -> Optional[UserContext]:
+    """Returns user context if authenticated, None otherwise. Does not raise."""
+    if not current_user:
+        return None
+    try:
+        user_id = int(current_user.get("sub") or current_user.get("user_id") or current_user.get("id"))
+        tenant_id = int(current_user.get("tenant_id"))
+        role = current_user.get("role")
+        if not user_id or not tenant_id or not role:
+            return None
+        membership = db.query(Membership).filter(
+            Membership.user_id == user_id,
+            Membership.tenant_id == tenant_id,
+            Membership.invitation_status == 'accepted'
+        ).first()
+        if not membership:
+            return None
+        allowed_shop_ids = membership.allowed_shop_ids or []
+        return UserContext(
+            user_id=user_id,
+            tenant_id=tenant_id,
+            role=role,
+            email=current_user.get("email", ""),
+            name=current_user.get("name"),
+            allowed_shop_ids=allowed_shop_ids,
+        )
+    except Exception:
+        return None
+
+
 def require_analytics_access():
     """
     Dependency to enforce analytics access (Owner/Admin/Viewer only)
