@@ -239,6 +239,12 @@ function LoginContent() {
           Privacy Policy
         </a>
       </p>
+
+      {/* Etsy Attribution Notice - Required by Etsy API Terms */}
+      <p className="mt-6 text-center text-xs text-[var(--text-muted)] max-w-sm mx-auto leading-relaxed">
+        The term &ldquo;Etsy&rdquo; is a trademark of Etsy, Inc. This application
+        uses the Etsy API but is not endorsed or certified by Etsy, Inc.
+      </p>
     </AuthLayout>
   );
 }

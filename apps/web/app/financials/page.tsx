@@ -128,20 +128,89 @@ function timeAgo(iso: string | null): string {
 /** Pretty entry type label (fallback for non-translated contexts) */
 function entryTypeLabel(t: string): string {
   const map: Record<string, string> = {
+    // Normalized categories (already mapped)
     sale: 'Sale',
     refund: 'Refund',
-    reserve: 'Reserve',
-    payout: 'Payout',
-    listing_renewal: 'Listing Renewal',
-    transaction_fee: 'Transaction Fee',
-    processing_fee: 'Processing Fee',
+    fee: 'Fee',
     advertising: 'Advertising',
     shipping_label: 'Shipping Label',
     subscription: 'Subscription',
-    tax: 'Tax',
+    processing_fee: 'Processing Fee',
+    transaction_fee: 'Transaction Fee',
+    listing_fee: 'Listing Fee',
+    offsite_ads: 'Offsite Ads',
+    vat_fee: 'VAT Fee',
     other: 'Other',
+
+    // Raw Etsy payment/revenue types
+    PAYMENT_GROSS: 'Payment Received',
+    payment_gross: 'Payment Received',
+    PAYMENT: 'Payment',
+    payment: 'Payment',
+    DEPOSIT: 'Deposit',
+    deposit: 'Deposit',
+    DISBURSE: 'Payout',
+    DISBURSE2: 'Payout',
+    disburse: 'Payout',
+    payout: 'Payout',
+    Payout: 'Payout',
+
+    // Raw Etsy fee types
+    PAYMENT_PROCESSING_FEE: 'Processing Fee',
+    payment_processing_fee: 'Processing Fee',
+    transaction: 'Transaction Fee',
+    TRANSACTION: 'Transaction Fee',
+    listing: 'Listing Fee',
+    LISTING: 'Listing Fee',
+    prolist: 'Promoted Listing',
+    PROLIST: 'Promoted Listing',
+    offsite_ads_fee: 'Offsite Ads Fee',
+    OFFSITE_ADS_FEE: 'Offsite Ads Fee',
+    DEPOSIT_FEE: 'Deposit Fee',
+    deposit_fee: 'Deposit Fee',
+
+    // Renewal types
+    renew_sold_auto: 'Auto Renewal (Sold)',
+    renew_sold: 'Renewal (Sold)',
+    renew_expired: 'Renewal (Expired)',
+    RENEW_SOLD_AUTO: 'Auto Renewal (Sold)',
+    RENEW_SOLD: 'Renewal (Sold)',
+    RENEW_EXPIRED: 'Renewal (Expired)',
+
+    // Refund types
+    REFUND: 'Refund',
+    REVERSAL: 'Reversal',
+    reversal: 'Reversal',
+    CASE_REFUND: 'Case Refund',
+    case_refund: 'Case Refund',
+
+    // Tax types
+    vat_tax_ep: 'VAT Tax',
+    VAT_TAX_EP: 'VAT Tax',
+    TAX: 'Tax',
+    tax: 'Tax',
+
+    // Shipping
+    SHIPPING_LABEL: 'Shipping Label',
+    postage: 'Postage',
+    POSTAGE: 'Postage',
+
+    // Subscription / onboarding
+    seller_onboarding_fee: 'Subscription Fee',
+    seller_onboarding_fee_payment: 'Subscription Payment',
+    SUBSCRIPTION: 'Subscription',
+
+    // Reserve
+    reserve: 'Reserve',
+    Reserve: 'Reserve',
+    RESERVE: 'Reserve',
   };
-  return map[t] || t;
+  if (map[t]) return map[t];
+  // Fallback: convert snake_case/UPPER_CASE to Title Case
+  return t
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 /** Translation key map for entry types */
@@ -923,6 +992,7 @@ export default function FinancialsPage() {
   const [ledgerPage, setLedgerPage] = useState(0);
   const [ledgerFilter, setLedgerFilter] = useState('');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  const [showLedgerTypeMenu, setShowLedgerTypeMenu] = useState(false);
   const [invoices, setInvoices] = useState<InvoiceListResponse | null>(null);
   const [uploading, setUploading] = useState(false);
   const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
@@ -940,6 +1010,26 @@ export default function FinancialsPage() {
     const key = ENTRY_TYPE_TRANSLATION_KEYS[type];
     return key ? t(key) : type;
   };
+
+  /** Label for ledger type filter dropdown */
+  const ledgerTypeToLabel = (value: string): string => {
+    if (!value) return t('financials.allTypes');
+    const key = (ENTRY_TYPE_TRANSLATION_KEYS as Record<string, string>)[value];
+    return key ? t(key) : value;
+  };
+
+  const LEDGER_TYPE_OPTIONS = [
+    { value: '', labelKey: 'financials.allTypes' },
+    { value: 'sale', labelKey: 'financials.types.sales' },
+    { value: 'transaction_fee', labelKey: 'financials.types.transactionFees' },
+    { value: 'processing_fee', labelKey: 'financials.types.processingFees' },
+    { value: 'refund', labelKey: 'financials.types.refunds' },
+    { value: 'payout', labelKey: 'financials.types.payouts' },
+    { value: 'listing_renewal', labelKey: 'financials.types.listingRenewals' },
+    { value: 'advertising', labelKey: 'financials.types.advertising' },
+    { value: 'shipping_label', labelKey: 'financials.types.shippingLabels' },
+    { value: 'reserve', labelKey: 'financials.types.reserves' },
+  ] as const;
 
   // ── Check scope status ──
   useEffect(() => {
@@ -1466,7 +1556,7 @@ export default function FinancialsPage() {
                     )
                     .map((cat) => (
                       <div key={cat.category} className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">{translateEntryType(cat.category)}</span>
+                        <span className="text-gray-600 dark:text-gray-400">{entryTypeLabel(cat.category)}</span>
                         <span className="font-medium text-red-600">-{formatCents(cat.amount, fees.currency)}</span>
                       </div>
                     ))}
@@ -1728,7 +1818,7 @@ export default function FinancialsPage() {
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                           {feeIcon(cat.category)}
-                          {translateEntryType(cat.category)}
+                          {entryTypeLabel(cat.category)}
                         </span>
                         <span className="font-medium">{formatWithConversion(cat.amount, fees.currency, undefined, fees.converted_currency)}</span>
                       </div>
@@ -1813,26 +1903,57 @@ export default function FinancialsPage() {
             <div className="p-5 border-b dark:border-gray-800">
               <SectionHeader title={t('financials.recentActivities')}>
                 <div className="flex items-center gap-2">
-                  <select
-                    className="text-sm rounded-lg border dark:border-gray-700 px-2 py-1 bg-white dark:bg-gray-800"
-                    value={ledgerFilter}
-                    onChange={(e) => {
-                      setLedgerFilter(e.target.value);
-                      setLedgerPage(0);
-                    }}
-                  >
-                    <option value="">{t('financials.allTypes')}</option>
-                    <option value="sale">{t('financials.types.sales')}</option>
-                    <option value="transaction_fee">{t('financials.types.transactionFees')}</option>
-                    <option value="processing_fee">{t('financials.types.processingFees')}</option>
-                    <option value="refund">{t('financials.types.refunds')}</option>
-                    <option value="payout">{t('financials.types.payouts')}</option>
-                    <option value="listing_renewal">{t('financials.types.listingRenewals')}</option>
-                    <option value="advertising">{t('financials.types.advertising')}</option>
-                    <option value="shipping_label">{t('financials.types.shippingLabels')}</option>
-                    <option value="reserve">{t('financials.types.reserves')}</option>
-                  </select>
-                  <span className="text-xs text-gray-400">{ledger.total_count} {t('common.total')}</span>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowLedgerTypeMenu(!showLedgerTypeMenu)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-500 transition-colors min-w-[160px] shadow-sm"
+                    >
+                      <Filter className="w-4 h-4 flex-shrink-0 text-slate-500 dark:text-slate-400" />
+                      <span className="text-sm font-medium flex-1 text-left truncate">
+                        {ledgerTypeToLabel(ledgerFilter)}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${showLedgerTypeMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showLedgerTypeMenu && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setShowLedgerTypeMenu(false)}
+                        />
+                        <div className="absolute left-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl shadow-xl z-50 overflow-hidden">
+                          <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-700">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                              {t('financials.filterByType') || 'Filter by type'}
+                            </p>
+                          </div>
+                          <div className="py-1 max-h-72 overflow-y-auto">
+                            {LEDGER_TYPE_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value || 'all'}
+                                onClick={() => {
+                                  setLedgerFilter(opt.value);
+                                  setLedgerPage(0);
+                                  setShowLedgerTypeMenu(false);
+                                }}
+                                className={`w-full flex items-center px-4 py-2.5 text-left transition-colors ${
+                                  ledgerFilter === opt.value
+                                    ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
+                                    : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                                }`}
+                              >
+                                <span className="text-sm">{t(opt.labelKey)}</span>
+                                {ledgerFilter === opt.value && (
+                                  <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{ledger.total_count} {t('common.total')}</span>
                 </div>
               </SectionHeader>
             </div>
@@ -1868,7 +1989,7 @@ export default function FinancialsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3 max-w-xs truncate text-gray-700 dark:text-gray-300">
-                        {entry.description || '—'}
+                        {entryTypeLabel(entry.description || entry.entry_type || '') || '—'}
                       </td>
                       <td
                         className={cn(

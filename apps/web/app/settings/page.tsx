@@ -642,6 +642,11 @@ function SettingsContent() {
                 ) : (
                   <>
                     <p className="text-[var(--text-muted)] text-sm">{t('settings.connectEtsyDescription')}</p>
+                    {/* Etsy Attribution Notice - Required by Etsy API Terms */}
+                    <p className="text-xs text-[var(--text-muted)] leading-relaxed mb-4">
+                      The term &ldquo;Etsy&rdquo; is a trademark of Etsy, Inc. This application
+                      uses the Etsy API but is not endorsed or certified by Etsy, Inc.
+                    </p>
                     <div className="flex flex-col sm:flex-row gap-3">
                       <input
                         value={shopNameInput}
