@@ -743,7 +743,7 @@ function SettingsContent() {
                           )}
                           <button
                             onClick={() => handleDeleteShop(shop.id, shop.display_name || shop.etsy_shop_id)}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-red-600/10 text-red-500 rounded-lg hover:bg-red-600/20 transition-colors"
+                            className="flex items-center gap-2 px-4 py-2.5 bg-red-800 text-white rounded-lg hover:bg-red-900 transition-colors"
                             title={t('settings.deleteShopTooltip')}
                           >
                             <Trash2 className="w-4 h-4" />{t('common.delete')}
@@ -1110,12 +1110,12 @@ function SettingsContent() {
             </div>
             <div>
               <label className="text-sm text-[var(--text-muted)] block mb-1">
-                {t('settings.typeDeleteToConfirm')}
+                {`Type ${(shopToDelete?.name || '').toUpperCase()} to confirm`}
               </label>
               <input
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder="DELETE"
+                placeholder={(shopToDelete?.name || '').toUpperCase()}
                 className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
               />
             </div>
@@ -1128,8 +1128,8 @@ function SettingsContent() {
               </button>
               <button
                 onClick={confirmDeleteShop}
-                disabled={deleteConfirmText !== 'DELETE' || deletingShop}
-                className="px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                disabled={deleteConfirmText !== (shopToDelete?.name || '').toUpperCase() || deletingShop}
+                className="px-4 py-2.5 bg-red-800 text-white rounded-lg hover:bg-red-900 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {deletingShop ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 {deletingShop ? t('settings.deleting') : t('settings.deletePermanently')}
