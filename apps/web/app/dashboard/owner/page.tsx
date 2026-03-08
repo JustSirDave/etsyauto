@@ -26,7 +26,6 @@ import {
   CheckCircle,
   XCircle,
   Upload,
-  Sparkles,
   TrendingUp,
   TrendingDown,
   MessageCircle,
@@ -366,7 +365,6 @@ function OwnerDashboardContent() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <QuickActionButton icon={Upload} label={t('dashboard.bulkUpload')} href="/products/import" />
-              <QuickActionButton icon={Sparkles} label={t('dashboard.aiGenerate')} href="/ai-content" variant="secondary" />
               <QuickActionButton icon={FileText} label={t('dashboard.viewProducts')} href="/products" variant="secondary" />
               <QuickActionButton icon={Users} label={t('dashboard.manageTeam')} href="/team" variant="secondary" />
             </div>

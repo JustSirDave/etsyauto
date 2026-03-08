@@ -357,21 +357,12 @@ class TokenManager:
     
     async def get_tokens_expiring_soon(self, hours: int = 24) -> list:
         """
-        Get all tokens expiring within the specified hours
-        
-        Used by scheduled task to proactively refresh tokens
-        
-        Args:
-            hours: Number of hours to look ahead
-        
-        Returns:
-            List of OAuthToken records
+        Get all tokens expiring within the specified hours, including already expired ones.
         """
         threshold = datetime.now(timezone.utc) + timedelta(hours=hours)
         
         tokens = self.db.query(OAuthToken).filter(
-            OAuthToken.expires_at <= threshold,
-            OAuthToken.refresh_token.isnot(None)  # Only tokens with refresh capability
+            OAuthToken.expires_at <= threshold
         ).all()
         
         return tokens

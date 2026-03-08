@@ -24,17 +24,18 @@ from app.api.dependencies import (
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
-from app.models.listings import Product, AIGeneration
+from app.models.listings import Product, KeywordResearch
+from app.models.tenancy import Shop
 from app.schemas.products import (
     ProductImportRequest, 
     ProductImportBatchRequest,
     ProductResponse,
-    AIGenerationRequest,
-    AIGenerationResponse
+    KeywordResearchRequest,
 )
-from app.services.ai_generation_service import AIGenerationService
-from app.services.ai_providers import AIProviderType
+from app.core.redis import get_redis_client
+from app.services.token_manager import TokenManager
 from app.worker.tasks.product_sync_tasks import sync_products_from_etsy
+from app.worker.tasks.keyword_tasks import run_keyword_research
 
 logger = logging.getLogger(__name__)
 
@@ -436,96 +437,85 @@ async def get_product(
     }
 
 
-@router.post("/{product_id}/generate", tags=["Products"])
-async def generate_ai_content(
+@router.post("/{product_id}/keyword-research", tags=["Products"])
+async def start_keyword_research(
     product_id: int,
-    request: AIGenerationRequest,
-    context: UserContext = Depends(require_permission(Permission.GENERATE_CONTENT)),
+    body: KeywordResearchRequest,
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
-    Generate AI content for a product
-    Requires: GENERATE_CONTENT permission (Owner, Admin, Creator)
+    Start keyword research for a product.
+    Poll GET /products/{product_id}/keyword-research/{research_id} for results.
+    Requires: GENERATE_CONTENT permission
     """
-    if not settings.ENABLE_AI_GENERATION:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="AI generation is currently disabled by the administrator"
-        )
-
-    # Get product
     product = db.query(Product).filter(
         Product.id == product_id,
         Product.tenant_id == context.tenant_id
     ).first()
-    
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
-    # Ensure tenant access (defense in depth)
     ensure_tenant_access(product.tenant_id, context)
-    
-    # Build product info string
-    product_info = f"{product.title_raw or ''}"
-    if product.description_raw:
-        product_info += f"\n{product.description_raw}"
-    if product.tags_raw:
-        tags_str = ", ".join(product.tags_raw) if isinstance(product.tags_raw, list) else str(product.tags_raw)
-        product_info += f"\nTags: {tags_str}"
-    
-    # Use new AI Generation Service with integrated policy checking
-    try:
-        service = AIGenerationService(db)
-        
-        # Determine provider (default to OpenAI)
-        provider_type = AIProviderType.OPENAI
-        if hasattr(request, 'provider') and request.provider:
-            provider_type = AIProviderType(request.provider)
-        
-        # Determine what to generate
-        generate_type = request.generate_type or "all"
-        if generate_type not in ("all", "title", "description", "tags"):
-            raise HTTPException(status_code=400, detail="generate_type must be one of: all, title, description, tags")
 
-        # Generate with automatic policy check
-        generation, needs_review = await service.generate_with_policy_check(
-            product_id=product.id,
-            tenant_id=context.tenant_id,
-            product_info=product_info,
-            title_raw=product.title_raw,
-            description_raw=product.description_raw,
-            tags_raw=product.tags_raw if isinstance(product.tags_raw, list) else None,
-            style=request.style or "friendly",
-            tone=request.tone or "professional",
-            provider_type=provider_type,
-            model=request.model,
-            generate_type=generate_type
-        )
-        
-        return {
-            "ai_generation_id": generation.id,
-            "generate_type": generate_type,
-            "title": generation.title,
-            "description": generation.description,
-            "tags": generation.tags,
-            "policy_status": generation.policy_status,
-            "policy_flags": generation.policy_flags,
-            "needs_review": needs_review,
-            "provider": generation.provider,
-            "tokens_used": generation.tokens_used,
-            "generation_time_ms": generation.generation_time_ms,
-            "cost": {
-                "tokens": generation.cost_tokens or generation.tokens_used or 0,
-                "usd_cents": generation.cost_usd_cents or 0
-            },
-            "message": "⚠️ Content needs manual review due to policy violations. Visit /ai-review to review." if needs_review else "✅ Content generated successfully and passed policy checks"
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"AI generation failed: {str(e)}"
-        )
+    etsy_token = None
+    shop_id = body.shop_id
+    if not shop_id:
+        shop = db.query(Shop).filter(Shop.tenant_id == context.tenant_id).first()
+        shop_id = shop.id if shop else None
+    if shop_id:
+        ensure_shop_access(shop_id, context, db)
+        try:
+            redis_client = get_redis_client()
+            token_manager = TokenManager(db, redis_client)
+            etsy_token = await token_manager.get_token(context.tenant_id, shop_id, "etsy")
+        except Exception as e:
+            logger.warning("Could not get Etsy token for keyword research: %s", e)
+    # If no token, keyword research uses API key from config (public Etsy endpoint)
+
+    rec = KeywordResearch(
+        tenant_id=context.tenant_id,
+        product_id=product_id,
+        seed_keyword=body.seed_keyword,
+        status="pending",
+    )
+    db.add(rec)
+    db.commit()
+    db.refresh(rec)
+
+    run_keyword_research.delay(rec.id, body.seed_keyword, etsy_token)
+    return {"research_id": rec.id, "status": "pending"}
+
+
+@router.get("/{product_id}/keyword-research/{research_id}", tags=["Products"])
+async def get_keyword_research(
+    product_id: int,
+    research_id: int,
+    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
+    db: Session = Depends(get_db)
+):
+    """
+    Get keyword research result. Poll every 2s until status is completed or failed.
+    """
+    rec = db.query(KeywordResearch).filter(
+        KeywordResearch.id == research_id,
+        KeywordResearch.product_id == product_id,
+        KeywordResearch.tenant_id == context.tenant_id,
+    ).first()
+    if not rec:
+        raise HTTPException(status_code=404, detail="Keyword research not found")
+    return {
+        "id": rec.id,
+        "product_id": rec.product_id,
+        "seed_keyword": rec.seed_keyword,
+        "primary_keyword": rec.primary_keyword,
+        "longtail_keywords": rec.longtail_keywords,
+        "top_tags": rec.top_tags,
+        "raw_scores": rec.raw_scores,
+        "status": rec.status,
+        "error_message": rec.error_message,
+        "created_at": rec.created_at.isoformat() if rec.created_at else None,
+        "updated_at": rec.updated_at.isoformat() if rec.updated_at else None,
+    }
 
 
 @router.put("/{product_id}", tags=["Products"])

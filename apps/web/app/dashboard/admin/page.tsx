@@ -22,7 +22,6 @@ import {
   CheckCircle,
   XCircle,
   Upload,
-  Sparkles,
   TrendingUp,
   TrendingDown as TrendingDownIcon,
   Link as LinkIcon,
@@ -120,7 +119,7 @@ function AdminDashboardContent() {
           Hi, {selectedShop?.display_name || user?.name || 'there'}. Welcome back! Here's your operations overview.
         </h1>
         <p className="text-[var(--text-muted)] mt-1">
-          Manage fulfillment, products, and AI content generation
+          Manage fulfillment and products
         </p>
       </div>
 
@@ -170,14 +169,6 @@ function AdminDashboardContent() {
                     <Upload className="w-5 h-5" />
                   </div>
                   <span className="font-medium text-sm truncate">Bulk Upload</span>
-                </div>
-              </Link>
-              <Link href="/ai-content" className="flex-1 p-4 rounded-xl border bg-[var(--card-bg)] hover:bg-[var(--card-hover)] border-[var(--border-color)] text-[var(--text-primary)] transition-all min-w-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--primary-bg)]">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <span className="font-medium text-sm truncate">AI Generate</span>
                 </div>
               </Link>
               <Link href="/products" className="flex-1 p-4 rounded-xl border bg-[var(--card-bg)] hover:bg-[var(--card-hover)] border-[var(--border-color)] text-[var(--text-primary)] transition-all min-w-0">

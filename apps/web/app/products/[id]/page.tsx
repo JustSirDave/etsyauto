@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { ArrowLeft, Package, Calendar, Tag, DollarSign, Sparkles, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, Package, Calendar, Tag, DollarSign, Trash2, Edit } from 'lucide-react';
 import { productsApi, Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useAuth } from '@/lib/auth-context';
@@ -23,7 +23,6 @@ function ProductDetailContent() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
   const productId = typeof params?.id === 'string' ? parseInt(params.id, 10) : null;
@@ -63,25 +62,6 @@ function ProductDetailContent() {
       showToast(error.detail || 'Failed to delete product', 'error');
     } finally {
       setDeleting(false);
-    }
-  };
-
-  const handleGenerateAI = async () => {
-    if (!productId) return;
-
-    try {
-      setGenerating(true);
-      const result = await productsApi.generateAI(productId);
-      showToast(
-        `AI content generated successfully! Cost: $${(result.cost.usd_cents / 100).toFixed(2)}`,
-        'success'
-      );
-      loadProduct(); // Reload to show updated data if backend updates it
-    } catch (error: any) {
-      console.error('Failed to generate AI content:', error);
-      showToast(error.detail || 'Failed to generate AI content', 'error');
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -129,26 +109,6 @@ function ProductDetailContent() {
         </button>
 
         <div className="flex items-center gap-3">
-          {!isSupplier && (
-          <button
-            onClick={handleGenerateAI}
-            disabled={generating}
-            className="flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {generating ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Generating...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                <span>Generate AI Content</span>
-              </>
-            )}
-          </button>
-          )}
-
           {!isSupplier && (
             <button
               onClick={() => setShowEditModal(true)}

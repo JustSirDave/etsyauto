@@ -6,7 +6,7 @@ import pytest
 from datetime import datetime, timezone
 
 from app.core.database import SessionLocal
-from app.models.listings import Product, AIGeneration, ListingJob
+from app.models.listings import Product, ListingJob
 from app.models.tenancy import Tenant
 from app.services.listing_policy_checker import ListingPolicyChecker
 

@@ -46,19 +46,7 @@ class ProductResponse(BaseModel):
         from_attributes = True
 
 
-class AIGenerationRequest(BaseModel):
-    """Request AI content generation"""
-    model: str = "gpt-4o-mini"
-    style: Optional[str] = "friendly"
-    tone: Optional[str] = "helpful"
-    generate_type: Optional[str] = "all"  # "all", "title", "description", "tags"
-
-
-class AIGenerationResponse(BaseModel):
-    """AI generated content"""
-    ai_generation_id: int
-    title: str
-    description: str
-    tags: List[str]
-    policy_flags: Dict
-    cost: Dict[str, int]
+class KeywordResearchRequest(BaseModel):
+    """Request to start keyword research"""
+    seed_keyword: str
+    shop_id: Optional[int] = None  # Optional; uses first connected shop if not provided

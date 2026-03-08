@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 from app.core.sentry_config import initialize_sentry
 from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, ai, schedules, listings, audit, google_oauth, ingestion, audit_logs, policy, webhooks, listing_errors, suppliers, analytics, financials, user_preferences, currency
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, schedules, listings, audit, google_oauth, ingestion, audit_logs, webhooks, listing_errors, suppliers, analytics, financials, user_preferences, currency
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
@@ -103,7 +103,7 @@ async def lifespan(app: FastAPI):
 _is_production = settings.ENVIRONMENT == "production"
 app = FastAPI(
     title="Etsy Automation Platform API",
-    description="AI-assisted, policy-compliant automation for Etsy sellers",
+    description="Etsy listing and order automation for sellers",
     version="1.0.0",
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
@@ -197,13 +197,11 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"]
 app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
 app.include_router(suppliers.router, prefix="/api/suppliers", tags=["Suppliers"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
-app.include_router(ai.router, prefix="/api/ai", tags=["AI Generation"])
 app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
 app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
 app.include_router(listing_errors.router, prefix="/api/listings", tags=["Listing Errors"])
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])
 app.include_router(audit_logs.router, prefix="/api/audit/logs", tags=["Audit Logs"])
-app.include_router(policy.router, prefix="/api/policy", tags=["Policy Compliance"])
 app.include_router(metrics_endpoint.router, prefix="/api", tags=["Observability"])
 app.include_router(ingestion.router, prefix="/api/products/ingestion", tags=["Product Ingestion"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])

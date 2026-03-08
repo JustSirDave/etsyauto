@@ -20,7 +20,7 @@
 │  │  • Redirects unauthenticated users to /login                │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
-│  • 30+ pages (App Router): Dashboard, Products, AI, Listings,      │
+│  • 30+ pages (App Router): Dashboard, Products, Listings,         │
 │    Orders, Schedules, Analytics, Audit, Suppliers, Settings         │
 │  • Role-based dashboards: Owner, Admin, Supplier, Viewer           │
 │  • HttpOnly cookie auth (credentials: 'include')                   │
@@ -45,7 +45,6 @@
 │  │ /api/auth/google   - Google OAuth (PKCE)                    │   │
 │  │ /api/shops         - Etsy OAuth connect, shop management    │   │
 │  │ /api/products      - CSV/JSON import, CRUD, sync            │   │
-│  │ /api/ai            - OpenAI generation + policy check       │   │
 │  │ /api/listings      - Publish pipeline, job management       │   │
 │  │ /api/orders        - Etsy sync, manual tracking, fulfill    │   │
 │  │ /api/schedules     - Cron schedules, quota management       │   │
@@ -180,20 +179,7 @@ User → Upload CSV → Next.js → POST /api/products/import
                              → Return { imported, skipped, row_errors[] }
 ```
 
-### 3. AI Generation Flow
-
-```
-User → Select product → POST /api/products/{id}/generate
-                       → Load product data
-                       → Build prompt with Etsy guidelines
-                       → Call OpenAI API (GPT-4o-mini)
-                       → Run policy checker (banned terms, compliance)
-                       → Store ai_generations row
-                       → Update usage_costs (tokens, USD)
-                       → Return generated title/description/tags
-```
-
-### 4. Listing Publish Flow (with Circuit Breaker)
+### 3. Listing Publish Flow (with Circuit Breaker)
 
 ```
 User → Click "Publish" → POST /api/shops/{id}/listings
@@ -217,7 +203,7 @@ On Etsy 429/5xx:
     → Half-open: allows one probe → success resets, failure re-opens
 ```
 
-### 5. Scheduled Publishing Flow
+### 4. Scheduled Publishing Flow
 
 ```
 Celery Beat → Every 5 min → Check active schedules
@@ -227,7 +213,7 @@ Celery Beat → Every 5 min → Check active schedules
                            → rate_limiter enforces per-shop Etsy limits
 ```
 
-### 6. Order Sync Flow
+### 5. Order Sync Flow
 
 ```
 Celery Worker → Fetch Etsy receipts → Upsert into orders table
@@ -283,7 +269,6 @@ etsy-automation-platform/
 │   │   │   │   │   ├── google_oauth.py   Google OAuth flow
 │   │   │   │   │   ├── shops.py          Etsy OAuth + shop CRUD
 │   │   │   │   │   ├── products.py       CSV/JSON import, CRUD
-│   │   │   │   │   ├── ai.py             AI generation
 │   │   │   │   │   ├── listings.py       Publish pipeline
 │   │   │   │   │   ├── orders.py         Order sync + tracking
 │   │   │   │   │   ├── schedules.py      Cron schedules
@@ -305,7 +290,7 @@ etsy-automation-platform/
 │   │   │   ├── models/               ← SQLAlchemy models (20+ tables)
 │   │   │   │   ├── tenancy.py            User, Tenant, Membership, Shop,
 │   │   │   │   │                         SupplierProfile, OAuthToken
-│   │   │   │   ├── listings.py           Product, AIGeneration, ListingJob,
+│   │   │   │   ├── listings.py           Product, ListingJob,
 │   │   │   │   │                         Schedule, Order, ShipmentEvent,
 │   │   │   │   │                         UsageCost, AuditLog
 │   │   │   │   ├── notifications.py      Notification
@@ -324,11 +309,6 @@ etsy-automation-platform/
 │   │   │   │   ├── token_manager.py      OAuth token refresh
 │   │   │   │   ├── policy_engine.py      Content policy enforcement
 │   │   │   │   ├── quota_manager.py      Daily/weekly quota tracking
-│   │   │   │   ├── ai_generation_service.py
-│   │   │   │   ├── ai_providers/         Provider abstraction
-│   │   │   │   │   ├── openai_provider.py
-│   │   │   │   │   ├── anthropic_provider.py  (stub)
-│   │   │   │   │   └── gemini_provider.py     (stub)
 │   │   │   │   ├── google_oauth.py       Google OAuth service
 │   │   │   │   ├── analytics_service.py
 │   │   │   │   ├── notification_service.py
@@ -393,8 +373,6 @@ etsy-automation-platform/
 │   │   │   │   ├── supplier/
 │   │   │   │   └── viewer/
 │   │   │   ├── products/                 Product management
-│   │   │   ├── ai/                       AI generation + history
-│   │   │   ├── ai-review/               AI content review
 │   │   │   ├── listings/                 Listing management
 │   │   │   ├── orders/                   Order management
 │   │   │   ├── schedules/               Schedule management

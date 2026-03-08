@@ -2,15 +2,16 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /**
- * Next.js Edge Middleware — protects dashboard routes by checking
- * for the HttpOnly `access_token` cookie.  Runs at the Edge before
- * any page renders, preventing flash-of-protected-content.
- * Also proxies /api/* to the backend when rewrites fail.
+ * Next.js Edge Middleware — proxies /api/* to the FastAPI backend and
+ * protects dashboard routes by checking for the HttpOnly access_token cookie.
+ *
+ * API_INTERNAL_URL: Docker = http://api:8080 | local dev = http://localhost:8080
  */
 
-const API_TARGET = process.env.API_INTERNAL_URL || 'http://api:8080';
+function getApiTarget(): string {
+  return (process.env.API_INTERNAL_URL || 'http://api:8080').replace(/\/+$/, '');
+}
 
-/** Routes that do NOT require authentication */
 const PUBLIC_PATHS = new Set([
   '/',
   '/landing',
@@ -24,11 +25,10 @@ const PUBLIC_PATHS = new Set([
   '/terms',
 ]);
 
-/** Path prefixes that should always be accessible */
 const PUBLIC_PREFIXES = [
-  '/api/',       // API routes are guarded by the backend
-  '/oauth/',     // OAuth callback flows
-  '/_next/',     // Next.js internal
+  '/api/',
+  '/oauth/',
+  '/_next/',
   '/favicon',
   '/uploads/',
 ];
@@ -36,72 +36,91 @@ const PUBLIC_PREFIXES = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Proxy /api/* to backend (rewrites can fail in some setups)
+  /* ------------------------------------------------------------------ */
+  /*  Proxy /api/* to backend                                           */
+  /* ------------------------------------------------------------------ */
   if (pathname.startsWith('/api/')) {
-    const url = `${API_TARGET}${pathname}${request.nextUrl.search}`;
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-    const init: RequestInit = { method: request.method, headers };
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      try {
-        const body = await request.text();
-        if (body) {
-          init.body = body;
-          headers.set('Content-Type', request.headers.get('Content-Type') || 'application/json');
-        }
-      } catch { /* body may be empty */ }
-    }
+    const proxyUrl = `${getApiTarget()}${pathname}${request.nextUrl.search}`;
+
+    // Forward only headers we need — Edge Runtime can throw "Illegal invocation"
+    // when using headers.forEach() or iterating over request/response headers.
+    const fwdHeaders: Record<string, string> = {};
+    const copyHeader = (name: string) => {
+      const v = request.headers.get(name);
+      if (v) fwdHeaders[name] = v;
+    };
+    copyHeader('cookie');
+    copyHeader('content-type');
+    copyHeader('authorization');
+    copyHeader('accept');
+    copyHeader('accept-language');
+
     try {
-      const res = await fetch(url, init);
-      const resHeaders = new Headers(res.headers);
+      // Do not pass request.body to fetch — Edge throws "Illegal invocation".
+      // Read body as text when present and pass the string.
+      let body: string | undefined;
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        try {
+          body = await request.text();
+        } catch {
+          body = undefined;
+        }
+      }
+      if (body !== undefined && body !== '' && !fwdHeaders['content-type']) {
+        fwdHeaders['content-type'] = 'application/json';
+      }
+
+      const res = await fetch(proxyUrl, {
+        method: request.method,
+        headers: fwdHeaders,
+        body: body ?? undefined,
+      });
+
+      // Use res.text() — res.arrayBuffer() can throw "Illegal invocation" in Edge
+      const bodyText = await res.text();
+
+      // Copy only headers we need; avoid getSetCookie() (can throw in Edge)
+      const resHeaders = new Headers();
+      const ct = res.headers.get('content-type');
+      if (ct) resHeaders.set('content-type', ct);
+      const setCookie = res.headers.get('set-cookie');
+      if (setCookie) resHeaders.set('set-cookie', setCookie);
       resHeaders.set('x-middleware-cache', 'no-store');
-      return new NextResponse(res.body, {
+
+      return new NextResponse(bodyText, {
         status: res.status,
         statusText: res.statusText,
         headers: resHeaders,
       });
     } catch (e) {
-      console.error('[middleware] API proxy error:', e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[middleware] API proxy error:', proxyUrl, msg);
       return NextResponse.json({ detail: 'Backend unreachable' }, { status: 502 });
     }
   }
 
-  // 1. Allow public paths
-  if (PUBLIC_PATHS.has(pathname)) {
-    return NextResponse.next();
-  }
+  /* ------------------------------------------------------------------ */
+  /*  Auth guard for non-public routes                                  */
+  /* ------------------------------------------------------------------ */
+  if (PUBLIC_PATHS.has(pathname)) return NextResponse.next();
 
-  // 2. Allow public prefixes (api already handled above)
   for (const prefix of PUBLIC_PREFIXES) {
-    if (pathname.startsWith(prefix)) {
-      return NextResponse.next();
-    }
+    if (pathname.startsWith(prefix)) return NextResponse.next();
   }
 
-  // 3. Allow static assets (images, fonts, etc.)
-  if (/\.\w+$/.test(pathname)) {
-    return NextResponse.next();
-  }
+  if (/\.\w+$/.test(pathname)) return NextResponse.next();
 
-  // 4. Check for the access_token cookie
   const accessToken = request.cookies.get('access_token')?.value;
-
   if (!accessToken) {
-    // Redirect to login with a `next` query param so the user
-    // returns to the page they wanted after logging in.
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = '/login';
     loginUrl.searchParams.set('next', pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // Cookie exists — let the request through.
-  // The backend will validate the JWT itself; if it's expired the
-  // frontend 401 interceptor will attempt a refresh.
   return NextResponse.next();
 }
 
 export const config = {
-  // Run on all routes except Next.js internals and static files
   matcher: ['/((?!_next/static|_next/image).*)'],
 };

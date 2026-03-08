@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import Schedule, ListingJob, Product, AIGeneration
+from app.models.listings import Schedule, ListingJob, Product
 from app.models.tenancy import Shop
 from app.worker.tasks.listing_tasks import publish_listing
 
@@ -128,14 +128,12 @@ def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
         logger.warning(f"Shop {schedule.shop_id} not connected, skipping schedule {schedule.id}")
         return result
 
-    # Find ready products (those with approved AI generation)
+    # Find ready products for this tenant
     ready_products = (
         db.query(Product)
-        .join(AIGeneration, AIGeneration.product_id == Product.id)
         .filter(
             Product.tenant_id == shop.tenant_id,
             Product.status == "ready",
-            AIGeneration.status == "approved"
         )
         .limit(remaining_quota)
         .all()

@@ -218,26 +218,6 @@ class TestListingJobMetrics:
             assert metric in content, f"Listing job metric {metric} not found"
 
 
-class TestAIGenerationMetrics:
-    """Test AI generation metrics"""
-    
-    def test_ai_generation_metrics_exist(self):
-        """Test that AI generation metrics are defined"""
-        response = client.get("/api/metrics")
-        content = response.text
-        
-        expected_ai_metrics = [
-            "ai_generation_requests_total",
-            "ai_generation_duration_seconds",
-            "ai_generation_tokens_used",
-            "ai_generation_failures_total",
-            "ai_generation_policy_violations_total"
-        ]
-        
-        for metric in expected_ai_metrics:
-            assert metric in content, f"AI generation metric {metric} not found"
-
-
 class TestProductIngestionMetrics:
     """Test product ingestion metrics"""
     

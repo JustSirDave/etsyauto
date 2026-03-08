@@ -65,45 +65,6 @@ class Product(Base):
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class AIGeneration(Base):
-    """AI-generated content for products"""
-    __tablename__ = "ai_generations"
-    
-    id = Column(BigInteger, primary_key=True, index=True)
-    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
-    product_id = Column(BigInteger, ForeignKey('products.id', ondelete="CASCADE"), nullable=False)
-    
-    model = Column(String(100))
-    prompt_hash = Column(String(64))
-    
-    title = Column(Text)
-    description = Column(Text)
-    tags = Column(JSONB)
-    
-    # Policy compliance
-    policy_status = Column(String(20), CheckConstraint("policy_status IN ('passed','failed','needs_review','warning')"), default='passed')
-    policy_flags = Column(JSONB)
-    policy_checked_at = Column(DateTime(timezone=True))
-    can_publish = Column(Integer, default=0)  # 0=blocked, 1=can publish
-    
-    # Review workflow
-    reviewed_by = Column(BigInteger, ForeignKey('users.id', ondelete="SET NULL"), nullable=True)
-    reviewed_at = Column(DateTime(timezone=True), nullable=True)
-    review_decision = Column(String(20), CheckConstraint("review_decision IN ('accepted','rejected','modified')"), nullable=True)
-    
-    # Provider info
-    provider = Column(String(20), default='openai')
-    tokens_used = Column(Integer, nullable=True)
-    generation_time_ms = Column(Integer, nullable=True)
-    
-    # Legacy fields (kept for backwards compatibility)
-    status = Column(String(20), CheckConstraint("status IN ('ok','flagged')"), default='ok')
-    cost_tokens = Column(Integer, default=0)
-    cost_usd_cents = Column(Integer, default=0)
-    
-    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
-
-
 class ListingJob(Base):
     """Jobs for publishing listings to Etsy"""
     __tablename__ = "listing_jobs"
@@ -112,8 +73,7 @@ class ListingJob(Base):
     tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False)
     shop_id = Column(BigInteger, ForeignKey('shops.id', ondelete="CASCADE"), nullable=False)
     product_id = Column(BigInteger, ForeignKey('products.id', ondelete="CASCADE"), nullable=False)
-    ai_generation_id = Column(BigInteger, ForeignKey('ai_generations.id', ondelete="SET NULL"), nullable=True)
-    
+
     idempotency_key = Column(String(255), unique=True)
     
     # Policy compliance (pre-publish enforcement)
@@ -626,6 +586,36 @@ class FinancialSyncStatus(Base):
     __table_args__ = (
         UniqueConstraint("shop_id", name="uq_financial_sync_status_shop_id"),
         Index("idx_financial_sync_status_tenant_shop", "tenant_id", "shop_id"),
+    )
+
+
+class KeywordResearch(Base):
+    """Keyword research results for products before AI generation"""
+    __tablename__ = "keyword_research"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(BigInteger, ForeignKey('products.id', ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id = Column(BigInteger, ForeignKey('tenants.id', ondelete="CASCADE"), nullable=False, index=True)
+
+    seed_keyword = Column(String(255), nullable=False)
+    primary_keyword = Column(String(255), nullable=True)
+    longtail_keywords = Column(JSONB, nullable=True)  # [{"keyword": str, "score": float}]
+    top_tags = Column(JSONB, nullable=True)  # [{"tag": str, "frequency": int}]
+    raw_scores = Column(JSONB, nullable=True)  # Etsy competition, trend score, etc.
+
+    status = Column(
+        String(20),
+        CheckConstraint("status IN ('pending','running','completed','failed')"),
+        default='pending',
+        index=True
+    )
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_keyword_research_product_status', 'product_id', 'status'),
     )
 
 

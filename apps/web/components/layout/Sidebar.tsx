@@ -14,7 +14,6 @@ import {
   ShoppingCart,
   Calendar,
   Settings,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   LifeBuoy,
@@ -66,8 +65,6 @@ const ownerNavigation: NavSection[] = [
   {
     title: 'nav.automation',
     items: [
-      { name: 'nav.aiGeneration', href: '/ai', icon: Sparkles },
-      { name: 'nav.aiReview', href: '/ai-review', icon: BookOpen },
       { name: 'nav.schedules', href: '/schedules', icon: Calendar },
     ],
   },
@@ -112,8 +109,6 @@ const adminNavigation: NavSection[] = [
   {
     title: 'nav.automation',
     items: [
-      { name: 'nav.aiGeneration', href: '/ai', icon: Sparkles },
-      { name: 'nav.aiReview', href: '/ai-review', icon: BookOpen },
       { name: 'nav.schedules', href: '/schedules', icon: Calendar },
     ],
   },

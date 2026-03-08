@@ -12,7 +12,7 @@ from app.worker.tasks.listing_tasks import (
     _cache_idempotency_result,
     _handle_etsy_error
 )
-from app.models.listings import ListingJob, Product, AIGeneration, AuditLog
+from app.models.listings import ListingJob, Product, AuditLog
 from app.models.tenancy import Shop, Tenant
 from app.models.notifications import Notification  # Import for SQLAlchemy relationship resolution
 from app.services.etsy_client import EtsyAPIError

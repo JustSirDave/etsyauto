@@ -11,7 +11,7 @@ import os
 
 from app.core.database import Base, get_db
 from app.models.tenancy import Tenant, User, Membership, Shop, OAuthToken
-from app.models.listings import Product, ListingJob, Schedule, AIGeneration
+from app.models.listings import Product, ListingJob, Schedule
 from app.services.encryption import token_encryptor
 from app.core.jwt_manager import get_jwt_manager
 from main import app

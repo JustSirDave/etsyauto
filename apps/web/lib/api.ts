@@ -193,7 +193,14 @@ async function apiRequest<T>(
     throw error;
   }
 
-  return response.json();
+  try {
+    return await response.json();
+  } catch (e) {
+    const msg = e instanceof SyntaxError
+      ? 'Invalid response from server. Please try again.'
+      : (e instanceof Error ? e.message : 'Request failed');
+    throw { detail: msg, status: response.status } as ApiError;
+  }
 }
 
 /**
@@ -391,17 +398,6 @@ export const productsApi = {
     }
 
     return response.json();
-  },
-
-  generateAI: async (productId: number, options?: { model?: string; style?: string; tone?: string }) => {
-    return apiRequest<any>(`/api/products/${productId}/generate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        model: options?.model || 'gpt-4o-mini',
-        style: options?.style || 'friendly',
-        tone: options?.tone || 'helpful',
-      }),
-    });
   },
 
   update: async (productId: number, data: any) => {
@@ -1067,80 +1063,6 @@ export const notificationsApi = {
       method: 'POST',
       body: JSON.stringify(notification),
     });
-  },
-};
-
-/**
- * AI Generation API
- */
-export interface AIStats {
-  total_generations: number;
-  success_rate: number;
-  avg_response_time_ms: number;
-  growth_percentage: number;
-  this_month_count: number;
-  last_month_count: number;
-}
-
-export interface AIGeneration {
-  id: number;
-  product_id: number;
-  type: 'title' | 'description' | 'tags';
-  title: string;
-  timestamp: string;
-  status: 'completed' | 'failed';
-  cost_tokens: number;
-  cost_usd_cents: number;
-}
-
-export interface AIGenerationResult {
-  ai_generation_id: number;
-  title: string;
-  description: string;
-  tags: string[];
-  policy_flags: any;
-  cost: {
-    tokens: number;
-    usd_cents: number;
-  };
-}
-
-export const aiApi = {
-  getStats: async (): Promise<AIStats> => {
-    return apiRequest<AIStats>('/api/ai/stats');
-  },
-
-  getRecentGenerations: async (limit: number = 10): Promise<{ generations: AIGeneration[]; total: number }> => {
-    const params = new URLSearchParams({ limit: String(limit) });
-    return apiRequest<{ generations: AIGeneration[]; total: number }>(`/api/ai/recent?${params.toString()}`);
-  },
-
-  generateContent: async (productId: number, options?: { model?: string; style?: string; tone?: string; generate_type?: string }): Promise<AIGenerationResult> => {
-    return apiRequest<AIGenerationResult>(`/api/products/${productId}/generate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        model: options?.model || 'gpt-4o-mini',
-        style: options?.style || 'friendly',
-        tone: options?.tone || 'helpful',
-        generate_type: options?.generate_type || 'all',
-      }),
-    });
-  },
-
-  // Helper for form data uploads (not used in current implementation)
-  postForm: async (endpoint: string, formData: FormData) => {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ detail: 'Request failed' }));
-      throw { response: { data: errorData } };
-    }
-
-    return await response.json();
   },
 };
 

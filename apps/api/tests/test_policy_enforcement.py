@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
-from app.models.listings import Product, AIGeneration, ListingJob
+from app.models.listings import Product, ListingJob
 from app.models.tenancy import Tenant
 from app.services.listing_policy_checker import ListingPolicyChecker
 
@@ -22,7 +22,6 @@ def test_db():
     # Cleanup
     try:
         db.query(ListingJob).delete()
-        db.query(AIGeneration).delete()
         db.query(Product).delete()
         db.commit()
     except:
@@ -268,94 +267,6 @@ class TestRemediationFlow:
         result2 = policy_checker.check_listing_compliance(mock_listing, product)
         assert result2["can_publish"] == True
         assert result2["policy_status"] in ["passed", "warning"]
-    
-    def test_remediation_with_ai_generation(self, policy_checker, test_db, test_tenant):
-        """Test remediation workflow with AI generation"""
-        # Create product
-        product = from tests.test_policy_enforcement_helper import create_test_product
-        product = create_test_product(test_db, test_tenant.id, 
-            tenant_id=test_tenant.id,
-            title="Test Product",
-            description="Description with prohibited cure claims",  # Prohibited
-            price=1000,
-            quantity=5,
-            source="manual"
-        )
-        test_db.add(product)
-        test_db.commit()
-        
-        # Create AI generation
-        ai_gen = AIGeneration(
-            tenant_id=test_tenant.id,
-            product_id=product.id,
-            title="Test Product",
-            description="Description with cure claims",
-            tags=["test"],
-            status="ok"
-        )
-        test_db.add(ai_gen)
-        test_db.commit()
-        
-        # Check - should fail
-        from types import SimpleNamespace
-        mock_listing = SimpleNamespace(product_id=product.id, ai_generation_id=ai_gen.id)
-        
-        result1 = policy_checker.check_listing_compliance(mock_listing, product)
-        assert result1["can_publish"] == False
-        
-        # Remediate AI generation
-        ai_gen.description = "Beautiful handmade product created by skilled artisans. Each piece is unique and crafted with care. Made from high-quality materials, this item is perfect for everyday use or as a thoughtful gift."
-        test_db.commit()
-        
-        # Update product with AI content
-        product.description = ai_gen.description
-        
-        # Re-check - should pass
-        result2 = policy_checker.check_listing_compliance(mock_listing, product)
-        assert result2["can_publish"] == True
-
-
-# ==================== Test 3: Policy Check Updates AIGeneration ====================
-
-class TestPolicyStorageOnAIGeneration:
-    """Test that policy results are stored on AIGeneration"""
-    
-    def test_policy_status_stored_on_generation(self, policy_checker, test_db, test_tenant):
-        """Test policy status is stored on AI generation"""
-        product = from tests.test_policy_enforcement_helper import create_test_product
-        product = create_test_product(test_db, test_tenant.id, 
-            tenant_id=test_tenant.id,
-            title="Handmade Necklace",
-            description="Beautiful handmade necklace crafted with care and attention to detail.",
-            price=2999,
-            quantity=10,
-            source="manual"
-        )
-        test_db.add(product)
-        test_db.commit()
-        
-        ai_gen = AIGeneration(
-            tenant_id=test_tenant.id,
-            product_id=product.id,
-            title=product.title,
-            description=product.description,
-            tags=["handmade", "jewelry"],
-            status="ok"
-        )
-        test_db.add(ai_gen)
-        test_db.commit()
-        
-        # Run policy check
-        from types import SimpleNamespace
-        mock_listing = SimpleNamespace(product_id=product.id, ai_generation_id=ai_gen.id)
-        
-        result = policy_checker.check_listing_compliance(mock_listing, product)
-        
-        # Store policy result
-        policy_checker.store_policy_result(mock_listing, result)
-        
-        # Note: store_policy_result expects a Listing object, but we're using a mock
-        # In real implementation, this would update the listing table
 
 
 # ==================== Test 4: Fail Closed Behavior ====================

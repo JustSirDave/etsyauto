@@ -7,8 +7,8 @@ from app.models.tenancy import Tenant, User, Membership, SupplierProfile, Shop, 
 from app.models.user_preferences import UserPreference
 from app.models.exchange_rates import ExchangeRate
 from app.models.listings import (
-    Product, AIGeneration, ListingJob, Schedule, Order,
-    UsageCost, AuditLog, WebhookEvent
+    Product, ListingJob, Schedule, Order,
+    UsageCost, AuditLog, WebhookEvent, KeywordResearch
 )
 from app.models.notifications import Notification, NotificationType
 from app.models.ingestion import IngestionBatch
@@ -26,13 +26,13 @@ __all__ = [
     "OAuthToken",
     # Listing models
     "Product",
-    "AIGeneration",
     "ListingJob",
     "Schedule",
     "Order",
     "UsageCost",
     "AuditLog",
     "WebhookEvent",
+    "KeywordResearch",
     # Notification models
     "Notification",
     "NotificationType",

@@ -53,9 +53,6 @@ class Permission(str, Enum):
     DELETE_SCHEDULE = "delete_schedule"
     PAUSE_SCHEDULE = "pause_schedule"
     
-    # AI Generation permissions
-    GENERATE_CONTENT = "generate_content"
-    
     # Audit Log permissions
     READ_AUDIT_LOG = "read_audit_log"
     READ_AUDIT_LOGS = "read_audit_logs"
@@ -101,8 +98,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.UPDATE_SCHEDULE,
         Permission.DELETE_SCHEDULE,
         Permission.PAUSE_SCHEDULE,
-        # AI
-        Permission.GENERATE_CONTENT,
         # Audit
         Permission.READ_AUDIT_LOG,
         Permission.READ_AUDIT_LOGS,
@@ -142,8 +137,6 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.UPDATE_SCHEDULE,
         Permission.DELETE_SCHEDULE,
         Permission.PAUSE_SCHEDULE,
-        # AI
-        Permission.GENERATE_CONTENT,
         # Audit
         Permission.READ_AUDIT_LOG,
         Permission.READ_AUDIT_LOGS,

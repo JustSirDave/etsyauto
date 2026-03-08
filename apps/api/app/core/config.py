@@ -111,16 +111,8 @@ class Settings(BaseSettings):
     ETSY_RATE_LIMIT_CAPACITY: int = 100
     ETSY_RATE_LIMIT_REFILL_PER_SEC: float = 0.5
 
-    # AI Providers
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
-    AI_DEFAULT_MODEL: str = "gpt-4o-mini"
-    AI_MAX_TOKENS: int = 1000
-    AI_TEMPERATURE: float = 0.7
-
     # Feature Flags
     ENABLE_SCHEDULED_PUBLISHING: bool = True
-    ENABLE_AI_GENERATION: bool = True
 
     # Monitoring
     SENTRY_DSN: str = ""

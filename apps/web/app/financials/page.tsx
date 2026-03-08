@@ -1284,15 +1284,15 @@ export default function FinancialsPage() {
                     </div>
                     <div className="py-1">
                       {PERIOD_OPTIONS.map((p) => (
-                        <button
-                          key={p}
+                <button
+                  key={p}
                           onClick={() => {
                             setPeriod(p);
                             persistPeriod(p);
                             setShowPeriodMenu(false);
                           }}
                           className={`w-full flex items-center px-4 py-2.5 text-left transition-colors ${
-                            period === p
+                    period === p
                               ? 'bg-slate-100 dark:bg-slate-700/50 text-slate-800 dark:text-slate-200'
                               : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
                           }`}
@@ -1301,8 +1301,8 @@ export default function FinancialsPage() {
                           {period === p && (
                             <CheckCircle strokeWidth={1.5} className="ml-auto w-4 h-4 flex-shrink-0 text-slate-900 dark:text-slate-100" />
                           )}
-                        </button>
-                      ))}
+                </button>
+              ))}
                     </div>
                   </div>
                 </>
@@ -1428,11 +1428,11 @@ export default function FinancialsPage() {
                   <a
                     href="/settings?tab=shops"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-red-800 hover:bg-red-700 px-4 py-2 text-sm font-semibold text-white transition-colors"
-                  >
-                    {t('financials.reconnectEtsy')}
+                >
+                  {t('financials.reconnectEtsy')}
                     <ArrowUpRight className="w-3.5 h-3.5" />
-                  </a>
-                </div>
+                </a>
+            </div>
               ) : undefined
             }
           />
@@ -1581,7 +1581,7 @@ export default function FinancialsPage() {
                     <span className="font-medium text-red-600">
                       -{formatWithConversion(summary.advertising_expenses, summary.currency, summary.converted_advertising_expenses, summary.converted_currency)}
                     </span>
-                  </div>
+            </div>
                 </div>
               </ExpandableCard>
 
@@ -1610,41 +1610,41 @@ export default function FinancialsPage() {
 
         {/* ── Additional stats (Product costs, Invoices, etc.) ── */}
         {summary && user?.role && ['owner', 'admin'].includes(user.role.toLowerCase()) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              title={t('financials.productCosts')}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                title={t('financials.productCosts')}
               value={formatWithConversion(summary.product_costs, summary.currency, summary.converted_product_costs, summary.converted_currency)}
-              icon={Package}
-              positive={false}
-              subtitle={t('financials.productCostsDescription')}
-            />
-            <StatCard
-              title={t('financials.invoiceExpenses')}
+                icon={Package}
+                positive={false}
+                subtitle={t('financials.productCostsDescription')}
+              />
+              <StatCard
+                title={t('financials.invoiceExpenses')}
               value={formatWithConversion(summary.invoice_expenses, summary.currency, summary.converted_invoice_expenses, summary.converted_currency)}
-              icon={FileUp}
-              positive={false}
-              subtitle={t('financials.invoiceExpensesDescription')}
-            />
-            <StatCard
-              title={t('financials.totalExpenses')}
+                icon={FileUp}
+                positive={false}
+                subtitle={t('financials.invoiceExpensesDescription')}
+              />
+              <StatCard
+                title={t('financials.totalExpenses')}
               value={formatWithConversion(summary.total_expenses, summary.currency, summary.converted_total_expenses, summary.converted_currency)}
-              icon={TrendingDown}
-              positive={false}
-              subtitle={t('financials.totalExpensesDescription')}
-            />
-            <StatCard
-              title={t('financials.netProfit')}
+                icon={TrendingDown}
+                positive={false}
+                subtitle={t('financials.totalExpensesDescription')}
+              />
+              <StatCard
+                title={t('financials.netProfit')}
               value={formatWithConversion(summary.net_profit, summary.currency, summary.converted_net_profit, summary.converted_currency)}
-              icon={TrendingUp}
-              positive={summary.net_profit >= 0}
-              subtitle={summary.net_profit >= 0 ? t('financials.profitable') : t('financials.loss')}
-              className={cn(
-                summary.net_profit >= 0
-                  ? 'border-emerald-200 dark:border-emerald-800'
-                  : 'border-red-200 dark:border-red-800'
-              )}
-            />
-          </div>
+                icon={TrendingUp}
+                positive={summary.net_profit >= 0}
+                subtitle={summary.net_profit >= 0 ? t('financials.profitable') : t('financials.loss')}
+                className={cn(
+                  summary.net_profit >= 0
+                    ? 'border-emerald-200 dark:border-emerald-800'
+                    : 'border-red-200 dark:border-red-800'
+                )}
+              />
+            </div>
         )}
 
         {/* ── Invoice Expenses Section ── */}
@@ -1933,7 +1933,7 @@ export default function FinancialsPage() {
                                 key={opt.value || 'all'}
                                 onClick={() => {
                                   setLedgerFilter(opt.value);
-                                  setLedgerPage(0);
+                      setLedgerPage(0);
                                   setShowLedgerTypeMenu(false);
                                 }}
                                 className={`w-full flex items-center px-4 py-2.5 text-left transition-colors ${

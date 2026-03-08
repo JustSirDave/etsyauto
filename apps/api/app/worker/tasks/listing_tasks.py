@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import ListingJob, Product, AIGeneration, AuditLog
+from app.models.listings import ListingJob, Product, AuditLog
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitError
 from app.services.rate_limiter import get_rate_limiter
@@ -138,42 +138,22 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             raise Exception("Shop not found")
 
         product_label = _get_product_label(product)
-        
-        ai_generation = (
-            db.query(AIGeneration)
-            .filter(
-                AIGeneration.product_id == product.id,
-                AIGeneration.review_decision == "accepted"
-            )
-            .order_by(AIGeneration.created_at.desc())
-            .first()
-        )
-        
-        # ==== POLICY COMPLIANCE CHECK (PRE-PUBLISH) ====
-        # Create a mock listing object for policy checking
+
+        # ==== SIMPLE COMPLIANCE CHECK (required fields + Etsy limits) ====
         from types import SimpleNamespace
-        mock_listing = SimpleNamespace(
-            product_id=product.id,
-            ai_generation_id=ai_generation.id if ai_generation else None
-        )
-        
+        mock_listing = SimpleNamespace(product_id=product.id)
         policy_checker = ListingPolicyChecker(db)
         compliance_result = policy_checker.check_listing_compliance(mock_listing, product)
-        
-        # Store policy results on job
         job.policy_status = compliance_result["policy_status"]
         job.policy_flags = compliance_result["policy_flags"]
         job.policy_checked_at = datetime.utcnow()
-        
-        # FAIL CLOSED: Block publish if not compliant
+
         if not compliance_result["can_publish"]:
             job.status = "policy_blocked"
             job.policy_block_reason = f"Policy violations: {', '.join(compliance_result['policy_flags'])}"
             job.completed_at = datetime.utcnow()
             db.commit()
-            
             logger.error(f"[{request_id}] Job {job_id} blocked by policy: {job.policy_block_reason}")
-
             notify_tenant_admins(
                 db=db,
                 tenant_id=job.tenant_id,
@@ -183,10 +163,7 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                 action_url="/listings",
                 action_label="Review listing",
             )
-            
-            # Release concurrency slot
             _release_shop_concurrency_slot(redis_client, shop_id)
-            
             result = {
                 "success": False,
                 "job_id": job_id,
@@ -196,28 +173,15 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                 "remediation_required": True,
                 "message": job.policy_block_reason
             }
-            
             if job.idempotency_key:
                 _cache_idempotency_result(redis_client, job.idempotency_key, result, ttl=3600)
-            
             return result
-        
-        # Store policy approval on AIGeneration if available
-        if ai_generation and compliance_result["can_publish"]:
-            ai_generation.policy_status = compliance_result["policy_status"]
-            ai_generation.policy_flags = compliance_result["policy_flags"]
-            ai_generation.policy_checked_at = datetime.utcnow()
-            ai_generation.can_publish = 1
-            db.commit()
-        
-        logger.info(f"[{request_id}] Policy check passed for job {job_id}")
-        
-        # Initialize Etsy client
+
+        logger.info(f"[{request_id}] Compliance check passed for job {job_id}")
+
         rate_limiter = get_rate_limiter(redis_client)
         etsy_client = EtsyClient(db, rate_limiter)
-        
-        # Prepare listing data
-        listing_data = _prepare_listing_data(product, shop, ai_generation)
+        listing_data = _prepare_listing_data(product, shop)
         
         # ==== AUDIT LOG: Create Draft Listing ====
         start_time = time.time()
@@ -778,27 +742,13 @@ def _get_product_label(product: Optional[Product]) -> str:
     return f"Product {product.id}"
 
 
-def _prepare_listing_data(product: Product, shop: Shop, ai_generation: AIGeneration = None) -> Dict[str, Any]:
+def _prepare_listing_data(product: Product, shop: Shop) -> Dict[str, Any]:
     """
-    Prepare Etsy listing data from product, shop, and AI generation.
-
-    Args:
-        product: Product model instance
-        shop: Shop model instance (for default shipping/return policies)
-        ai_generation: Optional AI generation data
-
-    Returns:
-        dict: Etsy API listing data
+    Prepare Etsy listing data from product and shop (title, description, tags from product raw fields).
     """
-    # Use AI-generated content if available, otherwise use product data
-    if ai_generation:
-        title = ai_generation.title
-        description = ai_generation.description
-        tags = ai_generation.tags[:13]  # Etsy max 13 tags
-    else:
-        title = product.title_raw
-        description = product.description_raw or ""
-        tags = product.tags_raw[:13] if product.tags_raw else []
+    title = product.title_raw or ""
+    description = product.description_raw or ""
+    tags = (product.tags_raw[:13] if product.tags_raw else []) or []
 
     # Etsy listing data structure
     listing_data = {
@@ -979,18 +929,7 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
             product = db.query(Product).filter(Product.id == job.product_id).first()
             if not product:
                 raise Exception("Product not found")
-            
-            ai_generation = (
-                db.query(AIGeneration)
-                .filter(
-                    AIGeneration.product_id == product.id,
-                    AIGeneration.review_decision == "accepted"
-                )
-                .order_by(AIGeneration.created_at.desc())
-                .first()
-            )
-            
-            listing_data = _prepare_listing_data(product, shop, ai_generation)
+            listing_data = _prepare_listing_data(product, shop)
         
         # Initialize Etsy client
         rate_limiter = get_rate_limiter(redis_client)
