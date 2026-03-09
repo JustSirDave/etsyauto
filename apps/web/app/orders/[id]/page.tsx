@@ -102,6 +102,7 @@ function OrderDetailContent() {
   const [fulfilling, setFulfilling] = useState(false);
   const [trackingCode, setTrackingCode] = useState('');
   const [carrierName, setCarrierName] = useState('');
+  const [shipDate, setShipDate] = useState(new Date().toISOString().split('T')[0]);
   const [note, setNote] = useState('');
   const [sendBcc, setSendBcc] = useState(false);
   const [manualOnly, setManualOnly] = useState(false);
@@ -194,6 +195,7 @@ function OrderDetailContent() {
         tracking_code: trackingCode.trim(),
         carrier_name: carrierName.trim() || undefined,
         note: note.trim() || undefined,
+        ship_date: shipDate,
       };
       if (manualOnly) {
         await ordersApi.recordTracking(order.id, payload);
@@ -552,9 +554,12 @@ function OrderDetailContent() {
             </div>
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Shipment Date</label>
-              <p className="px-3 py-2 text-sm text-[var(--text-primary)] bg-[var(--background)] border border-[var(--border-color)] rounded-lg">
-                {new Date().toLocaleDateString()} <span className="text-[var(--text-muted)]">(auto-filled with today&apos;s date)</span>
-              </p>
+              <input
+                type="date"
+                value={shipDate}
+                onChange={(e) => setShipDate(e.target.value)}
+                className="w-full px-3 py-2 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+              />
             </div>
             <div>
               <label className="block text-sm text-[var(--text-muted)] mb-2">Note</label>

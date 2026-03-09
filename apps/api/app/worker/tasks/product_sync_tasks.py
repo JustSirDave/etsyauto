@@ -20,6 +20,24 @@ from app.models.notifications import NotificationType
 logger = logging.getLogger(__name__)
 
 
+@celery_app.task(name="app.worker.tasks.product_sync_tasks.sync_all_shops_products")
+def sync_all_shops_products() -> Dict[str, Any]:
+    """
+    Queue product sync for all connected shops. Used by Celery Beat every 6 hours.
+    """
+    db = SessionLocal()
+    try:
+        shops = db.query(Shop).filter(Shop.status == "connected").all()
+        count = 0
+        for shop in shops:
+            sync_products_from_etsy.delay(shop_id=shop.id, tenant_id=shop.tenant_id)
+            count += 1
+        logger.info("Queued product sync for %s connected shop(s)", count)
+        return {"shops_queued": count}
+    finally:
+        db.close()
+
+
 @celery_app.task(name="app.worker.tasks.product_sync_tasks.sync_products_from_etsy", max_retries=3)
 def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
     """

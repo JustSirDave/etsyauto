@@ -152,6 +152,12 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             job.status = "policy_blocked"
             job.policy_block_reason = f"Policy violations: {', '.join(compliance_result['policy_flags'])}"
             job.completed_at = datetime.utcnow()
+            job.error_code = "policy_blocked"
+            job.error_message = f"Policy violations: {', '.join(compliance_result['policy_flags'])}"
+            job.error_detail = {
+                "flags": compliance_result["policy_flags"],
+                "checked_at": datetime.utcnow().isoformat()
+            }
             db.commit()
             logger.error(f"[{request_id}] Job {job_id} blocked by policy: {job.policy_block_reason}")
             notify_tenant_admins(
@@ -186,16 +192,14 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         # ==== AUDIT LOG: Create Draft Listing ====
         start_time = time.time()
         audit = AuditLog(
+            request_id=request_id,
             tenant_id=job.tenant_id,
             shop_id=shop.id,
-            actor_type='worker',
-            actor_id=f'celery:{self.request.id}',
             action='etsy.create_draft_listing',
             target_type='listing',
             target_id=str(product.id),
-            request_id=request_id,
-            idempotency_key=job.idempotency_key,
-            diff={'attempt': job.retry_count, 'product_id': product.id}
+            status='pending',
+            request_metadata={'attempt': job.retry_count, 'product_id': product.id},
         )
         
         logger.info(f"[{request_id}] Creating draft listing for product {product.id}")
@@ -235,7 +239,7 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             # Update audit log with error
             audit.status_code = e.status_code or 500
             audit.latency_ms = int((time.time() - start_time) * 1000)
-            audit.diff['error'] = str(e)
+            audit.request_metadata['error'] = str(e)
             db.add(audit)
             db.commit()
             raise
@@ -299,18 +303,20 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                         
                         # Log successful upload
                         audit_image = AuditLog(
+                            request_id=request_id,
                             tenant_id=job.tenant_id,
                             shop_id=shop.id,
-                            actor_type='worker',
-                            actor_id=f'celery:{self.request.id}',
                             action='etsy.upload_image',
                             target_type='listing_image',
                             target_id=listing_id,
-                            request_id=request_id,
-                            idempotency_key=image_cache_key,
-                            diff={'image_idx': idx, 'rank': idx + 1, 'size_bytes': len(image_data)},
-                            status_code=200,
-                            latency_ms=int((time.time() - start_upload_time) * 1000)
+                            status='success',
+                            http_status=200,
+                            request_metadata={
+                                'image_idx': idx,
+                                'rank': idx + 1,
+                                'size_bytes': len(image_data),
+                                'latency_ms': int((time.time() - start_upload_time) * 1000),
+                            },
                         )
                         db.add(audit_image)
                         
@@ -326,18 +332,17 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                     
                     # Log failure
                     audit_image_fail = AuditLog(
+                        request_id=request_id,
                         tenant_id=job.tenant_id,
                         shop_id=shop.id,
-                        actor_type='worker',
-                        actor_id=f'celery:{self.request.id}',
                         action='etsy.upload_image',
                         target_type='listing_image',
                         target_id=listing_id,
-                        request_id=request_id,
-                        idempotency_key=image_cache_key,
-                        diff={'image_idx': idx, 'error': str(img_error)},
-                        status_code=500,
-                        error_message=str(img_error)
+                        status='error',
+                        http_status=500,
+                        error_message=str(img_error),
+                        request_metadata={'image_idx': idx},
+                        response_metadata={'error': str(img_error)},
                     )
                     db.add(audit_image_fail)
                     
@@ -351,16 +356,14 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         # ==== AUDIT LOG: Publish Listing ====
         start_time = time.time()
         audit_publish = AuditLog(
+            request_id=request_id,
             tenant_id=job.tenant_id,
             shop_id=shop.id,
-            actor_type='worker',
-            actor_id=f'celery:{self.request.id}',
             action='etsy.publish_listing',
             target_type='listing',
             target_id=listing_id,
-            request_id=request_id,
-            idempotency_key=job.idempotency_key,
-            diff={'attempt': job.retry_count, 'listing_id': listing_id}
+            status='pending',
+            request_metadata={'attempt': job.retry_count, 'listing_id': listing_id},
         )
         
         logger.info(f"[{request_id}] Publishing listing {listing_id}")
@@ -392,7 +395,7 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
             # Update audit log with error
             audit_publish.status_code = e.status_code or 500
             audit_publish.latency_ms = int((time.time() - start_time) * 1000)
-            audit_publish.diff['error'] = str(e)
+            audit_publish.request_metadata['error'] = str(e)
             db.add(audit_publish)
             db.commit()
             raise
@@ -403,15 +406,13 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
 
         verify_start = time.time()
         audit_verify = AuditLog(
+            request_id=request_id,
             tenant_id=job.tenant_id,
             shop_id=shop.id,
-            actor_type='worker',
-            actor_id=f'celery:{self.request.id}',
             action='etsy.verify_listing',
             target_type='listing',
             target_id=listing_id,
-            request_id=request_id,
-            idempotency_key=job.idempotency_key,
+            status='pending',
         )
 
         try:
@@ -430,13 +431,13 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
 
             audit_verify.status_code = 200
             audit_verify.latency_ms = int((time.time() - verify_start) * 1000)
-            audit_verify.diff = {"state": listing_state or "active"}
+            audit_verify.request_metadata = {"state": listing_state or "active"}
             db.add(audit_verify)
             db.commit()
         except EtsyAPIError as e:
             audit_verify.status_code = e.status_code or 500
             audit_verify.latency_ms = int((time.time() - verify_start) * 1000)
-            audit_verify.diff = {"error": str(e)}
+            audit_verify.request_metadata = {"error": str(e)}
             db.add(audit_verify)
             db.commit()
             raise
@@ -581,6 +582,41 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
     job.retry_count += 1
     
     # ==== Client Errors (4xx) - Don't Retry ====
+    if status_code == 401:
+        logger.error(f"[{request_id}] Auth error for job {job.id}: {error}")
+        job.status = "failed"
+        job.error_code = "etsy_auth_error"
+        job.error_message = "Etsy OAuth token invalid or expired — reconnect your shop"
+        job.error_detail = {
+            "status_code": 401,
+            "message": str(error),
+            "request_id": request_id,
+        }
+        job.completed_at = datetime.utcnow()
+        db.commit()
+        product = db.query(Product).filter(Product.id == job.product_id).first()
+        notify_tenant_admins(
+            db=db,
+            tenant_id=job.tenant_id,
+            notification_type=NotificationType.ERROR,
+            title="Shop connection expired",
+            message=f"Reconnect your Etsy shop to continue publishing.",
+            action_url="/settings/shops",
+            action_label="Reconnect shop",
+        )
+        result = {
+            "success": False,
+            "job_id": job.id,
+            "error_code": "etsy_auth_error",
+            "error": "Etsy OAuth token invalid or expired",
+            "request_id": request_id,
+            "retryable": False
+        }
+        if job.idempotency_key:
+            redis_client = get_redis_client()
+            _cache_idempotency_result(redis_client, job.idempotency_key, result)
+        return result
+
     if 400 <= status_code < 500 and status_code != 429:
         logger.error(f"[{request_id}] Client error {status_code} for job {job.id}: {error}")
         
@@ -635,6 +671,8 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
         logger.warning(f"[{request_id}] Rate limit hit for job {job.id}, retry in {countdown}s")
         
         job.status = "pending"
+        job.error_code = "rate_limited"
+        job.error_message = f"Etsy rate limit hit — retrying in {countdown}s"
         job.error_detail = {
             "status_code": 429,
             "retry_after": countdown,
@@ -654,6 +692,8 @@ def _handle_etsy_error(task, db: Session, job: ListingJob, error: EtsyAPIError, 
             
             job.status = "failed"
             job.completed_at = datetime.utcnow()
+            job.error_code = "max_retries_exceeded"
+            job.error_message = f"Publishing failed after {job.retry_count} attempts: {str(error)}"
             job.error_detail = {
                 "status_code": status_code,
                 "message": str(error),
@@ -744,59 +784,70 @@ def _get_product_label(product: Optional[Product]) -> str:
 
 def _prepare_listing_data(product: Product, shop: Shop) -> Dict[str, Any]:
     """
-    Prepare Etsy listing data from product and shop (title, description, tags from product raw fields).
+    Prepare Etsy v3 listing payload. Only includes fields accepted by
+    POST /application/shops/{etsy_shop_id}/listings.
     """
-    title = product.title_raw or ""
-    description = product.description_raw or ""
-    tags = (product.tags_raw[:13] if product.tags_raw else []) or []
+    if not shop.default_shipping_profile_id:
+        raise ValueError("Shop has no shipping profile configured. Please reconnect your shop.")
 
-    # Etsy listing data structure
-    listing_data = {
+    title = (product.title_raw or "").strip()[:140]
+    description = (product.description_raw or "").strip()
+    tags = product.tags_raw[:13] if product.tags_raw else []
+
+    price = round(product.price / 100.0, 2) if product.price else 0.00
+
+    listing_data: Dict[str, Any] = {
+        # Required fields
         "quantity": product.quantity or 1,
-        "title": title[:140],  # Etsy max 140 chars
+        "title": title,
         "description": description,
-        "price": product.price / 100.0 if product.price else 0,  # Convert cents to dollars
-        
-        # Required Etsy fields
+        "price": price,
         "who_made": product.who_made or "i_did",
         "when_made": product.when_made or "made_to_order",
-        "taxonomy_id": product.taxonomy_id or 1,  # Default to "Other" if not set
-        
-        # Shop-level defaults
+        "taxonomy_id": product.taxonomy_id or 1,
         "shipping_profile_id": shop.default_shipping_profile_id,
-        "return_policy_id": shop.default_return_policy_id,
-        "shop_section_id": shop.shop_section_id or product.variants.get('shop_section_id') if product.variants else None,
-        
-        # Materials and customization
-        "materials": product.materials if product.materials else [],
+
+        # Optional but commonly accepted
+        "tags": tags,
+        "materials": product.materials or [],
         "is_supply": product.is_supply or False,
         "is_customizable": product.is_customizable or False,
-        "is_personalizable": product.is_personalizable or False,
-        "personalization_is_required": product.is_personalizable or False,
-        "personalization_char_count_max": 100 if product.is_personalizable else None,
-        "personalization_instructions": product.personalization_instructions,
-        
-        # Processing time
+        "should_auto_renew": True,
+        "is_taxable": True,
+        "type": "physical",
         "processing_min": product.processing_min or 1,
         "processing_max": product.processing_max or 3,
-        
-        # Tags and styles
-        "tags": tags,
-        "styles": [],  # Could be extended from product metadata
-        
-        # Dimensions and weight
-        "item_weight": product.item_weight,
-        "item_length": product.item_length,
-        "item_width": product.item_width,
-        "item_height": product.item_height,
-        "item_weight_unit": product.item_weight_unit or "oz",
-        "item_dimensions_unit": product.item_dimensions_unit or "in",
-        
-        # Listing settings
-        "should_auto_renew": True,  # Auto-renew when expires
-        "is_taxable": True,
-        "type": "physical",  # physical or download
     }
+
+    # Only include return_policy_id if set
+    if getattr(shop, "default_return_policy_id", None):
+        listing_data["return_policy_id"] = shop.default_return_policy_id
+
+    # Only include shop_section_id if set
+    shop_section_id = None
+    if product.variants and isinstance(product.variants, dict):
+        shop_section_id = product.variants.get("shop_section_id")
+    if shop_section_id:
+        listing_data["shop_section_id"] = shop_section_id
+
+    # Only include personalization fields if product is personalizable
+    if product.is_personalizable:
+        listing_data["is_personalizable"] = True
+        listing_data["personalization_is_required"] = True
+        listing_data["personalization_char_count_max"] = 100
+        listing_data["personalization_instructions"] = (
+            product.personalization_instructions or ""
+        )
+
+    # Only include dimensions if set
+    if product.item_weight:
+        listing_data["item_weight"] = product.item_weight
+        listing_data["item_weight_unit"] = product.item_weight_unit or "oz"
+    if product.item_length:
+        listing_data["item_length"] = product.item_length
+        listing_data["item_width"] = product.item_width
+        listing_data["item_height"] = product.item_height
+        listing_data["item_dimensions_unit"] = product.item_dimensions_unit or "in"
 
     return listing_data
 
@@ -947,16 +998,14 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
         # ==== AUDIT LOG: Update Listing ====
         start_time = time.time()
         audit = AuditLog(
+            request_id=request_id,
             tenant_id=job.tenant_id,
             shop_id=shop.id,
-            actor_type='worker',
-            actor_id=f'celery:{self.request.id}',
             action='etsy.update_listing',
             target_type='listing',
             target_id=job.etsy_listing_id,
-            request_id=request_id,
-            idempotency_key=job.idempotency_key,
-            diff={'attempt': job.retry_count, 'listing_id': job.etsy_listing_id}
+            status='pending',
+            request_metadata={'attempt': job.retry_count, 'listing_id': job.etsy_listing_id},
         )
         
         logger.info(f"[{request_id}] Updating listing {job.etsy_listing_id} for job {job_id}")
@@ -972,7 +1021,7 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
             # Update audit log with success
             audit.status_code = 200
             audit.latency_ms = int((time.time() - start_time) * 1000)
-            audit.diff.update(listing_response)
+            audit.request_metadata.update(listing_response)
             db.add(audit)
             db.commit()
             
@@ -982,7 +1031,7 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
             # Update audit log with error
             audit.status_code = e.status_code or 500
             audit.latency_ms = int((time.time() - start_time) * 1000)
-            audit.diff['error'] = str(e)
+            audit.request_metadata['error'] = str(e)
             db.add(audit)
             db.commit()
             raise

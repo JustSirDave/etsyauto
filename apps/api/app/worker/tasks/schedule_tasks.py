@@ -82,6 +82,24 @@ def process_scheduled_listings() -> Dict[str, Any]:
         db.close()
 
 
+@celery_app.task(name="app.worker.tasks.schedule_tasks.sync_all_shop_defaults")
+def sync_all_shop_defaults() -> None:
+    """
+    Daily maintenance task to refresh default shipping/return policies for all connected shops.
+    """
+    import asyncio
+    from app.models.tenancy import Shop
+    from app.services.shop_sync_service import sync_shop_defaults
+
+    db = SessionLocal()
+    try:
+        shops = db.query(Shop).filter(Shop.status == 'connected').all()
+        for shop in shops:
+            asyncio.run(sync_shop_defaults(db, shop))
+    finally:
+        db.close()
+
+
 def _process_schedule(db, schedule: Schedule) -> Dict[str, Any]:
     """
     Process a single schedule and create listing jobs.

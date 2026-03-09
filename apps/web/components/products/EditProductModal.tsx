@@ -20,6 +20,7 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
     images: [] as string[],
     variants: [] as any[],
     cost_usd_cents: 0 as number | undefined,
+    taxonomy_id: undefined as number | undefined | null,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
         images: product.images || [],
         variants: product.variants || [],
         cost_usd_cents: product.cost_usd_cents ?? 0,
+        taxonomy_id: (product as any).taxonomy_id ?? null,
       });
       setTagsInput((product.tags_raw || []).join(', '));
       setImagesInput((product.images || []).join('\n'));
@@ -176,6 +178,37 @@ export function EditProductModal({ isOpen, onClose, onSuccess, product, showToas
                 className="w-full pl-8 pr-4 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:border-[var(--primary)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               />
             </div>
+          </div>
+
+          {/* Category / Taxonomy ID */}
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
+              Category ID <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={formData.taxonomy_id || ''}
+              onChange={e =>
+                setFormData(prev => ({
+                  ...prev,
+                  taxonomy_id: e.target.value ? parseInt(e.target.value, 10) || null : null,
+                }))
+              }
+              placeholder="e.g. 68887478 (find on Etsy)"
+              disabled={isSubmitting}
+              className="w-full px-3 py-2 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] text-sm"
+            />
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              Find your category ID at{' '}
+              <a
+                href="https://www.etsy.com/taxonomy/json"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                etsy.com/taxonomy/json
+              </a>
+            </p>
           </div>
 
           {/* Tags */}

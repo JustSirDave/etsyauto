@@ -10,7 +10,7 @@ import { useShop } from '@/lib/shop-context';
 import { useLanguage } from '@/lib/language-context';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { Clock, CheckCircle, XCircle, RefreshCw, Loader } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, RefreshCw, Loader, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ListingJob {
@@ -19,13 +19,38 @@ interface ListingJob {
   shop_id: number;
   etsy_listing_id: string | null;
   status: string;
+  error_code?: string | null;
   error_message: string | null;
+  policy_flags?: string[] | null;
+  policy_block_reason?: string | null;
   retry_count: number;
   scheduled_for: string | null;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
 }
+
+const ERROR_MESSAGES: Record<string, string> = {
+  // Policy errors
+  description_empty: 'Description is missing',
+  required_missing_fields: 'Required fields are missing (check category, description, price)',
+  prohibited_terms: 'Title or description contains prohibited terms',
+  handmade_violation: "Product does not meet Etsy handmade policy",
+
+  // Etsy API errors
+  rate_limited: 'Etsy rate limit hit — will retry automatically',
+  etsy_api_error: 'Etsy API returned an error',
+  etsy_auth_error: 'Shop connection expired — reconnect your Etsy shop',
+  listing_already_exists: 'This product is already listed on Etsy',
+  invalid_taxonomy: 'Invalid category — update the product category',
+  invalid_shipping: 'Shipping profile missing or invalid',
+
+  // Worker/system errors
+  token_expired: 'Shop OAuth token expired — reconnect your shop',
+  worker_timeout: 'Publishing timed out — will retry',
+  max_retries_exceeded: 'Publishing failed after multiple attempts',
+  unknown: 'An unexpected error occurred',
+};
 
 const statusStyles: Record<string, string> = {
   pending: 'bg-[var(--background)] text-[var(--text-muted)]',
@@ -52,6 +77,9 @@ function ListingsContent() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string | undefined>();
   const [retrying, setRetrying] = useState<Set<number>>(new Set());
+  const [expandedJobId, setExpandedJobId] = useState<number | null>(null);
+  const [expandedJobDetail, setExpandedJobDetail] = useState<any | null>(null);
+  const [expandedLoading, setExpandedLoading] = useState(false);
   const { selectedShopId } = useShop();
   const { t } = useLanguage();
   const limit = 20;
@@ -72,6 +100,25 @@ function ListingsContent() {
       console.error('Failed to load:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleExpandJob = async (jobId: number) => {
+    if (expandedJobId === jobId) {
+      setExpandedJobId(null);
+      setExpandedJobDetail(null);
+      return;
+    }
+    setExpandedJobId(jobId);
+    setExpandedJobDetail(null);
+    setExpandedLoading(true);
+    try {
+      const detail = await listingsApi.getById(jobId);
+      setExpandedJobDetail(detail);
+    } catch (error) {
+      console.error('Failed to load job detail', error);
+    } finally {
+      setExpandedLoading(false);
     }
   };
 
@@ -103,6 +150,22 @@ function ListingsContent() {
     processing: jobs.filter(j => j.status === 'processing').length,
     completed: jobs.filter(j => j.status === 'completed').length,
     failed: jobs.filter(j => j.status === 'failed').length,
+  };
+
+  const getReadableReason = (job: ListingJob) => {
+    if (job.status === 'policy_blocked') {
+      if (job.policy_flags && job.policy_flags.length > 0) {
+        const primary = job.policy_flags[0];
+        return ERROR_MESSAGES[primary] || `Policy issue: ${primary}`;
+      }
+      if (job.policy_block_reason) {
+        return job.policy_block_reason;
+      }
+    }
+    if (job.error_code) {
+      return ERROR_MESSAGES[job.error_code] || job.error_message || job.error_code;
+    }
+    return job.error_message || '';
   };
 
   return (
@@ -170,38 +233,184 @@ function ListingsContent() {
               ) : (
                 jobs.map(job => {
                   const StatusIcon = statusIcons[job.status as keyof typeof statusIcons] || Clock;
+                  const isErrorState = ['failed', 'cancelled', 'policy_blocked'].includes(job.status);
+                  const reason = getReadableReason(job);
                   return (
-                    <tr key={job.id} className="border-b border-[var(--border-color)] hover:bg-[var(--background)] transition-colors">
-                      <td className="py-4 px-5 text-[var(--text-primary)] font-mono">#{job.id}</td>
-                      <td className="py-4 px-5">
-                        <p className="text-[var(--text-primary)]">Product #{job.product_id}</p>
-                        <p className="text-xs text-[var(--text-muted)]">Shop #{job.shop_id}</p>
-                      </td>
-                      <td className="py-4 px-5">
-                        <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium', statusStyles[job.status] || statusStyles.pending)}>
-                          <StatusIcon className={cn('w-3.5 h-3.5', job.status === 'processing' && 'animate-spin')} />
-                          {job.status}
-                        </span>
-                        {job.error_message && <p className="text-xs text-[var(--danger)] mt-1 max-w-xs truncate">{job.error_message}</p>}
-                      </td>
-                      <td className="py-4 px-5 text-[var(--text-muted)] font-mono text-sm">{job.etsy_listing_id || '-'}</td>
-                      <td className="py-4 px-5 text-[var(--text-muted)]">{job.retry_count > 0 ? <span className="text-[var(--warning)]">{job.retry_count}/3</span> : '0/3'}</td>
-                      <td className="py-4 px-5 text-[var(--text-muted)] text-sm">{new Date(job.created_at).toLocaleString()}</td>
-                      <td className="py-4 px-5">
-                        <div className="flex gap-2 justify-end">
-                          {job.status === 'failed' && job.retry_count < 3 && (
-                            <button onClick={() => handleRetry(job.id)} disabled={retrying.has(job.id)} className="p-2 text-[var(--primary)] hover:bg-[var(--primary-bg)] rounded-lg disabled:opacity-50 transition-colors">
-                              {retrying.has(job.id) ? <Loader className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                            </button>
+                    <>
+                      <tr
+                        key={job.id}
+                        className="border-b border-[var(--border-color)] hover:bg-[var(--background)] transition-colors cursor-pointer"
+                        onClick={() => toggleExpandJob(job.id)}
+                      >
+                        <td className="py-4 px-5 text-[var(--text-primary)] font-mono">#{job.id}</td>
+                        <td className="py-4 px-5">
+                          <p className="text-[var(--text-primary)]">Product #{job.product_id}</p>
+                          <p className="text-xs text-[var(--text-muted)]">Shop #{job.shop_id}</p>
+                        </td>
+                        <td className="py-4 px-5">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium',
+                              statusStyles[job.status] || statusStyles.pending,
+                              isErrorState && 'bg-[var(--danger-bg)] text-[var(--danger)]'
+                            )}
+                          >
+                            <StatusIcon
+                              className={cn(
+                                'w-3.5 h-3.5',
+                                job.status === 'processing' && 'animate-spin'
+                              )}
+                            />
+                            {job.status}
+                          </span>
+                          {isErrorState && reason && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-[var(--danger)] max-w-xs">
+                              <span className="truncate">{reason}</span>
+                              {job.error_message && (
+                                <span
+                                  className="shrink-0 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                                  title={job.error_message}
+                                >
+                                  <HelpCircle className="w-3 h-3 inline-block" />
+                                </span>
+                              )}
+                            </div>
                           )}
-                          {['pending', 'scheduled'].includes(job.status) && (
-                            <button onClick={() => handleCancel(job.id)} className="p-2 text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg transition-colors">
-                              <XCircle className="w-4 h-4" />
-                            </button>
+                        </td>
+                        <td className="py-4 px-5 text-[var(--text-muted)] font-mono text-sm">
+                          {job.etsy_listing_id || '-'}
+                        </td>
+                        <td className="py-4 px-5 text-[var(--text-muted)]">
+                          {job.retry_count > 0 ? (
+                            <span className="text-[var(--warning)]">{job.retry_count}/3</span>
+                          ) : (
+                            '0/3'
                           )}
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="py-4 px-5 text-[var(--text-muted)] text-sm">
+                          {new Date(job.created_at).toLocaleString()}
+                        </td>
+                        <td className="py-4 px-5">
+                          <div
+                            className="flex gap-2 justify-end"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {isErrorState &&
+                              ['rate_limited', 'worker_timeout'].includes(
+                                (job.error_code || '') as string
+                              ) &&
+                              job.retry_count < 3 && (
+                                <button
+                                  onClick={() => handleRetry(job.id)}
+                                  disabled={retrying.has(job.id)}
+                                  className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-bg)] disabled:opacity-50 transition-colors"
+                                >
+                                  {retrying.has(job.id) ? (
+                                    <Loader className="w-3 h-3 animate-spin inline-block" />
+                                  ) : (
+                                    'Retry'
+                                  )}
+                                </button>
+                              )}
+                            {['pending', 'scheduled'].includes(job.status) && (
+                              <button
+                                onClick={() => handleCancel(job.id)}
+                                className="p-2 text-[var(--danger)] hover:bg-[var(--danger-bg)] rounded-lg transition-colors"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            )}
+                            {job.status === 'policy_blocked' && (
+                              <a
+                                href={`/products?edit=${job.product_id}`}
+                                className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-bg)]"
+                              >
+                                Edit Product →
+                              </a>
+                            )}
+                            {['etsy_auth_error', 'token_expired'].includes(
+                              (job.error_code || '') as string
+                            ) && (
+                              <a
+                                href="/settings/shops"
+                                className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border-color)] text-[var(--primary)] hover:bg-[var(--primary-bg)]"
+                              >
+                                Reconnect Shop →
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedJobId === job.id && (
+                        <tr className="border-b border-[var(--border-color)] bg-[var(--background)]/60">
+                          <td colSpan={7} className="px-5 pb-4">
+                            {expandedLoading ? (
+                              <div className="py-3 text-sm text-[var(--text-muted)]">
+                                {t('common.loading')}
+                              </div>
+                            ) : expandedJobDetail ? (
+                              <div className="space-y-2 text-xs text-[var(--text-primary)]">
+                                <div className="flex gap-4 flex-wrap">
+                                  <div>
+                                    <span className="font-semibold">Status:</span>{' '}
+                                    {expandedJobDetail.status}
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold">Retries:</span>{' '}
+                                    {expandedJobDetail.retry_count}
+                                  </div>
+                                  {expandedJobDetail.completed_at && (
+                                    <div>
+                                      <span className="font-semibold">Failed at:</span>{' '}
+                                      {new Date(
+                                        expandedJobDetail.completed_at
+                                      ).toLocaleString()}
+                                    </div>
+                                  )}
+                                </div>
+                                {expandedJobDetail.error_message && (
+                                  <div>
+                                    <span className="font-semibold">Error:</span>{' '}
+                                    {expandedJobDetail.error_message}
+                                  </div>
+                                )}
+                                {expandedJobDetail.policy_flags &&
+                                  expandedJobDetail.policy_flags.length > 0 && (
+                                    <div>
+                                      <span className="font-semibold">Policy flags:</span>{' '}
+                                      {expandedJobDetail.policy_flags.join(', ')}
+                                    </div>
+                                  )}
+                                {expandedJobDetail.policy_block_reason && (
+                                  <div>
+                                    <span className="font-semibold">Block reason:</span>{' '}
+                                    {expandedJobDetail.policy_block_reason}
+                                  </div>
+                                )}
+                                {expandedJobDetail.error_detail && (
+                                  <details className="mt-1">
+                                    <summary className="cursor-pointer text-[var(--text-secondary)]">
+                                      Raw error detail
+                                    </summary>
+                                    <pre className="mt-1 max-h-64 overflow-auto rounded bg-[var(--card-bg)] p-2 text-[10px] text-[var(--text-secondary)]">
+                                      {JSON.stringify(
+                                        expandedJobDetail.error_detail,
+                                        null,
+                                        2
+                                      )}
+                                    </pre>
+                                  </details>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="py-3 text-sm text-[var(--text-muted)]">
+                                {t('listings.noDetails')}
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   );
                 })
               )}

@@ -124,20 +124,8 @@ function AcceptInvitationContent() {
       setInvitationData(data);
       setSuccess(true);
 
-      // Store JWT token for auto-login and redirect to dashboard
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-        
-        // Redirect to dashboard after 2 seconds
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 2000);
-      } else {
-        // Fallback: redirect to login if no token provided
-        setTimeout(() => {
-          router.push('/login?message=invitation_accepted');
-        }, 3000);
-      }
+      // Backend now sets HttpOnly cookies; just redirect to dashboard
+      router.push('/dashboard');
     } catch (err: any) {
       console.error('Accept invitation error:', err);
       setError(err.message || 'Failed to accept invitation. Please try again or contact support.');

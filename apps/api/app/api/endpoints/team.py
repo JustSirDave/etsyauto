@@ -17,7 +17,7 @@ from ...models.notifications import Notification, NotificationType
 from ..dependencies import get_current_user, get_user_context, UserContext, require_role, require_role_with_context, require_permission
 from ...core.rbac import Permission
 from ...core.query_helpers import ensure_tenant_access
-from ...core.security import hash_password, verify_password
+from ...core.security import hash_password, verify_password, create_access_token, create_refresh_token, set_auth_cookies
 from ...services.email_service import email_service
 from ...core.config import settings
 
@@ -385,9 +385,8 @@ async def accept_invitation(
         # Single commit at the end - all or nothing
         db.commit()
 
-        # Create JWT token for auto-login
-        from ...core.security import create_access_token
-        jwt_token = create_access_token(
+        # Create JWT + refresh token for auto-login
+        access_token = create_access_token(
             user_id=user.id,
             tenant_id=membership.tenant_id,
             role=membership.role,
@@ -396,21 +395,24 @@ async def accept_invitation(
             shop_ids=membership.allowed_shop_ids or [],
             remember_me=True
         )
-
-        # Return response with explicit CORS headers and JWT token
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "Invitation accepted successfully",
-                "user_id": user.id,
-                "email": user.email,
-                "tenant_id": tenant.id,
-                "tenant_name": tenant.name,
-                "role": membership.role,
-                "token": jwt_token  # Add JWT for auto-login
-            },
-            headers=CORS_HEADERS
+        refresh_tok = create_refresh_token(
+            user_id=user.id,
+            tenant_id=membership.tenant_id,
+            role=membership.role,
         )
+
+        # Build response body (no raw JWT token — cookies only)
+        body = {
+            "message": "Invitation accepted successfully",
+            "user_id": user.id,
+            "email": user.email,
+            "tenant_id": tenant.id,
+            "tenant_name": tenant.name,
+            "role": membership.role,
+        }
+        response = JSONResponse(status_code=200, content=body)
+        set_auth_cookies(response, access_token, refresh_tok)
+        return response
         
     except Exception as e:
         # Rollback on any error - token remains valid for retry

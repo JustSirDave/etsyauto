@@ -164,7 +164,7 @@ class Settings(BaseSettings):
     # Google OAuth
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/api/auth/callback/google"
+    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/api/oauth/google/callback"
 
     model_config = SettingsConfigDict(
         env_file=".env",

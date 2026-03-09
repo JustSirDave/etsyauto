@@ -10,6 +10,7 @@ from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, timezone
 import uuid
+import json
 
 from app.api.dependencies import get_user_context, UserContext, require_permission, require_any_permission
 from app.core.database import get_db
@@ -20,7 +21,7 @@ from app.models.user_preferences import UserPreference
 from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENCIES
 from app.models.tenancy import Shop, Membership, User
 from app.services.order_utils import build_shipping_address, derive_payment_status, derive_lifecycle_status
-from app.services.etsy_client import EtsyClient
+from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitError
 from app.services.rate_limiter import get_rate_limiter
 from app.core.redis import get_redis_client
 
@@ -593,15 +594,31 @@ async def fulfill_order(
     if context.role.lower() == "supplier" and order.supplier_user_id != context.user_id:
         raise HTTPException(status_code=403, detail="Order not assigned to supplier")
 
+    if not order.etsy_receipt_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Order has no Etsy receipt ID — cannot sync tracking to Etsy.",
+        )
+
+    # Normalize existing shipments to a list
     existing_shipments = order.shipments or []
+    if isinstance(existing_shipments, str):
+        try:
+            existing_shipments = json.loads(existing_shipments)
+        except Exception:
+            existing_shipments = []
+    if not isinstance(existing_shipments, list):
+        existing_shipments = []
+
     for shipment in existing_shipments:
         if (
             shipment.get("tracking_code") == request.tracking_code
-            and shipment.get("carrier_name") == request.carrier_name
+            and (shipment.get("carrier_name") or "").lower() == (request.carrier_name or "").lower()
         ):
             return {"message": "Tracking already submitted", "status": "already_synced"}
 
     ship_date_ts = None
+    ship_date_dt: Optional[datetime] = None
     if request.ship_date:
         try:
             normalized = request.ship_date.replace("Z", "+00:00")
@@ -609,6 +626,7 @@ async def fulfill_order(
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
             ship_date_ts = int(parsed.timestamp())
+            ship_date_dt = parsed
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid ship_date format")
 
@@ -619,16 +637,38 @@ async def fulfill_order(
     redis_client = get_redis_client()
     etsy_client = EtsyClient(db, get_rate_limiter(redis_client))
 
-    etsy_response = await etsy_client.create_receipt_shipment(
-        shop_id=order.shop_id,
-        etsy_shop_id=shop.etsy_shop_id,
-        receipt_id=str(order.etsy_receipt_id),
-        tracking_code=request.tracking_code,
-        carrier_name=request.carrier_name,
-        ship_date=ship_date_ts,
-        note=request.note,
-        send_bcc=request.send_bcc,
-    )
+    try:
+        etsy_response = await etsy_client.create_receipt_shipment(
+            shop_id=order.shop_id,
+            etsy_shop_id=shop.etsy_shop_id,
+            receipt_id=str(order.etsy_receipt_id),
+            tracking_code=request.tracking_code,
+            carrier_name=request.carrier_name,
+            ship_date=ship_date_ts,
+            note=request.note,
+            send_bcc=request.send_bcc,
+        )
+    except EtsyRateLimitError:
+        raise HTTPException(
+            status_code=429,
+            detail="Etsy rate limit hit — please try again shortly.",
+        )
+    except EtsyAPIError as e:
+        status_code = e.status_code or 500
+        if status_code == 401:
+            raise HTTPException(
+                status_code=502,
+                detail="Etsy shop connection expired — please reconnect your shop.",
+            )
+        if status_code == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="Etsy receipt not found — order may have been cancelled.",
+            )
+        raise HTTPException(
+            status_code=502,
+            detail=f"Etsy error: {str(e)}",
+        )
 
     # Look up actor name for metadata
     actor_user = db.query(User).filter(User.id == context.user_id).first()
@@ -669,7 +709,7 @@ async def fulfill_order(
         actor_user_id=context.user_id,
         actor_role=context.role,
         event_timestamp=datetime.now(timezone.utc),
-        shipped_at=datetime.fromisoformat(request.ship_date.replace("Z", "+00:00")) if request.ship_date else datetime.now(timezone.utc),
+        shipped_at=ship_date_dt or datetime.now(timezone.utc),
         notes=request.note,
         event_metadata={"etsy_response": etsy_response if isinstance(etsy_response, dict) else None},
     )
@@ -730,15 +770,25 @@ async def record_manual_tracking(
     if context.role.lower() == "supplier" and order.supplier_user_id != context.user_id:
         raise HTTPException(status_code=403, detail="Order not assigned to supplier")
 
+    # Normalize existing shipments to a list
     existing_shipments = order.shipments or []
+    if isinstance(existing_shipments, str):
+        try:
+            existing_shipments = json.loads(existing_shipments)
+        except Exception:
+            existing_shipments = []
+    if not isinstance(existing_shipments, list):
+        existing_shipments = []
+
     for shipment in existing_shipments:
         if (
             shipment.get("tracking_code") == request.tracking_code
-            and shipment.get("carrier_name") == request.carrier_name
+            and (shipment.get("carrier_name") or "").lower() == (request.carrier_name or "").lower()
         ):
             return {"message": "Tracking already submitted", "status": "already_recorded"}
 
     ship_date_ts = None
+    ship_date_dt: Optional[datetime] = None
     if request.ship_date:
         try:
             normalized = request.ship_date.replace("Z", "+00:00")
@@ -789,7 +839,7 @@ async def record_manual_tracking(
         actor_user_id=context.user_id,
         actor_role=context.role,
         event_timestamp=datetime.now(timezone.utc),
-        shipped_at=datetime.fromisoformat(request.ship_date.replace("Z", "+00:00")) if request.ship_date else datetime.now(timezone.utc),
+        shipped_at=ship_date_dt or datetime.now(timezone.utc),
         notes=request.note,
         event_metadata=None,
     )

@@ -2,6 +2,7 @@
 Listing Jobs API Endpoints
 CRUD operations for managing listing publication jobs
 """
+import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -35,8 +36,11 @@ class ListingJobResponse(BaseModel):
     shop_id: int
     etsy_listing_id: Optional[str]
     status: str
+    error_code: Optional[str] = None
     error_message: Optional[str]
     retry_count: int
+    policy_flags: Optional[List[str]] = None
+    policy_block_reason: Optional[str] = None
     scheduled_for: Optional[str]
     started_at: Optional[str]
     completed_at: Optional[str]
@@ -97,8 +101,11 @@ async def get_listing_jobs(
             "shop_id": job.shop_id,
             "etsy_listing_id": job.etsy_listing_id,
             "status": job.status if hasattr(job, 'status') else job.state,
+            "error_code": job.error_code if hasattr(job, 'error_code') else None,
             "error_message": job.error_message if hasattr(job, 'error_message') else (job.error_detail.get('message') if job.error_detail else None),
             "retry_count": job.retry_count if hasattr(job, 'retry_count') else job.attempts,
+            "policy_flags": getattr(job, "policy_flags", None),
+            "policy_block_reason": getattr(job, "policy_block_reason", None),
             "scheduled_for": job.scheduled_for.isoformat() if hasattr(job, 'scheduled_for') and job.scheduled_for else None,
             "started_at": job.started_at.isoformat() if hasattr(job, 'started_at') and job.started_at else None,
             "completed_at": job.completed_at.isoformat() if hasattr(job, 'completed_at') and job.completed_at else None,
@@ -145,7 +152,7 @@ async def create_listing_job(
     existing_job = db.query(ListingJob).filter(
         ListingJob.product_id == job.product_id,
         ListingJob.shop_id == job.shop_id,
-        ListingJob.status.in_(["pending", "processing", "scheduled"]) if hasattr(ListingJob, 'status') else ListingJob.state.in_(["queued", "processing"])
+        ListingJob.status.in_(["pending", "processing", "scheduled"])
     ).first()
     
     if existing_job:
@@ -159,10 +166,8 @@ async def create_listing_job(
         tenant_id=context.tenant_id,
         product_id=job.product_id,
         shop_id=job.shop_id,
-        status="pending" if hasattr(ListingJob, 'status') else None,
-        state="queued" if hasattr(ListingJob, 'state') else None,
-        retry_count=0 if hasattr(ListingJob, 'retry_count') else None,
-        attempts=0 if hasattr(ListingJob, 'attempts') else None
+        status="pending",
+        idempotency_key=str(uuid.uuid4()),
     )
     
     db.add(new_job)
@@ -224,8 +229,12 @@ async def get_listing_job(
         "shop_id": job.shop_id,
         "etsy_listing_id": job.etsy_listing_id,
         "status": job.status if hasattr(job, 'status') else job.state,
+        "error_code": job.error_code if hasattr(job, "error_code") else None,
         "error_message": job.error_message if hasattr(job, 'error_message') else (job.error_detail.get('message') if job.error_detail else None),
         "retry_count": job.retry_count if hasattr(job, 'retry_count') else job.attempts,
+        "policy_flags": getattr(job, "policy_flags", None),
+        "policy_block_reason": getattr(job, "policy_block_reason", None),
+        "error_detail": getattr(job, "error_detail", None),
         "scheduled_for": job.scheduled_for.isoformat() if hasattr(job, 'scheduled_for') and job.scheduled_for else None,
         "started_at": job.started_at.isoformat() if hasattr(job, 'started_at') and job.started_at else None,
         "completed_at": job.completed_at.isoformat() if hasattr(job, 'completed_at') and job.completed_at else None,

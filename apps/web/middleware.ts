@@ -54,6 +54,7 @@ export async function middleware(request: NextRequest) {
     copyHeader('authorization');
     copyHeader('accept');
     copyHeader('accept-language');
+    copyHeader('idempotency-key');
 
     try {
       // Do not pass request.body to fetch — Edge throws "Illegal invocation".
@@ -70,10 +71,14 @@ export async function middleware(request: NextRequest) {
         fwdHeaders['content-type'] = 'application/json';
       }
 
+      const isMutating = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method);
+      const timeoutMs = isMutating ? 15000 : 5000;
+
       const res = await fetch(proxyUrl, {
         method: request.method,
         headers: fwdHeaders,
-        body: body ?? undefined,
+        body: body || undefined,
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       // Use res.text() — res.arrayBuffer() can throw "Illegal invocation" in Edge
@@ -86,6 +91,20 @@ export async function middleware(request: NextRequest) {
       const setCookie = res.headers.get('set-cookie');
       if (setCookie) resHeaders.set('set-cookie', setCookie);
       resHeaders.set('x-middleware-cache', 'no-store');
+
+      // Rewrite redirect Location from backend host to same-origin path so the browser can follow
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get('location');
+        if (loc) {
+          try {
+            const u = new URL(loc);
+            const sameOriginPath = u.pathname + u.search;
+            resHeaders.set('location', sameOriginPath);
+          } catch {
+            resHeaders.set('location', loc);
+          }
+        }
+      }
 
       return new NextResponse(bodyText, {
         status: res.status,

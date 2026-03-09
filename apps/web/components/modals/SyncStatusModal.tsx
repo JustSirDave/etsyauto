@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { tasksApi, type TaskStatus } from '@/lib/api';
 import { useLanguage } from '@/lib/language-context';
-import { Loader2, CheckCircle, XCircle, AlertCircle, X, RefreshCcw } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, X } from 'lucide-react';
 
 interface SyncStatusModalProps {
   isOpen: boolean;
@@ -22,24 +22,32 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
   const pollingRef = useRef(false);
+  // Guard: if set to true (modal closed mid-poll) the polling callback must not
+  // call onComplete or update component state.
+  const cancelledRef = useRef(false);
 
   const poll = useCallback(async () => {
     if (!taskId || pollingRef.current) return;
     pollingRef.current = true;
+    cancelledRef.current = false;
     setPolling(true);
     try {
       const finalStatus = await tasksApi.pollUntilComplete(
         taskId,
-        (s) => setStatus(s),
+        (s) => {
+          if (!cancelledRef.current) setStatus(s);
+        },
         2000,
         60
       );
+      if (cancelledRef.current) return;
       setStatus(finalStatus);
       if (finalStatus.status === 'completed') {
         localStorage.setItem(`${LAST_SYNC_KEY_PREFIX}${syncType}`, Date.now().toString());
         onCompleteRef.current?.();
       }
     } catch {
+      if (cancelledRef.current) return;
       setStatus({
         task_id: taskId,
         state: 'ERROR',
@@ -55,9 +63,16 @@ export function SyncStatusModal({ isOpen, onClose, taskId, syncType, onComplete 
 
   useEffect(() => {
     if (isOpen && taskId) {
+      cancelledRef.current = false;
       setStatus(null);
       poll();
     }
+    // When the modal closes, mark any in-flight poll as cancelled.
+    return () => {
+      if (!isOpen) {
+        cancelledRef.current = true;
+      }
+    };
   }, [isOpen, taskId, poll]);
 
   if (!isOpen) return null;

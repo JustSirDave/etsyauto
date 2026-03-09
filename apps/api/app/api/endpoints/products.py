@@ -4,7 +4,8 @@ Products API Endpoints
 
 from datetime import datetime, timezone
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import traceback
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -40,6 +41,11 @@ from app.worker.tasks.keyword_tasks import run_keyword_research
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+class SyncEtsyBody(BaseModel):
+    """Optional body for POST /sync/etsy so shop_id can be sent in body if query is stripped."""
+    shop_id: Optional[int] = None
 
 
 @router.post("/import", tags=["Products"])
@@ -307,18 +313,39 @@ async def export_problem_products(
 
 @router.post("/sync/etsy", tags=["Products"])
 async def sync_products_from_shop(
-    shop_id: int,
+    shop_id: Optional[int] = Query(None, description="Shop ID to sync products from (query or body)"),
+    body: Optional[SyncEtsyBody] = None,
     context: UserContext = Depends(require_permission(Permission.CREATE_PRODUCT)),
     db: Session = Depends(get_db)
 ):
     """
     Trigger a sync of Etsy listings into products for a specific shop.
     Requires: CREATE_PRODUCT permission (Owner, Admin, Creator)
+    Accepts shop_id via query (?shop_id=9) or JSON body ({"shop_id": 9}).
     """
-    ensure_shop_access(shop_id, context, db)
-    task = sync_products_from_etsy.delay(shop_id=shop_id, tenant_id=context.tenant_id)
-    logger.info("Queued Etsy product sync task %s for shop_id=%s tenant_id=%s", task.id, shop_id, context.tenant_id)
-    return {"message": "Etsy product sync started", "shop_id": shop_id, "task_id": task.id}
+    resolved_shop_id = shop_id if shop_id is not None else (body.shop_id if body else None)
+    if resolved_shop_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="shop_id is required (query or body)",
+        )
+    try:
+        ensure_shop_access(resolved_shop_id, context, db)
+        task = sync_products_from_etsy.delay(shop_id=resolved_shop_id, tenant_id=context.tenant_id)
+        logger.info("Queued Etsy product sync task %s for shop_id=%s tenant_id=%s", task.id, resolved_shop_id, context.tenant_id)
+        return {"message": "Etsy product sync started", "shop_id": resolved_shop_id, "task_id": task.id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(
+            "sync_products_from_shop failed: %s\n%s",
+            e,
+            traceback.format_exc(),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
 
 @router.get("/", tags=["Products"])
@@ -430,6 +457,10 @@ async def get_product(
         "images": product.images,
         "variants": product.variants,
         "price": product.price,
+        "taxonomy_id": getattr(product, "taxonomy_id", None),
+        "who_made": getattr(product, "who_made", None),
+        "when_made": getattr(product, "when_made", None),
+        "materials": getattr(product, "materials", None),
         "cost_usd_cents": getattr(product, "cost_usd_cents", 0) or 0,
         "source": product.source,
         "batch_id": product.ingest_batch_id,

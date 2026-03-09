@@ -30,6 +30,9 @@ from app.services.token_manager import TokenManager, TokenRefreshError
 from app.core.config import settings
 from app.core.security import check_rate_limit, rate_limit_key, SecurityHeaders
 from app.worker.tasks.financial_tasks import sync_ledger_entries, sync_payment_details
+from app.services.shop_sync_service import sync_shop_defaults
+from app.worker.tasks.product_sync_tasks import sync_products_from_etsy
+from app.worker.tasks.order_tasks import sync_orders
 import secrets
 
 # Redis client for PKCE state storage and token management
@@ -307,6 +310,19 @@ async def etsy_oauth_callback(
 
     db.commit()
     db.refresh(shop)
+
+    # Fetch and store shop defaults (shipping profile, return policy, etc.)
+    try:
+        await sync_shop_defaults(db, shop)
+        logger.info(f"Synced defaults for shop {shop.id}")
+    except Exception as e:
+        logger.warning(f"Could not sync shop defaults for shop {shop.id}: {e}")
+        # Don't fail the OAuth flow if sync fails
+
+    # Trigger product and order sync for the newly connected/reconnected shop
+    sync_products_from_etsy.delay(shop_id=shop.id, tenant_id=tenant_id)
+    sync_orders.delay(shop_id=shop.id, tenant_id=tenant_id)
+    logger.info("Triggered product and order sync for shop_id=%s after OAuth connect/reconnect", shop.id)
 
     # Trigger financial sync so data is pulled after connect/reconnect
     sync_ledger_entries.delay(

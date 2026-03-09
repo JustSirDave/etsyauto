@@ -85,6 +85,14 @@ celery_app.conf.beat_schedule = {
         "task": "audit.cleanup_old_logs",
         "schedule": 86400.0,  # Every 24 hours (daily at midnight UTC)
     },
+    "sync-all-shop-defaults-daily": {
+        "task": "app.worker.tasks.schedule_tasks.sync_all_shop_defaults",
+        "schedule": 86400.0,  # Every 24 hours (daily)
+    },
+    "sync-products-every-6-hours": {
+        "task": "app.worker.tasks.product_sync_tasks.sync_all_shops_products",
+        "schedule": 21600.0,  # Every 6 hours
+    },
     "sync-orders-every-15-minutes": {
         "task": "app.worker.tasks.order_tasks.sync_orders",
         "schedule": 900.0,  # Every 15 minutes

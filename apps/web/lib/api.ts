@@ -340,6 +340,10 @@ export interface Product {
   tags_raw: string[];
   images: string[];
   price: number | null;
+  taxonomy_id?: number | null;
+  who_made?: string | null;
+  when_made?: string | null;
+  materials?: string[] | null;
   cost_usd_cents?: number;
   source: string;
   batch_id: string | null;
@@ -408,9 +412,10 @@ export const productsApi = {
   },
 
   syncFromEtsy: async (shopId: number): Promise<{ message: string; shop_id: number; task_id?: string }> => {
-    return apiRequest<{ message: string; shop_id: number; task_id?: string }>(`/api/products/sync/etsy?shop_id=${shopId}`, {
-      method: 'POST',
-    });
+    return apiRequest<{ message: string; shop_id: number; task_id?: string }>(
+      `/api/products/sync/etsy?shop_id=${shopId}`,
+      { method: 'POST', body: JSON.stringify({ shop_id: shopId }) }
+    );
   },
 
   delete: async (productId: number) => {

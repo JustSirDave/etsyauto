@@ -1,8 +1,9 @@
-"""
+""" 
 Etsy API Client with OAuth 2.0 and Rate Limiting
 Handles all interactions with Etsy Open API v3
 """
 import httpx
+import json
 from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -228,6 +229,14 @@ class EtsyClient:
             f"/application/shops/{etsy_shop_id}"
         )
 
+    async def get_shipping_profiles(self, shop_id: int, etsy_shop_id: str) -> list:
+        response = await self._make_request(
+            shop_id=shop_id,
+            method="GET",
+            endpoint=f"/application/shops/{etsy_shop_id}/shipping-profiles",
+        )
+        return response.get("results", [])
+
     # ==================== Listing Methods ====================
 
     async def create_draft_listing(
@@ -247,6 +256,10 @@ class EtsyClient:
         Returns:
             dict: Created listing data
         """
+        logger.info(
+            f"[create_draft_listing] Payload for shop {etsy_shop_id}: "
+            f"{json.dumps(listing_data, default=str)}"
+        )
         return await self._make_request(
             shop_id,
             "POST",

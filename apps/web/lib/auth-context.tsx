@@ -22,7 +22,7 @@ interface AuthContextType {
   deleteProfilePicture: () => Promise<void>;
   error: string | null;
   clearError: () => void;
-  getRoleDashboardPath: () => string;
+  getRoleDashboardPath: (roleOverride?: string) => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,9 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const response = await authApi.login({ email, password, remember_me: rememberMe });
 
-      // Cookies are set by the backend response — just update React state
-      // Set user
-      setUser({
+      const nextUser: User = {
         id: response.user.id,
         email: response.user.email,
         name: response.user.name,
@@ -125,10 +123,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile_picture_url: response.user.profile_picture_url,
         tenant_description: response.tenant.description,
         onboarding_completed: response.tenant.onboarding_completed,
-      });
+      };
 
-      // Redirect to dashboard
-      router.push('/dashboard');
+      // Cookies are set by the backend response — just update React state
+      setUser(nextUser);
+
+      // Redirect to role-specific dashboard
+      router.push(getRoleDashboardPath(nextUser.role));
     } catch (err: any) {
       setError(getSafeAuthError(err, 'Login failed. Please try again.'));
       throw err;
@@ -251,11 +252,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
   };
 
-  const getRoleDashboardPath = (): string => {
-    if (!user) return '/dashboard';
-    
-    const role = user.role?.toLowerCase() || 'viewer';
-    switch (role) {
+  const getRoleDashboardPath = (roleOverride?: string): string => {
+    const effectiveRole = (roleOverride || user?.role || 'viewer').toLowerCase();
+    switch (effectiveRole) {
       case 'owner':
         return '/dashboard/owner';
       case 'admin':
