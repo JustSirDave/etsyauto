@@ -106,6 +106,7 @@ function OrderDetailContent() {
   const [note, setNote] = useState('');
   const [sendBcc, setSendBcc] = useState(false);
   const [manualOnly, setManualOnly] = useState(false);
+  const [fulfillResult, setFulfillResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [suppliers, setSuppliers] = useState<TeamMember[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
   const [assigningSupplier, setAssigningSupplier] = useState(false);
@@ -147,6 +148,22 @@ function OrderDetailContent() {
       setLoading(false);
     }
   };
+
+  // Pre-fill tracking form from latest shipment when order changes
+  useEffect(() => {
+    if (!order) return;
+    const shipments = (order as any).shipments || [];
+    if (shipments.length > 0) {
+      const latest = shipments[shipments.length - 1];
+      setTrackingCode(latest.tracking_code || '');
+      setCarrierName(latest.carrier_name || '');
+      setShipDate(
+        latest.shipping_date
+          ? String(latest.shipping_date).split('T')[0]
+          : new Date().toISOString().split('T')[0],
+      );
+    }
+  }, [order?.id]);
 
   const handleSyncOrder = async () => {
     try {
@@ -197,19 +214,32 @@ function OrderDetailContent() {
         note: note.trim() || undefined,
         ship_date: shipDate,
       };
+      let message = '';
+      let result: any = null;
       if (manualOnly) {
-        await ordersApi.recordTracking(order.id, payload);
-        showToast('Tracking recorded (manual only — not synced to Etsy)', 'success');
+        result = await ordersApi.recordTracking(order.id, payload);
+        message = 'Tracking recorded (manual only — not synced to Etsy)';
+        showToast(message, 'success');
       } else {
-        await ordersApi.fulfill(order.id, { ...payload, send_bcc: sendBcc });
-        showToast('Tracking submitted and synced to Etsy!', 'success');
+        result = await ordersApi.fulfill(order.id, { ...payload, send_bcc: sendBcc });
+        if (result && result.status === 'already_synced') {
+          message = 'Tracking already recorded on Etsy';
+        } else {
+          message = 'Tracking submitted and synced to Etsy successfully!';
+        }
+        showToast(message, 'success');
       }
       setTrackingCode('');
       setCarrierName('');
       setNote('');
       await loadOrder();
+      setFulfillResult({ type: 'success', message });
+      setTimeout(() => setFulfillResult(null), 5000);
     } catch (error: any) {
-      showToast(error.detail || 'Failed to submit tracking', 'error');
+      const message = error.detail || 'Failed to submit tracking';
+      showToast(message, 'error');
+      setFulfillResult({ type: 'error', message });
+      setTimeout(() => setFulfillResult(null), 5000);
     } finally {
       setFulfilling(false);
     }
@@ -256,6 +286,20 @@ function OrderDetailContent() {
   }
 
   const orderDetail = order as any; // access supplier_name etc.
+
+  const syncStatus = order.shipments && order.shipments.length > 0
+    ? order.shipments.some((s: any) => s.source === 'etsy_sync')
+      ? (
+        <span className="px-2 py-0.5 text-xs rounded-full bg-green-50 text-green-700">
+          Synced to Etsy
+        </span>
+        )
+      : (
+        <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">
+          Manual only — not synced
+        </span>
+        )
+    : null;
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-6">
@@ -355,7 +399,12 @@ function OrderDetailContent() {
         <DashboardCard>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-[var(--text-primary)]">Tracking & Fulfillment</h2>
-            <span className="text-sm text-[var(--text-muted)]">Status: {order.fulfillment_status || 'unshipped'}</span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-[var(--text-muted)]">
+                Status: {order.fulfillment_status || 'unshipped'}
+              </span>
+              {syncStatus}
+            </div>
           </div>
 
           {/* Display existing shipments with source badges */}
@@ -605,6 +654,18 @@ function OrderDetailContent() {
           </div>
 
           <div className="mt-4 flex justify-end">
+            {fulfillResult && (
+              <div
+                className={cn(
+                  'mr-4 flex-1 p-3 rounded-lg text-sm',
+                  fulfillResult.type === 'success'
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-red-50 text-red-700 border border-red-200',
+                )}
+              >
+                {fulfillResult.message}
+              </div>
+            )}
             <button
               onClick={handleFulfillOrder}
               disabled={fulfilling}

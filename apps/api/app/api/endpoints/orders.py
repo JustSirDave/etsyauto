@@ -11,12 +11,13 @@ from pydantic import BaseModel
 from datetime import datetime, timezone
 import uuid
 import json
+import logging
 
 from app.api.dependencies import get_user_context, UserContext, require_permission, require_any_permission
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
-from app.models.listings import Order
+from app.models.listings import Order, ShipmentEvent, AuditLog
 from app.models.user_preferences import UserPreference
 from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENCIES
 from app.models.tenancy import Shop, Membership, User
@@ -24,6 +25,8 @@ from app.services.order_utils import build_shipping_address, derive_payment_stat
 from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitError
 from app.services.rate_limiter import get_rate_limiter
 from app.core.redis import get_redis_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -654,7 +657,20 @@ async def fulfill_order(
             detail="Etsy rate limit hit — please try again shortly.",
         )
     except EtsyAPIError as e:
+        # Log full Etsy error context for debugging (status, response body, message)
+        logger.error(
+            "Etsy API error in fulfill_order: status=%s response=%s message=%s",
+            getattr(e, "status_code", None),
+            getattr(e, "response", None),
+            getattr(e, "message", None),
+        )
+
         status_code = e.status_code or 500
+
+        # Duplicate tracking — treat as success, tracking is already on Etsy
+        if status_code == 400 and getattr(e, "response", None) and "already in use" in str(e.response):
+            return {"message": "Tracking already recorded on Etsy", "status": "already_synced"}
+
         if status_code == 401:
             raise HTTPException(
                 status_code=502,
@@ -665,9 +681,18 @@ async def fulfill_order(
                 status_code=404,
                 detail="Etsy receipt not found — order may have been cancelled.",
             )
+
+        if status_code == 400:
+            # Surface the actual Etsy validation message cleanly
+            etsy_msg = e.response.get("error", str(e)) if isinstance(e.response, dict) else str(e)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Etsy rejected this update: {etsy_msg}",
+            )
+
         raise HTTPException(
             status_code=502,
-            detail=f"Etsy error: {str(e)}",
+            detail=f"Etsy error: {e.message}",
         )
 
     # Look up actor name for metadata

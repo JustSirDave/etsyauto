@@ -4,7 +4,7 @@
  * Reusable Data Table Component - Vuexy Style
  */
 
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { ChevronDown, Search, Download, Plus, MoreVertical, Eye, Trash2, Edit } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -146,18 +146,42 @@ export function AddButton({ label, onClick }: AddButtonProps) {
   )
 }
 
-// Table Actions
+// Table / Row Actions
+interface TableActionsMenuItem {
+  label: string
+  onClick: () => void
+  danger?: boolean
+}
+
 interface TableActionsProps {
   onView?: () => void
   onEdit?: () => void
   onDelete?: () => void
+  menuItems?: TableActionsMenuItem[]
 }
 
-export function TableActions({ onView, onEdit, onDelete }: TableActionsProps) {
+export function TableActions({ onView, onEdit, onDelete, menuItems }: TableActionsProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const hasMenu = !!menuItems && menuItems.length > 0
+
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [menuOpen])
+
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="relative flex items-center justify-end gap-1">
       {onView && (
-        <button 
+        <button
           onClick={onView}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition"
         >
@@ -165,7 +189,7 @@ export function TableActions({ onView, onEdit, onDelete }: TableActionsProps) {
         </button>
       )}
       {onEdit && (
-        <button 
+        <button
           onClick={onEdit}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary)] transition"
         >
@@ -173,16 +197,48 @@ export function TableActions({ onView, onEdit, onDelete }: TableActionsProps) {
         </button>
       )}
       {onDelete && (
-        <button 
+        <button
           onClick={onDelete}
           className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--danger-bg)] hover:text-[var(--danger)] transition"
         >
           <Trash2 className="w-4 h-4" />
         </button>
       )}
-      <button className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition">
-        <MoreVertical className="w-4 h-4" />
-      </button>
+      {hasMenu && (
+        <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--background)] hover:text-[var(--text-primary)] transition"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-40 bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg shadow-lg z-20">
+              <div className="py-1">
+                {menuItems!.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      item.onClick()
+                      setMenuOpen(false)
+                    }}
+                    className={cn(
+                      'w-full text-left px-3 py-2 text-xs transition-colors',
+                      item.danger
+                        ? 'text-[var(--danger)] hover:bg-[var(--danger-bg)]'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--background)] hover:text-[var(--text-primary)]',
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
