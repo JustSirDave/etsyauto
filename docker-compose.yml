@@ -144,6 +144,30 @@ services:
     networks:
       - etsy-network
 
+  # IMAP Listener (Etsy notification emails)
+  imap_listener:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: etsy-imap-listener
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
+      REDIS_URL: redis://redis:6379/0
+      API_INTERNAL_URL: http://api:8080
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-changeme-internal-secret}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/api:/app
+    command: python -m app.worker.services.imap_manager
+    restart: always
+    networks:
+      - etsy-network
+
   # Celery Beat (Scheduler)
   beat:
     build:

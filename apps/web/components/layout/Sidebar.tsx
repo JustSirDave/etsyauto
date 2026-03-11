@@ -24,6 +24,7 @@ import {
   TruckIcon,
   BarChart3,
   Wallet,
+  MessageCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/lib/language-context';
@@ -33,6 +34,7 @@ interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  badgeKey?: 'messages';
 }
 
 interface NavSection {
@@ -60,6 +62,7 @@ const ownerNavigation: NavSection[] = [
       { name: 'nav.products', href: '/products', icon: Package },
       { name: 'nav.listings', href: '/listings', icon: FileText },
       { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
+      { name: 'nav.messages', href: '/dashboard/messages', icon: MessageCircle, badgeKey: 'messages' },
     ],
   },
   {
@@ -185,6 +188,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showHelpCard, setShowHelpCard] = useState(true);
+  const [unreadMessages, setUnreadMessages] = useState<number | null>(null);
   const { t } = useLanguage();
   const { user } = useAuth();
   
@@ -201,6 +205,25 @@ export function Sidebar() {
     if (helpDismissed === 'true') {
       setShowHelpCard(false);
     }
+  }, []);
+
+  // Load unread messages count for badge
+  useEffect(() => {
+    async function loadUnread() {
+      try {
+        const res = await fetch('/api/messages?status=unread&page=1&limit=1', {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (typeof data.total === 'number') {
+          setUnreadMessages(data.total);
+        }
+      } catch {
+        // Ignore errors; badge is non-critical
+      }
+    }
+    loadUnread();
   }, []);
 
   const toggleSidebar = () => {
@@ -269,9 +292,10 @@ export function Sidebar() {
                 const Icon = item.icon;
                 const hrefBase = item.href.split('?')[0];
                 const isActive = pathname === hrefBase || (hrefBase !== '/' && pathname.startsWith(hrefBase + '/'));
+                const label = item.name === 'nav.messages' ? 'Messages' : t(item.name);
           
           return (
-            <Link
+                  <Link
               key={item.name}
               href={item.href}
               className={cn(
@@ -288,14 +312,19 @@ export function Sidebar() {
                       isActive ? 'text-[var(--primary)]' : 'text-[var(--text-inverse)] opacity-70 group-hover:opacity-100'
                     )} />
                     {!isCollapsed && (
-              <span
-                className={cn(
-                  'font-medium opacity-80 group-hover:opacity-100',
-                  isActive ? 'text-[var(--primary)]' : 'text-[var(--text-inverse)]'
-                )}
-              >
-                {t(item.name)}
-              </span>
+                      <span
+                        className={cn(
+                          'font-medium opacity-80 group-hover:opacity-100',
+                          isActive ? 'text-[var(--primary)]' : 'text-[var(--text-inverse)]'
+                        )}
+                      >
+                        {label}
+                      </span>
+                    )}
+                    {!isCollapsed && item.badgeKey === 'messages' && unreadMessages && unreadMessages > 0 && (
+                      <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-semibold px-1.5 min-w-[18px]">
+                        {unreadMessages > 99 ? '99+' : unreadMessages}
+                      </span>
                     )}
                     
                     {/* Tooltip for collapsed state */}

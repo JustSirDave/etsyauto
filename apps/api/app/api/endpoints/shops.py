@@ -6,9 +6,13 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
+from base64 import b64decode
 import logging
+import os
 import redis
 import json
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +60,38 @@ class UpdateShopRequest(BaseModel):
 
 class CreateConnectLinkRequest(BaseModel):
     shop_name: str | None = None
+
+
+class PatchMessagingConfigRequest(BaseModel):
+    """All fields optional; only provided fields are updated."""
+    imap_host: Optional[str] = None
+    imap_email: Optional[str] = None
+    imap_password: Optional[str] = None
+    adspower_profile_id: Optional[str] = None
+
+
+def _encrypt_imap_password(plaintext: str) -> bytes:
+    """
+    Encrypt IMAP password using AES-GCM with ENCRYPTION_KEY.
+    Stored format: nonce (12 bytes) + ciphertext_and_tag.
+    """
+    key_b64 = settings.ENCRYPTION_KEY or ""
+    if not key_b64:
+        return plaintext.encode("utf-8")
+    key = b64decode(key_b64)
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
+    return nonce + ciphertext
+
+
+def _messaging_config_response(shop) -> dict:
+    """Return GET/PATCH response shape; never expose imap_password_enc."""
+    return {
+        "imap_host": getattr(shop, "imap_host", None) or "",
+        "imap_email": getattr(shop, "imap_email", None) or "",
+        "adspower_profile_id": getattr(shop, "adspower_profile_id", None) or "",
+    }
 
 
 @router.post("/connect-link", tags=["Shops"])
@@ -568,3 +604,66 @@ async def delete_shop_permanently(
     db.commit()
 
     return {"message": f"Shop '{shop_name}' and all associated data have been permanently deleted"}
+
+
+@router.get("/{shop_id}/messaging-config", tags=["Shops"])
+async def get_messaging_config(
+    shop_id: int,
+    context: UserContext = Depends(require_permission(Permission.MANAGE_SHOP_SETTINGS)),
+    db: Session = Depends(get_db),
+):
+    """
+    Get messaging configuration for a shop (IMAP + AdsPower).
+    Never returns imap_password. Requires: MANAGE_SHOP_SETTINGS (Owner, Admin).
+    """
+    ensure_shop_access(shop_id, context, db)
+    shop = db.query(Shop).filter(
+        Shop.id == shop_id,
+        Shop.tenant_id == context.tenant_id,
+    ).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    return _messaging_config_response(shop)
+
+
+@router.patch("/{shop_id}/messaging-config", tags=["Shops"])
+async def patch_messaging_config(
+    shop_id: int,
+    request: PatchMessagingConfigRequest,
+    context: UserContext = Depends(require_permission(Permission.MANAGE_SHOP_SETTINGS)),
+    db: Session = Depends(get_db),
+):
+    """
+    Update messaging configuration for a shop.
+    All body fields optional. If imap_password provided and non-empty, encrypt and store;
+    if omitted or empty, leave imap_password_enc unchanged.
+    Requires: MANAGE_SHOP_SETTINGS (Owner, Admin).
+    """
+    ensure_shop_access(shop_id, context, db)
+    shop = db.query(Shop).filter(
+        Shop.id == shop_id,
+        Shop.tenant_id == context.tenant_id,
+    ).first()
+    if not shop:
+        raise HTTPException(status_code=404, detail="Shop not found")
+
+    if request.imap_host is not None:
+        shop.imap_host = request.imap_host
+    if request.imap_email is not None:
+        shop.imap_email = request.imap_email
+    if request.adspower_profile_id is not None:
+        shop.adspower_profile_id = request.adspower_profile_id
+    if request.imap_password is not None and request.imap_password.strip():
+        shop.imap_password_enc = _encrypt_imap_password(request.imap_password)
+
+    shop.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(shop)
+
+    # Notify IMAP manager to reload listeners
+    try:
+        redis_client.publish("imap:reload", "reload")
+    except Exception:
+        pass
+
+    return _messaging_config_response(shop)

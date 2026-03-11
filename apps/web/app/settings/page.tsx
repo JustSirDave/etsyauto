@@ -16,11 +16,11 @@ import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
   Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, CheckCircle2, XCircle,
-  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown,
+  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile' | 'currency';
+type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile' | 'currency' | 'messaging';
 
 function SettingsContent() {
   const { user } = useAuth();
@@ -70,10 +70,24 @@ function SettingsContent() {
     title: string;
     message: string;
   }>({ show: false, type: 'success', title: '', message: '' });
+  const [messagingConfig, setMessagingConfig] = useState({
+    imap_host: '',
+    imap_email: '',
+    imap_password: '',
+    adspower_profile_id: '',
+  });
+  const [loadingMessaging, setLoadingMessaging] = useState(false);
+  const [savingMessaging, setSavingMessaging] = useState(false);
+  const [selectedShopForMessaging, setSelectedShopForMessaging] = useState<number | null>(null);
 
   useEffect(() => { loadShops(); }, []);
   useEffect(() => { if (activeTab === 'team') loadTeamMembers(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'currency') loadCurrencyPrefs(); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === 'messaging' && selectedShopForMessaging) {
+      loadMessagingConfig(selectedShopForMessaging);
+    }
+  }, [activeTab, selectedShopForMessaging]);
   useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
 
   useEffect(() => {
@@ -126,7 +140,47 @@ function SettingsContent() {
       setSavingCurrency(false);
     }
   };
-  
+
+  const loadMessagingConfig = async (shopId: number) => {
+    try {
+      setLoadingMessaging(true);
+      const data = await shopsApi.getMessagingConfig(shopId);
+      setMessagingConfig({
+        imap_host: data.imap_host || '',
+        imap_email: data.imap_email || '',
+        imap_password: '',
+        adspower_profile_id: data.adspower_profile_id || '',
+      });
+    } catch {
+      // Leave form empty on error or 404
+    } finally {
+      setLoadingMessaging(false);
+    }
+  };
+
+  const saveMessagingConfig = async () => {
+    if (!selectedShopForMessaging) return;
+    try {
+      setSavingMessaging(true);
+      await shopsApi.updateMessagingConfig(selectedShopForMessaging, messagingConfig);
+      setNotification({
+        show: true,
+        type: 'success',
+        title: 'Messaging Config Saved',
+        message: 'IMAP and AdsPower settings saved successfully.',
+      });
+    } catch {
+      setNotification({
+        show: true,
+        type: 'error',
+        title: 'Save Failed',
+        message: 'Could not save messaging configuration.',
+      });
+    } finally {
+      setSavingMessaging(false);
+    }
+  };
+
   // Update active tab when URL parameter changes
   useEffect(() => {
     if (tabParam && tabParam !== activeTab) {
@@ -450,6 +504,7 @@ function SettingsContent() {
     { id: 'shops' as TabType, label: t('settings.tabs.shops'), icon: Store },
     { id: 'team' as TabType, label: t('settings.tabs.team'), icon: Users },
     { id: 'currency' as TabType, label: t('settings.tabs.currency'), icon: DollarSign },
+    { id: 'messaging' as TabType, label: 'Messaging', icon: MessageSquare },
     { id: 'notifications' as TabType, label: t('settings.tabs.notifications'), icon: Bell }
   ];
   if (user?.role === 'supplier') {
@@ -939,6 +994,89 @@ function SettingsContent() {
                   </button>
                 </div>
               </div>
+            )}
+          </DashboardCard>
+        </div>
+      )}
+
+      {activeTab === 'messaging' && (
+        <div className="space-y-6">
+          <DashboardCard>
+            <div className="flex items-center gap-3 mb-4">
+              <MessageSquare className="w-5 h-5 text-[var(--primary)]" />
+              <h2 className="text-lg font-semibold text-[var(--text-primary)]">Messaging Automation</h2>
+            </div>
+            <p className="text-sm text-[var(--text-muted)] mb-6">
+              Configure IMAP email monitoring and AdsPower browser profile per shop to enable automated message reading and replies.
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-[var(--text-secondary)] mb-2">Select Shop</label>
+              <select
+                value={selectedShopForMessaging || ''}
+                onChange={(e) => setSelectedShopForMessaging(Number(e.target.value))}
+                className="w-full max-w-xs px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+              >
+                <option value="">-- Select a shop --</option>
+                {shops.map(s => (
+                  <option key={s.id} value={s.id}>{s.display_name || s.etsy_shop_id}</option>
+                ))}
+              </select>
+            </div>
+
+            {selectedShopForMessaging && (
+              loadingMessaging ? (
+                <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" /></div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-[var(--text-muted)] mb-1">IMAP Host</p>
+                    <input
+                      value={messagingConfig.imap_host}
+                      onChange={(e) => setMessagingConfig({ ...messagingConfig, imap_host: e.target.value })}
+                      placeholder="imap.gmail.com"
+                      className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[var(--text-muted)] mb-1">IMAP Email</p>
+                    <input
+                      value={messagingConfig.imap_email}
+                      onChange={(e) => setMessagingConfig({ ...messagingConfig, imap_email: e.target.value })}
+                      placeholder="shop@gmail.com"
+                      className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[var(--text-muted)] mb-1">App Password</p>
+                    <input
+                      type="password"
+                      value={messagingConfig.imap_password}
+                      onChange={(e) => setMessagingConfig({ ...messagingConfig, imap_password: e.target.value })}
+                      placeholder="Leave blank to keep existing"
+                      className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm text-[var(--text-muted)] mb-1">AdsPower Profile ID</p>
+                    <input
+                      value={messagingConfig.adspower_profile_id}
+                      onChange={(e) => setMessagingConfig({ ...messagingConfig, adspower_profile_id: e.target.value })}
+                      placeholder="e.g. jd8k2m"
+                      className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex justify-end">
+                    <button
+                      onClick={saveMessagingConfig}
+                      disabled={savingMessaging}
+                      className="px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+                    >
+                      {savingMessaging ? 'Saving...' : 'Save Messaging Config'}
+                    </button>
+                  </div>
+                </div>
+              )
             )}
           </DashboardCard>
         </div>

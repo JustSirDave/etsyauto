@@ -28,6 +28,7 @@ from app.middleware.sentry_middleware import SentryContextMiddleware
 from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.idempotency import IdempotencyMiddleware
 from app.middleware.content_length_fix import ContentLengthFixMiddleware
+from routers import messages as messages_router
 
 # Initialize logging redaction and Sentry
 setup_log_redaction()
@@ -208,6 +209,7 @@ app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
 app.include_router(financials.router, prefix="/api/financials", tags=["Financials"])
 app.include_router(user_preferences.router, prefix="/api/user-preferences", tags=["User Preferences"])
 app.include_router(currency.router, prefix="/api/currency", tags=["Currency"])
+app.include_router(messages_router.router)
 
 from app.api.endpoints import financial_invoices
 app.include_router(financial_invoices.router, prefix="/api/financials/invoices", tags=["Invoices"])

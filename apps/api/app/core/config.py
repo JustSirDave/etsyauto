@@ -123,6 +123,10 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str = ""
     S3_SECRET_KEY: str = ""
 
+    # AdsPower (browser profiles for messaging automation)
+    ADSPOWER_BASE_URL: str = ""
+    ADSPOWER_API_KEY: str = ""
+
     # Celery
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"

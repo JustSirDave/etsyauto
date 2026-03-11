@@ -1,3 +1,13 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+alembic
+pydantic
+redis
+celery
+httpx
+python-dotenv
 fastapi==0.115.6
 uvicorn[standard]==0.24.0
 sqlalchemy==2.0.23
@@ -23,3 +33,6 @@ email-validator==2.1.0
 resend==2.5.1
 pytrends>=4.9.0
 google-auth>=2.0.0
+aioimaplib
+beautifulsoup4
+playwright

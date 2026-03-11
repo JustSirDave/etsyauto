@@ -76,6 +76,31 @@ export interface Shop {
   created_at: string;
 }
 
+export interface MessageThread {
+  id: number;
+  shop_id: number;
+  customer_name?: string | null;
+  customer_message_preview?: string | null;
+  customer_message?: string | null;
+  status: 'pending_read' | 'unread' | 'replied' | 'failed';
+  created_at: string;
+  replied_at?: string | null;
+}
+
+export interface MessageThreadDetail extends MessageThread {
+  tenant_id: number;
+  replied_text?: string | null;
+  updated_at: string;
+  etsy_conversation_url: string;
+}
+
+export interface MessageListResponse {
+  threads: MessageThread[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 /**
  * @deprecated No longer used — auth tokens are now HttpOnly cookies.
  * Kept as no-ops for any lingering call-sites during migration.
@@ -315,6 +340,57 @@ export const shopsApi = {
     shopId: number,
   ): Promise<{ message: string; expires_at?: string; refresh_count?: number }> => {
     return apiRequest(`/api/shops/${shopId}/refresh-token`, { method: 'POST' });
+  },
+
+  getMessagingConfig: async (shopId: number): Promise<{ imap_host?: string; imap_email?: string; adspower_profile_id?: string }> => {
+    return apiRequest(`/api/shops/${shopId}/messaging-config`);
+  },
+
+  updateMessagingConfig: async (
+    shopId: number,
+    body: { imap_host?: string; imap_email?: string; imap_password?: string; adspower_profile_id?: string },
+  ): Promise<void> => {
+    return apiRequest(`/api/shops/${shopId}/messaging-config`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+export const messagesApi = {
+  list: async (
+    page: number = 1,
+    limit: number = 20,
+    options: { shopId?: number | null; status?: string | null } = {},
+  ): Promise<MessageListResponse> => {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (options.shopId) {
+      params.append('shop_id', String(options.shopId));
+    }
+    if (options.status && options.status !== 'all') {
+      params.append('status', options.status);
+    }
+    return apiRequest<MessageListResponse>(`/api/messages?${params.toString()}`);
+  },
+
+  getById: async (threadId: number): Promise<MessageThreadDetail> => {
+    return apiRequest<MessageThreadDetail>(`/api/messages/${threadId}`);
+  },
+
+  sendReply: async (threadId: number, replyText: string): Promise<{ queued: boolean; thread_id: number }> => {
+    return apiRequest(`/api/messages/${threadId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ reply_text: replyText }),
+    });
+  },
+
+  retryScrape: async (threadId: number): Promise<{ queued: boolean; thread_id: number }> => {
+    return apiRequest(`/api/messages/${threadId}/retry-scrape`, {
+      method: 'POST',
+    });
   },
 };
 
