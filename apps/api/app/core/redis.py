@@ -48,3 +48,14 @@ def get_redis() -> Generator[redis.Redis, None, None]:
     finally:
         # Connection pooling handles cleanup
         pass
+
+
+# Etsy token bucket singleton for per-shop rate limiting
+from app.services.token_bucket import EtsyTokenBucket
+
+etsy_token_bucket = EtsyTokenBucket(
+    redis_client=get_redis_client(),
+    capacity=settings.ETSY_RATE_LIMIT_CAPACITY,
+    refill_per_sec=settings.ETSY_RATE_LIMIT_REFILL_PER_SEC,
+)
+

@@ -13,7 +13,7 @@ from app.models.tenancy import Shop, OAuthToken
 from app.services.rate_limiter import RateLimiter
 from app.services.token_manager import TokenManager, TokenRefreshError
 from app.services.circuit_breaker import get_circuit_breaker, CircuitOpenError
-from app.core.redis import get_redis_client
+from app.core.redis import get_redis_client, etsy_token_bucket
 import logging
 
 logger = logging.getLogger(__name__)
@@ -136,8 +136,11 @@ class EtsyClient:
             raise EtsyAPIError("Shop not found")
         
         tenant_id = shop.tenant_id
-        
-        # Acquire rate limit token
+
+        # Per-shop Redis token bucket (synchronous, blocks until allowed or raises)
+        etsy_token_bucket.acquire_or_wait(shop_id=shop_id)
+
+        # Existing logical rate limiter (kept for compatibility / secondary safeguards)
         if not await self.rate_limiter.acquire(shop_id):
             wait_time = await self.rate_limiter.get_wait_time(shop_id)
             raise EtsyRateLimitError(
