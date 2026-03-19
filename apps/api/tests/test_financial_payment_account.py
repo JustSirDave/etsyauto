@@ -197,17 +197,7 @@ class TestSyncPaymentAccountState:
     async def test_sync_updates_shop_financial_state(self, db, tenant, shop_with_oauth):
         """Phase 8: Mock get_shop_payment_account; assert shop_financial_state updated."""
         from app.services.etsy_client import EtsyClient
-        from app.services.rate_limiter import get_rate_limiter
-
-        mock_redis = MagicMock()
-        mock_redis.get.return_value = None
-        mock_redis.set.return_value = True
-        mock_redis.delete.return_value = True
-        mock_redis.exists.return_value = False
-
-        with patch("app.services.etsy_client.get_redis_client", return_value=mock_redis):
-            rate_limiter = get_rate_limiter(mock_redis)
-            etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         mock_response = {
             "balance": {"amount": 1500, "divisor": 100, "currency_code": "USD"},

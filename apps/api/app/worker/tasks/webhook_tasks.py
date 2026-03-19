@@ -12,8 +12,6 @@ from app.core.database import SessionLocal
 from app.models.listings import WebhookEvent, ListingJob, Product, Order
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
-from app.services.rate_limiter import get_rate_limiter
-from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -127,9 +125,7 @@ def _handle_listing_event(db, shop: Shop, payload: Dict[str, Any]) -> Dict[str, 
         listing_job.error_message = "Listing expired on Etsy"
     elif event_type == "listing.sold_out":
         # Fetch updated quantity from Etsy
-        redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
         
         try:
             listing_data = asyncio.run(etsy_client.get_listing(shop.id, listing_id))
@@ -248,9 +244,7 @@ def reconcile_listings(shop_id: int = None) -> Dict[str, Any]:
             "updated": []
         }
         
-        redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
         
         for shop in shops:
             logger.info(f"Reconciling listings for shop {shop.id}")
@@ -323,4 +317,5 @@ def reconcile_listings(shop_id: int = None) -> Dict[str, Any]:
         
     finally:
         db.close()
+
 

@@ -17,7 +17,6 @@ from app.core.database import SessionLocal
 from app.models.listings import ListingJob, Product, AuditLog
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitError
-from app.services.rate_limiter import get_rate_limiter
 from app.services.listing_policy_checker import ListingPolicyChecker
 from app.core.redis import get_redis_client
 from app.worker.rbac_helpers import enforce_task_rbac, TaskRBACError
@@ -185,8 +184,7 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
 
         logger.info(f"[{request_id}] Compliance check passed for job {job_id}")
 
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
         listing_data = _prepare_listing_data(product, shop)
         
         # ==== AUDIT LOG: Create Draft Listing ====
@@ -205,18 +203,6 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         logger.info(f"[{request_id}] Creating draft listing for product {product.id}")
         
         # ==== RATE LIMITING: Acquire Token ====
-        rate_limit_acquired = asyncio.run(rate_limiter.acquire(shop.id, tokens=1))
-        if not rate_limit_acquired:
-            # No tokens available, calculate wait time
-            wait_time = asyncio.run(rate_limiter.get_wait_time(shop.id, tokens=1))
-            logger.warning(f"[{request_id}] Rate limit reached for shop {shop.id}, waiting {wait_time:.1f}s")
-            
-            # Release concurrency slot before retry
-            _release_shop_concurrency_slot(redis_client, shop_id)
-            
-            # Retry after wait time
-            raise self.retry(countdown=int(wait_time) + 5)
-        
         try:
             # Create draft listing on Etsy
             listing_response = asyncio.run(etsy_client.create_draft_listing(
@@ -263,12 +249,6 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
                         continue
                 
                 # Rate limit check
-                rate_limit_acquired = asyncio.run(rate_limiter.acquire(shop.id, tokens=1))
-                if not rate_limit_acquired:
-                    wait_time = asyncio.run(rate_limiter.get_wait_time(shop.id, tokens=1))
-                    logger.warning(f"[{request_id}] Rate limit for image upload, waiting {wait_time:.1f}s")
-                    time.sleep(wait_time + 1)
-                
                 # Validate URL before server-side fetch (SSRF protection)
                 from app.services.url_validator import validate_image_url
                 url_valid, url_error = validate_image_url(image_url)
@@ -369,16 +349,6 @@ def publish_listing(self, job_id: int) -> Dict[str, Any]:
         logger.info(f"[{request_id}] Publishing listing {listing_id}")
         
         # ==== RATE LIMITING: Acquire Token for Publish ====
-        rate_limit_acquired = asyncio.run(rate_limiter.acquire(shop.id, tokens=1))
-        if not rate_limit_acquired:
-            wait_time = asyncio.run(rate_limiter.get_wait_time(shop.id, tokens=1))
-            logger.warning(f"[{request_id}] Rate limit reached for shop {shop.id}, waiting {wait_time:.1f}s")
-            
-            # Release concurrency slot before retry
-            _release_shop_concurrency_slot(redis_client, shop_id)
-            
-            raise self.retry(countdown=int(wait_time) + 5)
-        
         try:
             # Publish the listing (activate it)
             asyncio.run(etsy_client.publish_listing(
@@ -983,18 +953,9 @@ def update_listing(self, job_id: int, listing_data: Optional[Dict[str, Any]] = N
             listing_data = _prepare_listing_data(product, shop)
         
         # Initialize Etsy client
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
         
         # ==== RATE LIMITING: Acquire Token ====
-        rate_limit_acquired = asyncio.run(rate_limiter.acquire(shop.id, tokens=1))
-        if not rate_limit_acquired:
-            wait_time = asyncio.run(rate_limiter.get_wait_time(shop.id, tokens=1))
-            logger.warning(f"[{request_id}] Rate limit reached for shop {shop.id}, waiting {wait_time:.1f}s")
-            
-            _release_shop_concurrency_slot(redis_client, shop_id)
-            raise self.retry(countdown=int(wait_time) + 5)
-        
         # ==== AUDIT LOG: Update Listing ====
         start_time = time.time()
         audit = AuditLog(
@@ -1124,3 +1085,4 @@ def cancel_listing_job(job_id: int) -> Dict[str, Any]:
 
     finally:
         db.close()
+

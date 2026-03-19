@@ -1,8 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient
-from app.core.redis import get_redis_client
-from app.services.rate_limiter import get_rate_limiter
 
 
 async def sync_shop_defaults(db: Session, shop: Shop) -> None:
@@ -10,10 +8,8 @@ async def sync_shop_defaults(db: Session, shop: Shop) -> None:
   if not shop or not shop.etsy_shop_id:
     return
 
-  # Initialize Etsy client with rate limiter
-  redis_client = get_redis_client()
-  rate_limiter = get_rate_limiter(redis_client)
-  etsy_client = EtsyClient(db, rate_limiter)
+  # Initialize Etsy client
+  etsy_client = EtsyClient(db)
 
   # Fetch shipping profiles and store first active profile ID
   try:

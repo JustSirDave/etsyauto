@@ -20,7 +20,6 @@ from app.models.listings import (
 )
 from app.models.tenancy import Shop, OAuthToken
 from app.services.etsy_client import EtsyClient, EtsyAPIError
-from app.services.rate_limiter import get_rate_limiter
 from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -399,8 +398,7 @@ def sync_ledger_entries(
         }
 
         redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         for shop in shops:
             has_scope = _has_financial_scope(db, shop)
@@ -582,8 +580,7 @@ def sync_payment_details(
         }
 
         redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         for shop in shops:
             try:

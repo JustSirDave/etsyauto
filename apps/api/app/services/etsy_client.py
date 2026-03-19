@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 import redis
 from app.core.config import settings
 from app.models.tenancy import Shop, OAuthToken
-from app.services.rate_limiter import RateLimiter
 from app.services.token_manager import TokenManager, TokenRefreshError
 from app.services.circuit_breaker import get_circuit_breaker, CircuitOpenError
 from app.core.redis import get_redis_client, etsy_token_bucket
@@ -39,20 +38,12 @@ class EtsyClient:
     Etsy Open API v3 Client with automatic token refresh, rate limiting, and retry logic.
     """
 
-    def __init__(self, db: Session, rate_limiter: Optional[RateLimiter] = None):
+    def __init__(self, db: Session):
         self.db = db
         self.base_url = settings.ETSY_API_BASE_URL
         self.client_id = settings.ETSY_CLIENT_ID
         self.client_secret = settings.ETSY_CLIENT_SECRET
 
-        # Initialize rate limiter
-        if rate_limiter is None:
-            redis_client = get_redis_client()
-            from app.services.rate_limiter import get_rate_limiter
-            self.rate_limiter = get_rate_limiter(redis_client)
-        else:
-            self.rate_limiter = rate_limiter
-        
         # Initialize token manager
         redis_client = get_redis_client()
         self.token_manager = TokenManager(db, redis_client)
@@ -140,12 +131,6 @@ class EtsyClient:
         # Per-shop Redis token bucket (synchronous, blocks until allowed or raises)
         etsy_token_bucket.acquire_or_wait(shop_id=shop_id)
 
-        # Existing logical rate limiter (kept for compatibility / secondary safeguards)
-        if not await self.rate_limiter.acquire(shop_id):
-            wait_time = await self.rate_limiter.get_wait_time(shop_id)
-            raise EtsyRateLimitError(
-                f"Rate limit exceeded. Please wait {wait_time:.1f} seconds."
-            )
 
         # Get access token (automatically refreshes if expired)
         access_token = await self._get_access_token(shop_id, tenant_id)
@@ -694,3 +679,4 @@ class EtsyClient:
             "GET",
             f"/application/shops/{etsy_shop_id}/receipts/{receipt_id}/payments",
         )
+

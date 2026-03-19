@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.database import SessionLocal
 from app.models.listings import Schedule, Product, ListingJob
 from app.services.quota_manager import QuotaManager
-from app.services.rate_limiter import RateLimiter
+from app.core.redis import etsy_token_bucket
+from app.services.token_bucket import RateLimitExceeded
 from app.worker.tasks.listing_tasks import publish_listing
 from app.services.notification_service import notify_tenant_admins
 from app.models.notifications import NotificationType
@@ -66,9 +67,8 @@ def process_schedule(self, schedule_id: int):
         
         logger.info(f"Processing schedule {schedule_id}: {schedule.name}")
         
-        # Initialize quota manager and rate limiter
+        # Initialize quota manager
         quota_manager = QuotaManager(db)
-        rate_limiter = RateLimiter()
         
         # Reset quota status if needed (quota may have reset since last run)
         quota_manager.reset_quota_status(schedule)
@@ -94,10 +94,11 @@ def process_schedule(self, schedule_id: int):
             )
             return
         
-        # Check if shop has rate limit capacity
+        # Check if shop has token bucket capacity
         if schedule.shop_id:
-            has_capacity = rate_limiter.has_capacity(f"shop:{schedule.shop_id}")
-            if not has_capacity:
+            try:
+                etsy_token_bucket.acquire_or_wait(shop_id=schedule.shop_id, max_wait_ms=1)
+            except RateLimitExceeded:
                 logger.warning(f"Schedule {schedule_id} - Shop {schedule.shop_id} at rate limit capacity")
                 # Don't mark as error, just skip this run
                 schedule.last_run_at = datetime.now(timezone.utc)
@@ -123,11 +124,6 @@ def process_schedule(self, schedule_id: int):
         max_to_publish = daily_remaining
         if weekly_remaining is not None:
             max_to_publish = min(max_to_publish, weekly_remaining)
-        
-        # Also respect rate limiter max concurrency
-        if schedule.shop_id:
-            max_concurrent = rate_limiter.get_max_concurrent(f"shop:{schedule.shop_id}")
-            max_to_publish = min(max_to_publish, max_concurrent)
         
         products_to_publish = products[:max_to_publish]
         

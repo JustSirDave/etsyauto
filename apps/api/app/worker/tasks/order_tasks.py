@@ -13,10 +13,8 @@ from app.core.database import SessionLocal
 from app.models.listings import Order, AuditLog
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
-from app.services.rate_limiter import get_rate_limiter
 from app.services.notification_service import notify_tenant_admins
 from app.models.notifications import NotificationType
-from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +67,7 @@ def sync_orders(
         logger.info(f"Syncing orders for {len(shops)} shops")
 
         # Initialize Etsy client
-        redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         for shop in shops:
             try:
@@ -656,9 +652,7 @@ def sync_order_by_id(shop_id: int, receipt_id: str) -> Dict[str, Any]:
             return {"success": False, "error": "Shop not found"}
 
         # Initialize Etsy client
-        redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         # Fetch specific receipt
         receipt = asyncio.run(etsy_client.get_receipt(
@@ -765,9 +759,7 @@ def reconcile_orders(shop_id: Optional[int] = None, days: int = 30) -> Dict[str,
             "mismatches_logged": 0,
         }
 
-        redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
@@ -837,3 +829,4 @@ def reconcile_orders(shop_id: Optional[int] = None, days: int = 30) -> Dict[str,
         return {"success": False, "error": str(e)}
     finally:
         db.close()
+

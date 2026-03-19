@@ -23,8 +23,6 @@ from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENC
 from app.models.tenancy import Shop, Membership, User
 from app.services.order_utils import build_shipping_address, derive_payment_status, derive_lifecycle_status
 from app.services.etsy_client import EtsyClient, EtsyAPIError, EtsyRateLimitError
-from app.services.rate_limiter import get_rate_limiter
-from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -637,8 +635,7 @@ async def fulfill_order(
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
 
-    redis_client = get_redis_client()
-    etsy_client = EtsyClient(db, get_rate_limiter(redis_client))
+    etsy_client = EtsyClient(db)
 
     try:
         etsy_response = await etsy_client.create_receipt_shipment(

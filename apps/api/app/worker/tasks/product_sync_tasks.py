@@ -9,11 +9,9 @@ from typing import Any, Dict, List, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.core.redis import get_redis_client
 from app.models.listings import Product
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
-from app.services.rate_limiter import get_rate_limiter
 from app.services.notification_service import notify_tenant_admins
 from app.models.notifications import NotificationType
 
@@ -58,9 +56,7 @@ def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
             logger.warning("Etsy product sync aborted: shop not found shop_id=%s tenant_id=%s", shop_id, tenant_id)
             return {"success": False, "error": "Shop not found"}
 
-        redis_client = get_redis_client()
-        rate_limiter = get_rate_limiter(redis_client)
-        etsy_client = EtsyClient(db, rate_limiter)
+        etsy_client = EtsyClient(db)
 
         results = {
             "success": True,
@@ -250,3 +246,4 @@ def _parse_listing_price_cents(price_data: Any) -> Optional[int]:
             return None
 
     return None
+
