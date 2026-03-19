@@ -42,6 +42,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
         "/api/listings/",
         "/api/ingestion/",
         "/api/oauth/",
+        "/api/shops/",
+        "/api/team/",
+        "/api/schedules/",
     ]
     
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
