@@ -93,11 +93,13 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: List[str] = [
+        "https://etsyauto.bigbotdrivers.com",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
     ]
+    CSRF_TRUSTED_ORIGINS: List[str] = []
 
     # Exchange Rate API (Frankfurter - free, no key, historical support)
     EXCHANGE_RATE_API_URL: str = "https://api.frankfurter.dev/v1"

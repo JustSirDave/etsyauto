@@ -28,6 +28,8 @@ from app.middleware.sentry_middleware import SentryContextMiddleware
 from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.idempotency import IdempotencyMiddleware
 from app.middleware.content_length_fix import ContentLengthFixMiddleware
+from app.middleware.csrf_middleware import CSRFMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
 from routers import messages as messages_router
 
 # Initialize logging redaction and Sentry
@@ -174,6 +176,13 @@ class CustomCORSMiddleware:
 cors_allow_all = settings.ENVIRONMENT == "development"
 cors_origins = list(dict.fromkeys(settings.CORS_ORIGINS + [settings.FRONTEND_URL]))
 app.add_middleware(CustomCORSMiddleware, allowed_origins=cors_origins, allow_all=cors_allow_all)
+app.add_middleware(
+    CSRFMiddleware,
+    allowed_origins=settings.CSRF_TRUSTED_ORIGINS
+    if isinstance(settings.CSRF_TRUSTED_ORIGINS, list)
+    else json.loads(settings.CSRF_TRUSTED_ORIGINS),
+)
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Middleware stack (order matters - last added = outermost layer)
 app.add_middleware(MetricsMiddleware)  # Track all requests
