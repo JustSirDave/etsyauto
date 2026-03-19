@@ -18,6 +18,35 @@ class AdsPowerError(Exception):
     pass
 
 
+class AdsPowerService:
+    """Simple AdsPower API service wrapper for health checks."""
+
+    def __init__(self, base_url: str, api_key: str):
+        self.base_url = (base_url or "").rstrip("/")
+        self.api_key = api_key or ""
+
+    def check_status(self) -> bool:
+        """
+        Return True when AdsPower active endpoint is reachable and returns success.
+        """
+        if not self.base_url:
+            raise AdsPowerError("ADSPOWER_BASE_URL is not configured")
+        if not self.api_key:
+            raise AdsPowerError("ADSPOWER_API_KEY is not configured")
+
+        url = f"{self.base_url}/api/v1/browser/active"
+        response = httpx.get(url, params={"api_key": self.api_key}, timeout=15.0)
+        if response.status_code != 200:
+            return False
+
+        try:
+            payload: Dict[str, Any] = response.json()
+        except ValueError:
+            return False
+
+        return payload.get("code") in (0, "0", None)
+
+
 def _get_base_url() -> str:
     base_url = (settings.ADSPOWER_BASE_URL or "").rstrip("/")
     if not base_url:

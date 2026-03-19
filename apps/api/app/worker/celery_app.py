@@ -25,6 +25,7 @@ celery_app = Celery(
         "app.worker.tasks.financial_tasks",
         "app.worker.tasks.exchange_rate_tasks",
         "app.worker.tasks.keyword_tasks",
+        "app.worker.tasks.messaging",
     ]
 )
 
@@ -112,5 +113,9 @@ celery_app.conf.beat_schedule = {
     "fetch-daily-exchange-rates": {
         "task": "app.worker.tasks.exchange_rate_tasks.fetch_daily_exchange_rates",
         "schedule": 86400.0,  # Every 24 hours (daily)
+    },
+    "check-adspower-health": {
+        "task": "app.worker.tasks.messaging.check_adspower_health",
+        "schedule": 1800.0,
     },
 }

@@ -5,11 +5,13 @@ using AdsPower browser profiles driven by Playwright.
 
 import random
 import time
+import logging
 from datetime import datetime, timezone
 from typing import List
 from uuid import uuid4
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+from prometheus_client import Counter, Histogram
 
 from app.worker.celery_app import celery_app as app  # type: ignore
 from app.core.database import SessionLocal  # type: ignore
@@ -17,6 +19,33 @@ from app.services import adspower  # type: ignore
 from app.models.listings import AuditLog  # type: ignore
 from app.models.messaging import MessageThread  # type: ignore
 from app.models.tenancy import Shop  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+messaging_scrape_total = Counter(
+    "messaging_scrape_total",
+    "Total conversation scrape attempts",
+    labelnames=("shop_id", "status"),
+)
+
+messaging_reply_total = Counter(
+    "messaging_reply_total",
+    "Total reply send attempts",
+    labelnames=("shop_id", "status"),
+)
+
+messaging_adspower_errors_total = Counter(
+    "messaging_adspower_errors_total",
+    "Total AdsPower API errors",
+    labelnames=("shop_id", "error_type"),
+)
+
+messaging_scrape_duration_seconds = Histogram(
+    "messaging_scrape_duration_seconds",
+    "Time taken to scrape a conversation in seconds",
+    labelnames=("shop_id",),
+    buckets=(1, 2, 5, 10, 20, 30, 60),
+)
 
 
 HUMAN_DELAY_SCRAPE_MIN_MS = 1500
@@ -90,6 +119,8 @@ def scrape_conversation(self, thread_id: int):
     profile_id = None
     thread = None
     shop = None
+    start_time = time.time()
+    selector_error_recorded = False
 
     try:
         thread = db.query(MessageThread).get(thread_id)  # type: ignore[attr-defined]
@@ -106,7 +137,14 @@ def scrape_conversation(self, thread_id: int):
         if adspower.profile_is_active(profile_id):
             raise self.retry(exc=Exception("AdsPower profile is currently active"))
 
-        cdp_url = adspower.open_profile(profile_id)
+        try:
+            cdp_url = adspower.open_profile(profile_id)
+        except Exception:
+            messaging_adspower_errors_total.labels(
+                shop_id=str(thread.shop_id),
+                error_type="open_profile_failed",
+            ).inc()
+            raise
 
         playwright_ctx, browser, page = _get_browser_and_page(
             cdp_url, thread.etsy_conversation_url  # type: ignore[attr-defined]
@@ -118,6 +156,17 @@ def scrape_conversation(self, thread_id: int):
             try:
                 page.wait_for_selector(MESSAGE_CONTAINER_SELECTOR, timeout=10_000)
             except PlaywrightTimeoutError as exc:
+                selector_error_recorded = True
+                messaging_scrape_total.labels(
+                    shop_id=str(thread.shop_id),
+                    status="selector_error",
+                ).inc()
+                logger.warning("DOM selector failed during scrape", extra={
+                    "selector": MESSAGE_CONTAINER_SELECTOR,
+                    "shop_id": thread.shop_id,
+                    "thread_id": thread_id,
+                    "error": "SELECTOR_NOT_FOUND"
+                })
                 raise RuntimeError(
                     f"Conversation message container not found using selector {MESSAGE_CONTAINER_SELECTOR!r}"
                 ) from exc
@@ -146,6 +195,13 @@ def scrape_conversation(self, thread_id: int):
             )
 
             db.commit()
+            messaging_scrape_total.labels(
+                shop_id=str(thread.shop_id),
+                status="success"
+            ).inc()
+            messaging_scrape_duration_seconds.labels(
+                shop_id=str(thread.shop_id)
+            ).observe(time.time() - start_time)
         finally:
             try:
                 browser.close()
@@ -155,6 +211,12 @@ def scrape_conversation(self, thread_id: int):
     except Exception as exc:
         if db.is_active:
             db.rollback()
+
+        if thread is not None and not selector_error_recorded:
+            messaging_scrape_total.labels(
+                shop_id=str(thread.shop_id),
+                status="failed"
+            ).inc()
 
         if thread is not None and shop is not None:
             thread.status = "failed"
@@ -191,6 +253,7 @@ def send_reply(self, thread_id: int, reply_text: str):
     profile_id = None
     thread = None
     shop = None
+    selector_error_recorded = False
 
     try:
         thread = db.query(MessageThread).get(thread_id)  # type: ignore[attr-defined]
@@ -206,7 +269,14 @@ def send_reply(self, thread_id: int, reply_text: str):
         if adspower.profile_is_active(profile_id):
             raise self.retry(exc=Exception("AdsPower profile is currently active"))
 
-        cdp_url = adspower.open_profile(profile_id)
+        try:
+            cdp_url = adspower.open_profile(profile_id)
+        except Exception:
+            messaging_adspower_errors_total.labels(
+                shop_id=str(thread.shop_id),
+                error_type="open_profile_failed",
+            ).inc()
+            raise
 
         playwright_ctx, browser, page = _get_browser_and_page(
             cdp_url, thread.etsy_conversation_url  # type: ignore[attr-defined]
@@ -216,6 +286,17 @@ def send_reply(self, thread_id: int, reply_text: str):
             try:
                 reply_box = page.wait_for_selector(REPLY_TEXTAREA_SELECTOR, timeout=10_000)
             except PlaywrightTimeoutError as exc:
+                selector_error_recorded = True
+                messaging_reply_total.labels(
+                    shop_id=str(thread.shop_id),
+                    status="selector_error"
+                ).inc()
+                logger.warning("DOM selector failed during reply", extra={
+                    "selector": REPLY_TEXTAREA_SELECTOR,
+                    "shop_id": thread.shop_id,
+                    "thread_id": thread_id,
+                    "error": "SELECTOR_NOT_FOUND"
+                })
                 raise RuntimeError(
                     f"Reply textarea not found using selector {REPLY_TEXTAREA_SELECTOR!r}"
                 ) from exc
@@ -229,6 +310,17 @@ def send_reply(self, thread_id: int, reply_text: str):
                     timeout=10_000,
                 )
             except PlaywrightTimeoutError as exc:
+                selector_error_recorded = True
+                messaging_reply_total.labels(
+                    shop_id=str(thread.shop_id),
+                    status="selector_error"
+                ).inc()
+                logger.warning("DOM selector failed during reply", extra={
+                    "selector": REPLY_TEXTAREA_SELECTOR,
+                    "shop_id": thread.shop_id,
+                    "thread_id": thread_id,
+                    "error": "SELECTOR_NOT_FOUND"
+                })
                 raise RuntimeError(
                     f"Send button not found using selector {SEND_BUTTON_SELECTOR!r}"
                 ) from exc
@@ -247,6 +339,17 @@ def send_reply(self, thread_id: int, reply_text: str):
                     timeout=10_000,
                 )
             except PlaywrightTimeoutError as exc:
+                selector_error_recorded = True
+                messaging_reply_total.labels(
+                    shop_id=str(thread.shop_id),
+                    status="selector_error"
+                ).inc()
+                logger.warning("DOM selector failed during reply", extra={
+                    "selector": REPLY_TEXTAREA_SELECTOR,
+                    "shop_id": thread.shop_id,
+                    "thread_id": thread_id,
+                    "error": "SELECTOR_NOT_FOUND"
+                })
                 raise RuntimeError(
                     f"Reply textarea was not cleared after send using selector {SENT_CONFIRMATION_SELECTOR!r}"
                 ) from exc
@@ -265,6 +368,10 @@ def send_reply(self, thread_id: int, reply_text: str):
             )
 
             db.commit()
+            messaging_reply_total.labels(
+                shop_id=str(thread.shop_id),
+                status="success"
+            ).inc()
         finally:
             try:
                 browser.close()
@@ -274,6 +381,12 @@ def send_reply(self, thread_id: int, reply_text: str):
     except Exception as exc:
         if db.is_active:
             db.rollback()
+
+        if thread is not None and not selector_error_recorded:
+            messaging_reply_total.labels(
+                shop_id=str(thread.shop_id),
+                status="failed"
+            ).inc()
 
         # For send_reply we follow the requested behavior: just retry on error.
         raise self.retry(exc=exc)
@@ -285,4 +398,35 @@ def send_reply(self, thread_id: int, reply_text: str):
             except Exception:
                 pass
         db.close()
+
+
+@app.task
+def check_adspower_health():
+    """
+    Ping AdsPower API every 30 minutes.
+    Logs error and increments counter if unreachable.
+    """
+    from app.services.adspower import AdsPowerService
+    from app.core.config import settings
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        service = AdsPowerService(
+            settings.ADSPOWER_BASE_URL,
+            settings.ADSPOWER_API_KEY
+        )
+        result = service.check_status()
+        if not result:
+            raise Exception("AdsPower status check returned falsy")
+        logger.info("AdsPower health check passed")
+    except Exception as e:
+        logger.error("AdsPower health check FAILED", extra={
+            "error": str(e),
+            "base_url": settings.ADSPOWER_BASE_URL
+        })
+        messaging_adspower_errors_total.labels(
+            shop_id="system",
+            error_type="health_check_failed"
+        ).inc()
 
