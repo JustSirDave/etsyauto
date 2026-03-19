@@ -288,7 +288,7 @@ async def get_revenue_timeline(
     shop_ids: Optional[str] = Query(None, description="Comma-separated shop IDs"),
     start_date: Optional[str] = Query(None, description="ISO start date"),
     end_date: Optional[str] = Query(None, description="ISO end date"),
-    granularity: str = Query("daily", regex="^(daily|weekly|monthly)$"),
+    granularity: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
     context: UserContext = Depends(require_revenue_access()),
     db: Session = Depends(get_db),
 ):

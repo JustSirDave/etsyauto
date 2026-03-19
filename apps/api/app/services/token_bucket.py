@@ -53,11 +53,9 @@ class EtsyTokenBucket:
 
     def __post_init__(self) -> None:
         # Load the Lua script and keep a reference to the registered script
-        from importlib import resources
+        from importlib.resources import files
 
-        from . import redis_lua
-
-        lua_source = resources.read_text(redis_lua, "token_bucket.lua")
+        lua_source = files(__package__).joinpath("redis_lua/token_bucket.lua").read_text()
         self._script = self.redis_client.register_script(lua_source)
 
     def _bucket_key(self, shop_id: int) -> str:

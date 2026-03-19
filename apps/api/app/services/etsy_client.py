@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.tenancy import Shop, OAuthToken
 from app.services.token_manager import TokenManager, TokenRefreshError
 from app.services.circuit_breaker import get_circuit_breaker, CircuitOpenError
+from app.services.token_bucket import RateLimitExceeded
 from app.core.redis import get_redis_client, etsy_token_bucket
 import logging
 
@@ -112,14 +113,7 @@ class EtsyClient:
             dict: API response JSON
         """
         # Circuit breaker check — reject early if circuit is open
-        try:
-            self.circuit_breaker.before_request(shop_id)
-        except CircuitOpenError as coe:
-            raise EtsyAPIError(
-                str(coe),
-                status_code=503,
-                headers={"Retry-After": str(int(coe.retry_after))},
-            )
+        self.circuit_breaker.before_request(shop_id)
 
         # Get shop to retrieve tenant_id
         shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
@@ -129,7 +123,10 @@ class EtsyClient:
         tenant_id = shop.tenant_id
 
         # Per-shop Redis token bucket (synchronous, blocks until allowed or raises)
-        etsy_token_bucket.acquire_or_wait(shop_id=shop_id)
+        try:
+            etsy_token_bucket.acquire_or_wait(shop_id=shop_id)
+        except RateLimitExceeded as exc:
+            raise EtsyRateLimitError(str(exc), status_code=429) from exc
 
 
         # Get access token (automatically refreshes if expired)
