@@ -14,10 +14,20 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models.listings import WebhookEvent, ListingJob
 from app.models.tenancy import Shop
+from app.services.audit_service import AuditService
 from app.worker.tasks.webhook_tasks import process_webhook_event
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def verify_etsy_signature(payload: bytes, signature: str, secret: str) -> bool:
+    expected = hmac.new(
+        secret.encode(),
+        payload,
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 
 @router.post("/etsy", tags=["Webhooks"])
@@ -41,7 +51,10 @@ async def etsy_webhook(
     try:
         # Read raw body
         body = await request.body()
-        body_str = body.decode('utf-8')
+        body_str = body.decode("utf-8")
+
+        audit_service = AuditService(db)
+        signature_status = "unverified"
         
         # Verify webhook signature when secret is configured (mandatory in production)
         if settings.ETSY_WEBHOOK_SECRET:
@@ -51,18 +64,26 @@ async def etsy_webhook(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Missing webhook signature"
                 )
-            expected_signature = hmac.new(
-                settings.ETSY_WEBHOOK_SECRET.encode('utf-8'),
-                body,
-                hashlib.sha256
-            ).hexdigest()
-            
-            if not hmac.compare_digest(x_etsy_signature, expected_signature):
+            if not verify_etsy_signature(body, x_etsy_signature, settings.ETSY_WEBHOOK_SECRET):
                 logger.warning("Invalid Etsy webhook signature received")
+                audit_service.log_action(
+                    action="webhook_received",
+                    status="unverified",
+                    actor_ip=request.client.host if request.client else None,
+                    target_type="webhook",
+                    target_id=request.headers.get("x-request-id") or "unknown",
+                    http_method=request.method,
+                    http_path=str(request.url.path),
+                    http_status=status.HTTP_401_UNAUTHORIZED,
+                    error_message="Invalid webhook signature",
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid webhook signature"
                 )
+            signature_status = "verified"
+        else:
+            logger.warning("ETSY_WEBHOOK_SECRET not configured; allowing unverified webhook")
         
         # Parse payload
         try:
@@ -77,35 +98,53 @@ async def etsy_webhook(
         # Extract event metadata
         event_type = payload.get("type")  # e.g., "listing.updated", "receipt.created"
         event_id = payload.get("event_id")
+        external_id = str(event_id).strip() if event_id is not None else ""
         shop_id_etsy = payload.get("shop_id")
-        
-        if not event_type or not shop_id_etsy:
-            logger.error(f"Missing required fields in webhook (event_type={event_type}, shop_id={shop_id_etsy})")
+
+        if not event_type or not shop_id_etsy or not external_id:
+            logger.error(
+                "Missing required fields in webhook (event_type=%s, shop_id=%s, external_id=%s)",
+                event_type,
+                shop_id_etsy,
+                external_id,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Missing required fields"
             )
-        
+
+        audit_service.log_action(
+            action="webhook_received",
+            status=signature_status,
+            actor_ip=request.client.host if request.client else None,
+            target_type="webhook",
+            target_id=external_id,
+            http_method=request.method,
+            http_path=str(request.url.path),
+            http_status=status.HTTP_202_ACCEPTED,
+            request_metadata={"event_type": event_type},
+        )
+
         # Check if we've already processed this event (idempotency)
         existing_event = db.query(WebhookEvent).filter(
-            WebhookEvent.external_id == event_id
+            WebhookEvent.external_id == external_id
         ).first()
-        
+
         if existing_event:
-            logger.info(f"Webhook event {event_id} already processed, skipping")
-            return {"status": "duplicate", "event_id": event_id}
-        
+            logger.info(f"Webhook event {external_id} already processed, skipping")
+            return {"status": "duplicate", "event_id": external_id}
+
         # Find the shop
         shop = db.query(Shop).filter(
             Shop.etsy_shop_id == str(shop_id_etsy)
         ).first()
-        
+
         if not shop:
-            logger.warning(f"Shop {shop_id_etsy} not found for webhook event {event_id}")
+            logger.warning(f"Shop {shop_id_etsy} not found for webhook event {external_id}")
             # Store as skipped
             webhook_event = WebhookEvent(
                 provider="etsy",
-                external_id=event_id,
+                external_id=external_id,
                 payload=payload,
                 status="skipped"
             )
@@ -117,7 +156,7 @@ async def etsy_webhook(
         # Store webhook event
         webhook_event = WebhookEvent(
             provider="etsy",
-            external_id=event_id,
+            external_id=external_id,
             payload=payload,
             status="pending"
         )
@@ -125,12 +164,12 @@ async def etsy_webhook(
         db.commit()
         db.refresh(webhook_event)
         
-        logger.info(f"Received Etsy webhook: {event_type} for shop {shop_id_etsy} (event {event_id})")
+        logger.info(f"Received Etsy webhook: {event_type} for shop {shop_id_etsy} (event {external_id})")
         
         # Process asynchronously via Celery
         process_webhook_event.delay(webhook_event.id, shop.id)
         
-        return {"status": "accepted", "event_id": event_id}
+        return {"status": "accepted", "event_id": external_id}
         
     except HTTPException:
         raise
