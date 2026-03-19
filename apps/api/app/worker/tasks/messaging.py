@@ -24,11 +24,11 @@ HUMAN_DELAY_SCRAPE_MAX_MS = 3500
 HUMAN_DELAY_REPLY_MIN_MS = 1000
 HUMAN_DELAY_REPLY_MAX_MS = 2500
 
-# TODO: Paste the confirmed Etsy DOM selectors here.
-MESSAGE_CONTAINER_SELECTOR = '[data-testid="message-text"]'
-REPLY_TEXTAREA_SELECTOR = '[data-testid="reply-box"]'
-SEND_BUTTON_SELECTOR = '[data-testid="send-button"]'
-SENT_CONFIRMATION_SELECTOR = '[data-testid="message-sent-confirmation"]'
+MESSAGE_CONTAINER_SELECTOR = 'div.wt-text-body-01.wt-display-inline-block.wt-break-word'
+REPLY_TEXTAREA_SELECTOR = 'textarea[placeholder="Type your reply"]'
+SEND_BUTTON_SELECTOR = 'button.wt-btn.wt-btn--filled.wt-btn--small'
+MESSAGE_LIST_SELECTOR = 'div.scrolling-message-list'
+SENT_CONFIRMATION_SELECTOR = 'textarea[placeholder="Type your reply"]'
 
 
 def _human_sleep_ms(min_ms: int, max_ms: int) -> None:
@@ -234,12 +234,21 @@ def send_reply(self, thread_id: int, reply_text: str):
                 ) from exc
             send_button.click()
 
-            # Wait for a confirmation element that indicates the message was sent.
+            # Confirm send by waiting for the reply textarea value to clear/empty.
             try:
-                page.wait_for_selector(SENT_CONFIRMATION_SELECTOR, timeout=10_000)
+                page.wait_for_function(
+                    """
+                    (selector) => {
+                        const el = document.querySelector(selector);
+                        return !!el && (el.value || '').trim().length === 0;
+                    }
+                    """,
+                    SENT_CONFIRMATION_SELECTOR,
+                    timeout=10_000,
+                )
             except PlaywrightTimeoutError as exc:
                 raise RuntimeError(
-                    f"Message sent confirmation not found using selector {SENT_CONFIRMATION_SELECTOR!r}"
+                    f"Reply textarea was not cleared after send using selector {SENT_CONFIRMATION_SELECTOR!r}"
                 ) from exc
 
             thread.status = "replied"
