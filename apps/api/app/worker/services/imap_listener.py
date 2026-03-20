@@ -17,7 +17,15 @@ import aioimaplib
 import httpx
 from bs4 import BeautifulSoup
 
+# Force our logger to output regardless of root logger state
+_handler = logging.StreamHandler()
+_handler.setLevel(logging.DEBUG)
+_formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+_handler.setFormatter(_formatter)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(_handler)
+logger.propagate = False
 
 
 INTERNAL_API_URL = os.getenv("API_INTERNAL_URL", "http://api:8080")
@@ -51,7 +59,11 @@ class IMAPIdleListener:
                 self._client = client
 
                 await client.wait_hello_from_server()
-                await client.login(self.email_addr, self.password)
+                login_response = await client.login(self.email_addr, self.password)
+                if login_response.result != "OK":
+                    raise ConnectionError(
+                        f"IMAP login failed for {self.email_addr}: {login_response.result} {login_response.lines}"
+                    )
                 await client.select("INBOX")
 
                 logger.info("IMAPIdleListener: connected and INBOX selected for shop_id=%s", self.shop_id)
@@ -124,28 +136,34 @@ class IMAPIdleListener:
 
         try:
             # Search for unseen messages
-            search_status, search_data = await client.uid("search", "UNSEEN")
-            if search_status != "OK":
+            search_response = await client.search("UNSEEN")
+            if search_response.result != "OK":
                 logger.warning(
-                    "IMAPIdleListener: UID SEARCH UNSEEN failed for shop_id=%s: %s %s",
+                    "IMAPIdleListener: SEARCH UNSEEN failed for shop_id=%s: %s %s",
                     self.shop_id,
-                    search_status,
-                    search_data,
+                    search_response.result,
+                    search_response.lines,
                 )
                 return
         except Exception as exc:
             logger.exception(
-                "IMAPIdleListener: UID SEARCH UNSEEN error for shop_id=%s: %s",
+                "IMAPIdleListener: SEARCH UNSEEN error for shop_id=%s: %s",
                 self.shop_id,
                 exc,
             )
             return
 
-        if not search_data or not search_data[0]:
+        # Extract UIDs from response
+        uid_data = search_response.lines[0] if search_response.lines else b""
+        if isinstance(uid_data, (bytes, bytearray)):
+            uid_list = uid_data.decode().split()
+        else:
+            uid_list = str(uid_data).split()
+
+        if not uid_list or uid_list == [""]:
             # No unseen messages
             return
 
-        uid_list = search_data[0].decode().split()
         logger.info(
             "IMAPIdleListener: found %d UNSEEN messages for shop_id=%s",
             len(uid_list),
@@ -169,14 +187,22 @@ class IMAPIdleListener:
         client = self._client
 
         # Fetch full RFC822 message
-        fetch_status, fetch_data = await client.uid("fetch", uid, "(RFC822)")
-        if fetch_status != "OK" or not fetch_data:
+        fetch_response = await client.fetch(uid, "(RFC822)")
+        if fetch_response.result != "OK":
             logger.warning(
-                "IMAPIdleListener: UID FETCH failed for uid=%s shop_id=%s: %s %s",
+                "IMAPIdleListener: FETCH failed for uid=%s shop_id=%s: %s %s",
                 uid,
                 self.shop_id,
-                fetch_status,
-                fetch_data,
+                fetch_response.result,
+                fetch_response.lines,
+            )
+            return
+        fetch_data = fetch_response.lines
+        if not fetch_data:
+            logger.warning(
+                "IMAPIdleListener: FETCH returned empty payload for uid=%s shop_id=%s",
+                uid,
+                self.shop_id,
             )
             return
 
@@ -233,7 +259,9 @@ class IMAPIdleListener:
             return
 
         try:
-            status, data = await self._client.uid("store", uid, "+FLAGS", "(\\Seen)")
+            store_response = await self._client.store(uid, "+FLAGS", "(\\Seen)")
+            status = store_response.result
+            data = store_response.lines
             if status != "OK":
                 logger.warning(
                     "IMAPIdleListener: failed to mark uid=%s as SEEN for shop_id=%s: %s %s",

@@ -17,7 +17,15 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from .imap_listener import IMAPIdleListener
 from app.core.config import settings
 
+# Force our logger to output regardless of root logger state
+_handler = logging.StreamHandler()
+_handler.setLevel(logging.DEBUG)
+_formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+_handler.setFormatter(_formatter)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.addHandler(_handler)
+logger.propagate = False
 
 
 def _get_database_url() -> str:
@@ -108,21 +116,63 @@ async def _start_listeners_for_current_shops() -> List[asyncio.Task]:
 async def _wait_for_reload_signal(redis_url: str) -> None:
     """
     Subscribe to Redis channel 'imap:reload' and return when a message arrives.
+    Resiliency behavior:
+    - If Redis connection/subscription fails, wait 30s and retry.
+    - If no signal is received within 24h, log and return.
     """
-    redis = aioredis.from_url(redis_url)
-    try:
-        pubsub = redis.pubsub()
-        await pubsub.subscribe("imap:reload")
-        logger.info("IMAPManager: subscribed to Redis channel 'imap:reload'")
-        async for message in pubsub.listen():
-            if message is None:
-                continue
-            msg_type = message.get("type")
-            if msg_type == "message":
-                logger.info("IMAPManager: received reload signal from Redis")
-                break
-    finally:
-        await redis.close()
+    timeout_seconds = 24 * 60 * 60
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+
+    while True:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            logger.info("IMAPManager: no reload signal received within 24h; continuing")
+            return
+
+        redis = None
+        pubsub = None
+        try:
+            redis = aioredis.from_url(redis_url)
+            pubsub = redis.pubsub()
+            await pubsub.subscribe("imap:reload")
+            logger.info("IMAPManager: subscribed to Redis channel 'imap:reload'")
+
+            # Poll for messages while honoring overall timeout.
+            while True:
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    logger.info("IMAPManager: no reload signal received within 24h; continuing")
+                    return
+
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True,
+                    timeout=min(1.0, remaining),
+                )
+                if message and message.get("type") == "message":
+                    logger.info("IMAPManager: received reload signal from Redis")
+                    return
+        except Exception as exc:
+            logger.exception("IMAPManager: Redis wait failed (%s); retrying in 30s", exc)
+            await asyncio.sleep(30)
+        finally:
+            try:
+                if pubsub is not None:
+                    close_fn = getattr(pubsub, "aclose", None) or getattr(pubsub, "close", None)
+                    if close_fn is not None:
+                        res = close_fn()
+                        if asyncio.iscoroutine(res):
+                            await res
+            except Exception:
+                logger.debug("IMAPManager: error closing pubsub", exc_info=True)
+            try:
+                if redis is not None:
+                    close_fn = getattr(redis, "aclose", None) or getattr(redis, "close", None)
+                    if close_fn is not None:
+                        res = close_fn()
+                        if asyncio.iscoroutine(res):
+                            await res
+            except Exception:
+                logger.debug("IMAPManager: error closing redis client", exc_info=True)
 
 
 async def run_manager() -> None:
@@ -133,22 +183,28 @@ async def run_manager() -> None:
     - Waits for a Redis 'imap:reload' message
     - On reload, cancels existing listeners and restarts them with fresh config
     """
-    logging.basicConfig(level=logging.INFO)
+    print("IMAPManager: run_manager started", flush=True)
+    logger.info("IMAPManager: starting...")
 
     redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
     logger.info("IMAPManager: starting with REDIS_URL=%s", redis_url)
 
     while True:
+        logger.info("IMAPManager: loading shops and starting listeners")
         tasks: List[asyncio.Task] = await _start_listeners_for_current_shops()
 
         if not tasks:
             logger.warning("IMAPManager: no shops with IMAP configured; waiting for reload signal")
+        else:
+            logger.info("IMAPManager: %d listeners running; waiting for reload signal", len(tasks))
 
         # Wait for reload signal while listeners run
         try:
             await _wait_for_reload_signal(redis_url)
         except Exception:
             logger.exception("IMAPManager: error while waiting for reload signal")
+            await asyncio.sleep(5)
+            continue
 
         logger.info("IMAPManager: reloading listeners after Redis signal")
 
@@ -157,6 +213,9 @@ async def run_manager() -> None:
             t.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Small delay before restarting to avoid rapid cycling
+        await asyncio.sleep(2)
 
 
 def main() -> None:

@@ -4,7 +4,7 @@ SQLAlchemy Models - Core Tenancy & Authentication
 from datetime import datetime
 from sqlalchemy import (
     Column, BigInteger, String, Text, Boolean, DateTime, Integer,
-    ForeignKey, CheckConstraint, UniqueConstraint, Index
+    ForeignKey, CheckConstraint, UniqueConstraint, Index, LargeBinary
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import CITEXT, JSONB, BYTEA
@@ -176,6 +176,12 @@ class Shop(Base):
     
     # Shop metadata from Etsy
     shop_data = Column(JSONB, nullable=True)  # Store full shop info from Etsy API
+
+    # Messaging automation configuration
+    adspower_profile_id = Column(Text, nullable=True)
+    imap_host = Column(Text, nullable=True)
+    imap_email = Column(Text, nullable=True)
+    imap_password_enc = Column(LargeBinary, nullable=True)
     
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

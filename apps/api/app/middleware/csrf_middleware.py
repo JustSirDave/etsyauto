@@ -7,6 +7,16 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+BYPASS_PATHS = [
+    "/api/messages/internal/",
+    "/healthz",
+    "/metrics",
+    "/api/auth/",
+    "/api/oauth/",
+]
+
+INTERNAL_IP_PREFIXES = ("172.", "10.", "192.168.", "127.")
+
 
 class CSRFMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, allowed_origins: list[str]):
@@ -29,17 +39,26 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return normalized in self.allowed_origins
 
     async def dispatch(self, request: Request, call_next):
-        if request.method in {"GET", "HEAD", "OPTIONS"}:
+        # Skip safe methods
+        if request.method in ("GET", "HEAD", "OPTIONS"):
             return await call_next(request)
 
+        # Skip bypass paths
         path = request.url.path
-        if (
-            path.startswith("/api/messages/internal/")
-            or path.startswith("/healthz")
-            or path.startswith("/metrics")
-        ):
+        if any(path.startswith(p) for p in BYPASS_PATHS):
             return await call_next(request)
 
+        # Skip internal network requests
+        client_ip = request.client.host if request.client else ""
+        if any(client_ip.startswith(p) for p in INTERNAL_IP_PREFIXES):
+            return await call_next(request)
+
+        # Skip Next.js server-side requests
+        user_agent = request.headers.get("user-agent", "")
+        if "Next.js" in user_agent:
+            return await call_next(request)
+
+        # Check Origin/Referer for all other requests
         origin = request.headers.get("origin")
         referer = request.headers.get("referer")
 
