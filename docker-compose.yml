@@ -65,6 +65,7 @@ services:
       SENTRY_DSN: ${SENTRY_DSN}
       # Security
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      ADMIN_PORTAL_SECRET: ${ADMIN_PORTAL_SECRET:-}
       # Email Configuration
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
@@ -223,6 +224,23 @@ services:
       - "3000:3000"
     depends_on:
       - api
+    networks:
+      - etsy-network
+
+  # Super-admin UI (Next.js). Proxies /api/admin/* → api:8080. Login password = ADMIN_PORTAL_SECRET in .env (≥16 chars).
+  admin:
+    build:
+      context: ./apps/admin
+      dockerfile: Dockerfile
+    container_name: etsy-admin
+    environment:
+      NODE_OPTIONS: "--max-old-space-size=512"
+      API_INTERNAL_URL: http://api:8080
+    ports:
+      - "3002:3002"
+    depends_on:
+      api:
+        condition: service_healthy
     networks:
       - etsy-network
 

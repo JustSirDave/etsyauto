@@ -121,6 +121,24 @@ services:
     environment:
       - NODE_ENV=production
 
+  # Super-admin portal (set ADMIN_PORTAL_SECRET in .env; login = same value)
+  admin:
+    build:
+      context: ./apps/admin
+      dockerfile: Dockerfile
+    container_name: etsy-admin
+    restart: always
+    ports:
+      - "3002:3002"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - etsy-network
+    environment:
+      - NODE_ENV=production
+      - API_INTERNAL_URL=http://api:8080
+
   adminer:
     image: adminer:latest
     container_name: etsy-adminer
@@ -146,6 +164,7 @@ services:
     depends_on:
       - api
       - web
+      - admin
       - adminer
     networks:
       - etsy-network

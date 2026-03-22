@@ -13,6 +13,7 @@ BYPASS_PATHS = [
     "/metrics",
     "/api/auth/",
     "/api/oauth/",
+    "/api/admin/",
 ]
 
 INTERNAL_IP_PREFIXES = ("172.", "10.", "192.168.", "127.")

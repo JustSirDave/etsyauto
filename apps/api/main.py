@@ -21,6 +21,7 @@ from app.core.sentry_config import initialize_sentry
 from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
 from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, schedules, listings, audit, google_oauth, ingestion, audit_logs, webhooks, listing_errors, suppliers, analytics, financials, user_preferences, currency
+from app.api.endpoints import admin as admin_endpoint
 from app.api.endpoints import metrics as metrics_endpoint
 from app.middleware.tenant_context import TenantContextMiddleware
 from app.middleware.metrics_middleware import MetricsMiddleware
@@ -196,6 +197,7 @@ app.add_middleware(IdempotencyMiddleware)  # HTTP idempotency enforcement
 app.add_middleware(ContentLengthFixMiddleware)
 
 # Include API routers
+app.include_router(admin_endpoint.router, prefix="/api/admin", tags=["admin"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(google_oauth.router, prefix="/api/oauth", tags=["OAuth"])
 app.include_router(onboarding.router, prefix="/api/onboarding", tags=["Onboarding"])

@@ -34,6 +34,7 @@ EXEMPT_PATHS = {
 # Path prefixes exempt from idempotency (for dynamic-token endpoints)
 EXEMPT_PATH_PREFIXES = (
     "/api/shops/connect-link/",
+    "/api/admin/",
 )
 
 

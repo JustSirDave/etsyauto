@@ -33,6 +33,14 @@ class Tenant(Base):
         default='active',
         nullable=False
     )
+    messaging_access = Column(
+        String(20),
+        CheckConstraint(
+            "messaging_access IN ('none', 'pending', 'approved', 'denied')"
+        ),
+        default='none',
+        nullable=False,
+    )
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     

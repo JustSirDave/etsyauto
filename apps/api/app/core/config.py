@@ -96,9 +96,14 @@ class Settings(BaseSettings):
         "https://etsyauto.bigbotdrivers.com",
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:3002",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
     ]
+
+    # Super-admin portal (Next.js on :3002); used for CSRF trusted origins in dev
+    ADMIN_PORTAL_SECRET: str = ""
     CSRF_TRUSTED_ORIGINS: List[str] = []
 
     # Exchange Rate API (Frankfurter - free, no key, historical support)
