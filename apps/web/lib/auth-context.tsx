@@ -123,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile_picture_url: response.user.profile_picture_url,
         tenant_description: response.tenant.description,
         onboarding_completed: response.tenant.onboarding_completed,
+        messaging_access: response.tenant.messaging_access ?? 'none',
       };
 
       // Cookies are set by the backend response — just update React state
@@ -167,6 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile_picture_url: response.user.profile_picture_url,
         tenant_description: response.tenant.description,
         onboarding_completed: response.tenant.onboarding_completed,
+        messaging_access: response.tenant.messaging_access ?? 'none',
       });
 
       // Post-registration onboarding (new users always see onboarding)
@@ -216,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile_picture_url: response.user.profile_picture_url,
         tenant_description: response.tenant.description,
         onboarding_completed: response.tenant.onboarding_completed,
+        messaging_access: response.tenant.messaging_access ?? 'none',
       });
 
       // Post-login onboarding for new users

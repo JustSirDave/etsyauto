@@ -90,6 +90,17 @@ function SettingsContent() {
   }, [activeTab, selectedShopForMessaging]);
   useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
 
+  // Block Messaging tab when tenant does not have admin approval
+  useEffect(() => {
+    if (!user) return;
+    if (user.messaging_access === 'approved') return;
+    const tab = searchParams.get('tab');
+    if (tab === 'messaging' || activeTab === 'messaging') {
+      setActiveTab('connections');
+      router.replace('/settings?tab=connections');
+    }
+  }, [user, searchParams, activeTab, router]);
+
   useEffect(() => {
     if (searchParams.get('etsy') === 'connected') {
       setNotification({
@@ -498,6 +509,7 @@ function SettingsContent() {
   };
 
   const canManageTeam = user?.role === 'owner' || user?.role === 'admin';
+  const messagingApproved = user?.messaging_access === 'approved';
   const etsyShop = Array.isArray(shops) ? shops.find(s => s.status === 'connected') : null;
   const tabs = [
     { id: 'connections' as TabType, label: t('settings.tabs.connections'), icon: LinkIcon },
@@ -506,9 +518,12 @@ function SettingsContent() {
     { id: 'currency' as TabType, label: t('settings.tabs.currency'), icon: DollarSign },
     { id: 'messaging' as TabType, label: 'Messaging', icon: MessageSquare },
     { id: 'notifications' as TabType, label: t('settings.tabs.notifications'), icon: Bell }
-  ];
+  ].filter((tab) => tab.id !== 'messaging' || messagingApproved);
   if (user?.role === 'supplier') {
-    tabs.splice(3, 0, { id: 'supplier_profile' as TabType, label: t('settings.tabs.supplierProfile'), icon: Truck });
+    const idx = tabs.findIndex((t) => t.id === 'currency');
+    if (idx >= 0) {
+      tabs.splice(idx, 0, { id: 'supplier_profile' as TabType, label: t('settings.tabs.supplierProfile'), icon: Truck });
+    }
   }
 
   return (

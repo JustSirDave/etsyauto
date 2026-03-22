@@ -12,7 +12,7 @@ from jose.exceptions import JWTError, ExpiredSignatureError
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.core.rbac import Permission, Role, has_permission, can_access_shop
-from app.models.tenancy import Membership, Shop
+from app.models.tenancy import Membership, Shop, Tenant
 
 # HTTP Bearer token security — made optional so cookie auth can take over
 security = HTTPBearer(auto_error=False)
@@ -119,6 +119,27 @@ def require_role_with_context(allowed_roles: List[str]):
             )
         return context
     return role_checker
+
+
+# ==================== Messaging (admin-approved) ====================
+
+def assert_messaging_access_approved(db: Session, tenant_id: int) -> None:
+    """Raise 403 unless tenant has admin-approved messaging automation."""
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant or getattr(tenant, "messaging_access", None) != "approved":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Messaging access not approved",
+        )
+
+
+def require_messaging_access(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """JWT user dependency that also requires tenant messaging_access == 'approved'."""
+    assert_messaging_access_approved(db, int(current_user["tenant_id"]))
+    return current_user
 
 
 # ==================== RBAC Dependencies ====================

@@ -53,6 +53,7 @@ export interface AuthResponse {
     role: string;
     description?: string | null;
     onboarding_completed?: boolean;
+    messaging_access?: string;
   };
 }
 
@@ -66,6 +67,8 @@ export interface User {
   role: string;
   tenant_description?: string | null;
   onboarding_completed?: boolean;
+  /** Tenant messaging automation gate: only 'approved' may use messaging features */
+  messaging_access?: string;
 }
 
 export interface Shop {

@@ -23,7 +23,8 @@ from app.api.dependencies import (
     get_optional_user_context,
     UserContext,
     require_permission,
-    require_shop_access
+    require_shop_access,
+    assert_messaging_access_approved,
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access
@@ -617,6 +618,7 @@ async def get_messaging_config(
     Never returns imap_password. Requires: MANAGE_SHOP_SETTINGS (Owner, Admin).
     """
     ensure_shop_access(shop_id, context, db)
+    assert_messaging_access_approved(db, context.tenant_id)
     shop = db.query(Shop).filter(
         Shop.id == shop_id,
         Shop.tenant_id == context.tenant_id,
@@ -640,6 +642,7 @@ async def patch_messaging_config(
     Requires: MANAGE_SHOP_SETTINGS (Owner, Admin).
     """
     ensure_shop_access(shop_id, context, db)
+    assert_messaging_access_approved(db, context.tenant_id)
     shop = db.query(Shop).filter(
         Shop.id == shop_id,
         Shop.tenant_id == context.tenant_id,

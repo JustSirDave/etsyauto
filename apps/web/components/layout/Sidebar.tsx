@@ -191,9 +191,15 @@ export function Sidebar() {
   const [unreadMessages, setUnreadMessages] = useState<number | null>(null);
   const { t } = useLanguage();
   const { user } = useAuth();
-  
+  const messagingApproved = user?.messaging_access === 'approved';
+
   // Get role-specific navigation
-  const navigation = getNavigationForRole(user?.role);
+  const navigation = getNavigationForRole(user?.role).map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) => item.name !== 'nav.messages' || messagingApproved
+    ),
+  }));
 
   // Load saved state from localStorage
   useEffect(() => {
@@ -207,8 +213,12 @@ export function Sidebar() {
     }
   }, []);
 
-  // Load unread messages count for badge
+  // Load unread messages count for badge (only when tenant has messaging access)
   useEffect(() => {
+    if (!messagingApproved) {
+      setUnreadMessages(null);
+      return;
+    }
     async function loadUnread() {
       try {
         const res = await fetch('/api/messages?status=unread&page=1&limit=1', {
@@ -224,7 +234,7 @@ export function Sidebar() {
       }
     }
     loadUnread();
-  }, []);
+  }, [messagingApproved]);
 
   const toggleSidebar = () => {
     const newState = !isCollapsed;

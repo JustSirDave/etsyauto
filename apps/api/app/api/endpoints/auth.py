@@ -235,7 +235,8 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         tenant={
             "id": tenant.id,
             "name": tenant.name,
-            "role": "owner"
+            "role": "owner",
+            "messaging_access": getattr(tenant, "messaging_access", "none"),
         }
     )
     response = JSONResponse(content=body.model_dump())
@@ -382,7 +383,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             "name": tenant.name,
             "role": membership.role,
             "description": tenant.description,
-            "onboarding_completed": tenant.onboarding_completed
+            "onboarding_completed": tenant.onboarding_completed,
+            "messaging_access": getattr(tenant, "messaging_access", "none"),
         }
     )
     response = JSONResponse(content=body.model_dump())
@@ -490,7 +492,8 @@ async def get_current_user_info(current_user = Depends(get_current_user), db: Se
         "tenant_name": tenant.name if tenant else None,
         "tenant_description": tenant.description if tenant else None,
         "role": current_user["role"],
-        "onboarding_completed": tenant.onboarding_completed if tenant else False
+        "onboarding_completed": tenant.onboarding_completed if tenant else False,
+        "messaging_access": getattr(tenant, "messaging_access", "none") if tenant else "none",
     }
 
 
@@ -974,7 +977,8 @@ async def google_oauth(
             "name": tenant.name,
             "role": membership.role,
             "description": tenant.description,
-            "onboarding_completed": tenant.onboarding_completed
+            "onboarding_completed": tenant.onboarding_completed,
+            "messaging_access": getattr(tenant, "messaging_access", "none"),
         }
     )
     response = JSONResponse(content=body.model_dump())

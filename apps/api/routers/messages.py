@@ -17,7 +17,7 @@ from app.worker.tasks.messaging import scrape_conversation, send_reply  # type: 
 
 # NOTE: These imports assume an existing auth dependency module following
 # your current JWT / RBAC patterns.
-from app.api.dependencies import get_current_user  # type: ignore
+from app.api.dependencies import require_messaging_access, assert_messaging_access_approved  # type: ignore
 
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
@@ -143,6 +143,8 @@ def internal_create_thread(
             detail={"error": "shop_not_found"},
         )
 
+    assert_messaging_access_approved(db, int(shop.tenant_id))  # type: ignore[arg-type]
+
     thread = MessageThread(
         tenant_id=shop.tenant_id,  # type: ignore[attr-defined]
         shop_id=shop.id,  # type: ignore[attr-defined]
@@ -167,7 +169,7 @@ def list_threads(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_messaging_access),
 ):
     """
     List message threads for the current tenant.
@@ -213,7 +215,7 @@ def list_threads(
 def get_thread(
     thread_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_messaging_access),
 ):
     """
     Get full details for a single message thread.
@@ -245,7 +247,7 @@ def reply_to_thread(
     thread_id: int,
     payload: ReplyRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_messaging_access),
 ):
     """
     Queue a reply to an Etsy conversation thread.
@@ -290,7 +292,7 @@ def reply_to_thread(
 def retry_scrape(
     thread_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_messaging_access),
 ):
     """
     Retry scraping a failed or pending message thread.
