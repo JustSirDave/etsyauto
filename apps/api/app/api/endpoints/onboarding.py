@@ -46,6 +46,33 @@ class OnboardingResponse(BaseModel):
     tenant: dict
 
 
+@router.get("/status", tags=["Onboarding"])
+async def get_onboarding_status(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Check whether the current user's tenant still needs onboarding.
+    """
+    membership = db.query(Membership).filter(
+        Membership.user_id == int(current_user["sub"])
+    ).first()
+
+    if not membership:
+        return {"needs_onboarding": True, "onboarding_completed": False}
+
+    tenant = db.query(Tenant).filter(Tenant.id == membership.tenant_id).first()
+
+    if not tenant:
+        return {"needs_onboarding": True, "onboarding_completed": False}
+
+    return {
+        "needs_onboarding": not tenant.onboarding_completed,
+        "onboarding_completed": tenant.onboarding_completed,
+        "tenant_name": tenant.name,
+    }
+
+
 @router.post("/complete", response_model=OnboardingResponse, tags=["Onboarding"])
 async def complete_onboarding(
     request: OnboardingRequest,
