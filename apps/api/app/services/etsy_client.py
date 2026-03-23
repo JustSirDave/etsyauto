@@ -60,6 +60,21 @@ class EtsyClient:
                 shop.status = "revoked"
                 self.db.commit()
                 logger.warning(f"Shop {shop_id} ({shop.display_name}) marked as revoked — token refresh permanently failed")
+                # Notify tenant admins
+                try:
+                    from app.services.notification_service import notify_tenant_admins
+                    from app.models.notifications import NotificationType
+                    notify_tenant_admins(
+                        db=self.db,
+                        tenant_id=shop.tenant_id,
+                        notification_type=NotificationType.ERROR,
+                        title=f"Shop \"{shop.display_name}\" disconnected",
+                        message="Etsy API access was revoked or the OAuth token expired permanently. Reconnect your shop from Settings to restore syncing.",
+                        action_url="/settings?tab=shops",
+                        action_label="Reconnect Shop",
+                    )
+                except Exception as notify_err:
+                    logger.error(f"Failed to send revocation notification for shop {shop_id}: {notify_err}")
         except Exception as e:
             logger.error(f"Failed to mark shop {shop_id} as revoked: {e}")
             self.db.rollback()

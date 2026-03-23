@@ -102,6 +102,7 @@ function ConnectionItem({
   name,
   status,
   storeName,
+  tokenHealth,
   onConnect,
   connectedLabel,
   notConnectedLabel,
@@ -110,6 +111,7 @@ function ConnectionItem({
   name: string;
   status: 'connected' | 'disconnected' | 'revoked';
   storeName?: string;
+  tokenHealth?: { has_token: boolean; token_valid: boolean; expires_at: string | null; last_refreshed_at: string | null };
   onConnect?: () => void;
   connectedLabel: string;
   notConnectedLabel: string;
@@ -117,15 +119,19 @@ function ConnectionItem({
 }) {
   const isConnected = status === 'connected';
   const isRevoked = status === 'revoked';
+  const tokenExpired = isConnected && tokenHealth?.has_token && !tokenHealth.token_valid;
+
+  const borderClass = isRevoked || tokenExpired ? 'border-amber-500/50' : 'border-[var(--border-color)]';
+  const iconBgClass = isRevoked || tokenExpired ? 'bg-amber-500/10' : 'bg-[var(--primary-bg)]';
 
   return (
-    <div className={`flex-1 p-4 bg-[var(--card-bg)] rounded-xl border min-w-0 ${isRevoked ? 'border-amber-500/50' : 'border-[var(--border-color)]'}`}>
+    <div className={`flex-1 p-4 bg-[var(--card-bg)] rounded-xl border min-w-0 ${borderClass}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isRevoked ? 'bg-amber-500/10' : 'bg-[var(--primary-bg)]'}`}>
-            {isConnected ? (
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBgClass}`}>
+            {isConnected && !tokenExpired ? (
               <CheckCircle className="w-5 h-5 text-[var(--text-primary)]" />
-            ) : isRevoked ? (
+            ) : isRevoked || tokenExpired ? (
               <AlertTriangle className="w-5 h-5 text-amber-400" />
             ) : (
               <XCircle className="w-5 h-5 text-[var(--text-muted)]" />
@@ -133,21 +139,28 @@ function ConnectionItem({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[var(--text-primary)] font-medium truncate text-sm">{name}</p>
-            {isConnected ? (
+            {isConnected && !tokenExpired ? (
               <p className="text-[var(--text-secondary)] text-xs truncate">{storeName || connectedLabel}</p>
             ) : isRevoked ? (
               <p className="text-amber-400 text-xs">API access revoked — reconnect to restore</p>
+            ) : tokenExpired ? (
+              <p className="text-amber-400 text-xs">Token expired — refresh needed</p>
             ) : (
               <p className="text-[var(--text-muted)] text-xs">{notConnectedLabel}</p>
             )}
+            {isConnected && tokenHealth?.last_refreshed_at && !tokenExpired && (
+              <p className="text-[var(--text-muted)] text-[10px] mt-0.5">
+                Last synced: {new Date(tokenHealth.last_refreshed_at).toLocaleDateString()}
+              </p>
+            )}
           </div>
         </div>
-        {!isConnected && (
+        {(!isConnected || tokenExpired) && (
           <button
             onClick={onConnect}
             className="px-3 py-1.5 bg-[var(--primary)] hover:bg-[var(--primary)]/80 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
           >
-            {isRevoked ? 'Reconnect' : connectLabel}
+            {isRevoked ? 'Reconnect' : tokenExpired ? 'Refresh' : connectLabel}
           </button>
         )}
       </div>
@@ -346,6 +359,7 @@ function OwnerDashboardContent() {
                     name={shop.display_name || `Shop ${shop.id}`}
                     status={shop.status === 'connected' ? 'connected' : shop.status === 'revoked' ? 'revoked' : 'disconnected'}
                     storeName={shop.etsy_shop_id}
+                    tokenHealth={shop.token_health}
                     onConnect={shop.status !== 'connected' ? handleConnectEtsy : undefined}
                     connectedLabel={t('dashboard.connected')}
                     notConnectedLabel={t('dashboard.notConnected')}

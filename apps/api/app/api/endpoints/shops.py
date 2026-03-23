@@ -417,19 +417,48 @@ async def list_shops(
             query = query.filter(Shop.id == -1)
 
     shops = query.all()
-    
-    return {
-        "shops": [
-            {
-                "id": shop.id,
-                "etsy_shop_id": shop.etsy_shop_id,
-                "display_name": shop.display_name,
-                "status": shop.status,
-                "created_at": shop.created_at.isoformat()
+
+    # Batch-load token health for all shops in one query
+    shop_ids = [s.id for s in shops]
+    tokens = (
+        db.query(OAuthToken)
+        .filter(OAuthToken.shop_id.in_(shop_ids), OAuthToken.provider == "etsy")
+        .all()
+    ) if shop_ids else []
+    token_map = {t.shop_id: t for t in tokens}
+    now = datetime.now(timezone.utc)
+
+    result = []
+    for shop in shops:
+        tok = token_map.get(shop.id)
+        if tok:
+            token_valid = tok.expires_at > now if tok.expires_at else False
+            token_health = {
+                "has_token": True,
+                "token_valid": token_valid,
+                "expires_at": tok.expires_at.isoformat() if tok.expires_at else None,
+                "last_refreshed_at": tok.last_refreshed_at.isoformat() if tok.last_refreshed_at else None,
+                "refresh_count": tok.refresh_count or 0,
             }
-            for shop in shops
-        ]
-    }
+        else:
+            token_health = {
+                "has_token": False,
+                "token_valid": False,
+                "expires_at": None,
+                "last_refreshed_at": None,
+                "refresh_count": 0,
+            }
+
+        result.append({
+            "id": shop.id,
+            "etsy_shop_id": shop.etsy_shop_id,
+            "display_name": shop.display_name,
+            "status": shop.status,
+            "created_at": shop.created_at.isoformat(),
+            "token_health": token_health,
+        })
+
+    return {"shops": result}
 
 
 @router.patch("/{shop_id}", tags=["Shops"])

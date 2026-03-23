@@ -159,7 +159,7 @@ export function TopBar() {
                   <div className="py-1 max-h-60 overflow-y-auto">
                     {shops.map((shop) => {
                       const isSelected = selectedShopIds.includes(shop.id);
-                      const isDisconnected = shop.status === 'revoked';
+                      const isDisconnected = shop.status === 'revoked' || (shop.status === 'connected' && shop.token_health?.has_token && !shop.token_health?.token_valid);
                       return (
                         <div key={shop.id}>
                           <button

@@ -16,7 +16,7 @@ import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
   Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, CheckCircle2, XCircle,
-  AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown, MessageSquare,
+  AlertCircle, AlertTriangle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MessagingActivationWizard } from '@/components/settings/MessagingActivationWizard';
@@ -791,14 +791,23 @@ function SettingsContent() {
                         <div>
                           <p className="text-sm text-[var(--text-muted)]">{t('common.status')}</p>
                           <div className="flex items-center gap-2">
-                            {shop.status === 'connected' ? (
+                            {shop.status === 'connected' && shop.token_health?.token_valid ? (
                               <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--success-bg)] text-[var(--success)] rounded-full text-sm">
                                 <CheckCircle className="w-4 h-4" />{t('common.connected')}
+                              </span>
+                            ) : shop.status === 'revoked' || (shop.status === 'connected' && shop.token_health && !shop.token_health.token_valid) ? (
+                              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 text-amber-400 rounded-full text-sm">
+                                <AlertTriangle className="w-4 h-4" />{shop.status === 'revoked' ? 'Revoked' : 'Token Expired'}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-[var(--background)] text-[var(--text-muted)] rounded-full text-sm">
                                 <XCircle className="w-4 h-4" />{t('common.notConnected')}
                               </span>
+                            )}
+                            {shop.token_health?.last_refreshed_at && (
+                              <p className="text-[var(--text-muted)] text-xs mt-1">
+                                Last refreshed: {new Date(shop.token_health.last_refreshed_at).toLocaleString()}
+                              </p>
                             )}
                           </div>
                         </div>

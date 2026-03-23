@@ -71,12 +71,21 @@ export interface User {
   messaging_access?: string;
 }
 
+export interface TokenHealth {
+  has_token: boolean;
+  token_valid: boolean;
+  expires_at: string | null;
+  last_refreshed_at: string | null;
+  refresh_count: number;
+}
+
 export interface Shop {
   id: number;
   etsy_shop_id: string;
   display_name: string;
   status: string;
   created_at: string;
+  token_health?: TokenHealth;
 }
 
 export interface MessageThread {
