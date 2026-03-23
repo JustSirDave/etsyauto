@@ -20,6 +20,8 @@ from app.models.listings import (
 )
 from app.models.tenancy import Shop, OAuthToken
 from app.services.etsy_client import EtsyClient, EtsyAPIError
+from app.services.notification_service import notify_tenant_admins
+from app.models.notifications import NotificationType
 from app.core.redis import get_redis_client
 
 logger = logging.getLogger(__name__)
@@ -421,6 +423,19 @@ def sync_ledger_entries(
                 logger.exception(f"Ledger sync failed for shop {shop.id}: {exc}")
                 results["errors"].append({"shop_id": shop.id, "error": str(exc)})
                 _upsert_ledger_sync_status(db, shop, success=False, error_msg=str(exc))
+                try:
+                    shop_name = shop.display_name or f"Shop {shop.id}"
+                    notify_tenant_admins(
+                        db=db,
+                        tenant_id=shop.tenant_id,
+                        notification_type=NotificationType.ERROR,
+                        title="Financial sync failed",
+                        message=f"Ledger sync failed for {shop_name}: {exc}",
+                        action_url="/financials",
+                        action_label="View financials",
+                    )
+                except Exception:
+                    pass
 
         # Invalidate financial cache so UI shows fresh data after sync
         if redis_client and results["shops_processed"] > 0:
@@ -594,6 +609,19 @@ def sync_payment_details(
                 logger.exception(f"Payment sync failed for shop {shop.id}")
                 results["errors"].append({"shop_id": shop.id, "error": str(exc)})
                 _upsert_payment_sync_status(db, shop, success=False, error_msg=str(exc))
+                try:
+                    shop_name = shop.display_name or f"Shop {shop.id}"
+                    notify_tenant_admins(
+                        db=db,
+                        tenant_id=shop.tenant_id,
+                        notification_type=NotificationType.ERROR,
+                        title="Payment sync failed",
+                        message=f"Payment detail sync failed for {shop_name}: {exc}",
+                        action_url="/financials",
+                        action_label="View financials",
+                    )
+                except Exception:
+                    pass
 
         logger.info(f"sync_payment_details complete: {results}")
         return results

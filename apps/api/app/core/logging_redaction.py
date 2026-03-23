@@ -44,3 +44,8 @@ def setup_log_redaction() -> None:
 
     for logger in loggers:
         logger.addFilter(filter_instance)
+
+    # Suppress verbose SQLAlchemy logs (connection pool, SQL echo, etc.)
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+    logging.getLogger("sqlalchemy.orm").setLevel(logging.WARNING)

@@ -16,6 +16,8 @@ from app.models.ingestion import IngestionBatch
 from app.models.listings import Product
 from app.services.ingestion_service import IngestionService
 from app.services.error_report_service import ErrorReportService
+from app.services.notification_service import notify_tenant_admins
+from app.models.notifications import NotificationType
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +153,7 @@ def process_ingestion_batch(self, batch_id: str) -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error processing batch {batch_id}: {str(e)}", exc_info=True)
-        
+
         # Update batch status to failed
         try:
             batch = db.query(IngestionBatch).filter(
@@ -162,9 +164,21 @@ def process_ingestion_batch(self, batch_id: str) -> Dict[str, Any]:
                 batch.error_message = str(e)
                 batch.completed_at = datetime.utcnow()
                 db.commit()
+                try:
+                    notify_tenant_admins(
+                        db=db,
+                        tenant_id=batch.tenant_id,
+                        notification_type=NotificationType.ERROR,
+                        title="Product import failed",
+                        message=f"Batch import \"{batch.filename or batch_id}\" failed: {e}",
+                        action_url="/products",
+                        action_label="View products",
+                    )
+                except Exception:
+                    pass
         except Exception as commit_error:
             logger.error(f"Error updating batch status: {str(commit_error)}")
-        
+
         # Retry if not exceeded max retries
         raise self.retry(exc=e)
 

@@ -91,6 +91,19 @@ def sync_orders(
                     "shop_id": shop.id,
                     "error": str(e)
                 })
+                try:
+                    shop_name = shop.display_name or f"Shop {shop.id}"
+                    notify_tenant_admins(
+                        db=db,
+                        tenant_id=shop.tenant_id,
+                        notification_type=NotificationType.ERROR,
+                        title="Order sync failed",
+                        message=f"Failed to sync orders for {shop_name}: {e}",
+                        action_url="/orders",
+                        action_label="View orders",
+                    )
+                except Exception:
+                    pass
 
         logger.info(
             f"Order sync complete: {results['shops_processed']} shops, "

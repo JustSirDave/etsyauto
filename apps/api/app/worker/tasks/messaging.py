@@ -19,6 +19,8 @@ from app.services import adspower  # type: ignore
 from app.models.listings import AuditLog  # type: ignore
 from app.models.messaging import MessageThread  # type: ignore
 from app.models.tenancy import Shop  # type: ignore
+from app.services.notification_service import notify_tenant_admins  # type: ignore
+from app.models.notifications import NotificationType  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +231,18 @@ def scrape_conversation(self, thread_id: int):
                 metadata={"thread_id": thread.id, "error": str(exc)},
             )
             db.commit()
+            try:
+                notify_tenant_admins(
+                    db=db,
+                    tenant_id=shop.tenant_id,
+                    notification_type=NotificationType.ERROR,
+                    title="Message scrape failed",
+                    message=f"Failed to scrape conversation for {shop.display_name or 'shop'}: {exc}",
+                    action_url="/messages",
+                    action_label="View messages",
+                )
+            except Exception:
+                pass
 
         # Retry according to Celery policy
         raise self.retry(exc=exc)
@@ -387,6 +401,20 @@ def send_reply(self, thread_id: int, reply_text: str):
                 shop_id=str(thread.shop_id),
                 status="failed"
             ).inc()
+
+        if thread is not None and shop is not None:
+            try:
+                notify_tenant_admins(
+                    db=db,
+                    tenant_id=shop.tenant_id,
+                    notification_type=NotificationType.ERROR,
+                    title="Message reply failed",
+                    message=f"Failed to send reply for {shop.display_name or 'shop'}: {exc}",
+                    action_url="/messages",
+                    action_label="View messages",
+                )
+            except Exception:
+                pass
 
         # For send_reply we follow the requested behavior: just retry on error.
         raise self.retry(exc=exc)

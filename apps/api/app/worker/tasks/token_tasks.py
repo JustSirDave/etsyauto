@@ -13,7 +13,9 @@ from app.worker.celery_app import celery_app
 from app.core.database import get_db_session
 from app.core.config import settings
 from app.services.token_manager import TokenManager
-from app.models.tenancy import OAuthToken
+from app.models.tenancy import OAuthToken, Shop
+from app.services.notification_service import notify_tenant_admins
+from app.models.notifications import NotificationType
 
 logger = logging.getLogger(__name__)
 
@@ -99,15 +101,29 @@ def refresh_expiring_tokens(self):
             except Exception as e:
                 failed += 1
                 logger.error(f"Error refreshing token for shop {token.shop_id}: {e}")
+                try:
+                    shop = self.db.query(Shop).filter(Shop.id == token.shop_id).first()
+                    shop_name = (shop.display_name if shop else None) or f"Shop {token.shop_id}"
+                    notify_tenant_admins(
+                        db=self.db,
+                        tenant_id=token.tenant_id,
+                        notification_type=NotificationType.WARNING,
+                        title="Token refresh failed",
+                        message=f"Failed to refresh OAuth token for {shop_name}. The shop may lose connectivity if not resolved.",
+                        action_url="/settings?tab=shops",
+                        action_label="Check shop",
+                    )
+                except Exception:
+                    pass
                 continue
-        
+
         result = {
             "status": "success",
             "refreshed": refreshed,
             "failed": failed,
             "total": len(expiring_tokens)
         }
-        
+
         logger.info(f"Token refresh complete: {result}")
         return result
         

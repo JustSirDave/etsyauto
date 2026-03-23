@@ -161,9 +161,35 @@ def sync_products_from_etsy(shop_id: int, tenant_id: int) -> Dict[str, Any]:
 
     except EtsyAPIError as e:
         logger.error(f"Etsy API error syncing products for shop {shop_id}: {e}")
+        try:
+            shop_obj = db.query(Shop).filter(Shop.id == shop_id).first()
+            shop_name = (shop_obj.display_name if shop_obj else None) or f"Shop {shop_id}"
+            notify_tenant_admins(
+                db=db,
+                tenant_id=tenant_id,
+                notification_type=NotificationType.ERROR,
+                title="Product sync failed",
+                message=f"Etsy API error syncing products for {shop_name}: {e}",
+                action_url="/products",
+                action_label="View products",
+            )
+        except Exception:
+            pass
         return {"success": False, "error": str(e)}
     except Exception as e:
         logger.exception(f"Unexpected error syncing products for shop {shop_id}: {e}")
+        try:
+            notify_tenant_admins(
+                db=db,
+                tenant_id=tenant_id,
+                notification_type=NotificationType.ERROR,
+                title="Product sync failed",
+                message=f"Unexpected error syncing products for Shop {shop_id}: {e}",
+                action_url="/products",
+                action_label="View products",
+            )
+        except Exception:
+            pass
         return {"success": False, "error": str(e)}
     finally:
         db.close()

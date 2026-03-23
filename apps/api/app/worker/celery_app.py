@@ -8,6 +8,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Suppress verbose SQLAlchemy logs in worker context
+logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.pool").setLevel(logging.WARNING)
+logging.getLogger("sqlalchemy.orm").setLevel(logging.WARNING)
+
 # Create Celery app
 celery_app = Celery(
     "etsy_automation",
