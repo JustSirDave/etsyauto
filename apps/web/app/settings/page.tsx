@@ -19,6 +19,7 @@ import {
   AlertCircle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MessagingActivationWizard } from '@/components/settings/MessagingActivationWizard';
 
 type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile' | 'currency' | 'messaging';
 
@@ -29,6 +30,7 @@ function SettingsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab') as TabType | null;
+  const activationToken = searchParams.get('token');
   const [activeTab, setActiveTab] = useState<TabType>(tabParam || 'connections');
   const [shops, setShops] = useState<Shop[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -90,10 +92,11 @@ function SettingsContent() {
   }, [activeTab, selectedShopForMessaging]);
   useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
 
-  // Block Messaging tab when tenant does not have admin approval
+  // Block Messaging tab when tenant does not have admin approval (unless completing token activation)
   useEffect(() => {
     if (!user) return;
     if (user.messaging_access === 'approved') return;
+    if (searchParams.get('token')) return;
     const tab = searchParams.get('tab');
     if (tab === 'messaging' || activeTab === 'messaging') {
       setActiveTab('connections');
@@ -510,6 +513,7 @@ function SettingsContent() {
 
   const canManageTeam = user?.role === 'owner' || user?.role === 'admin';
   const messagingApproved = user?.messaging_access === 'approved';
+  const showMessagingTab = messagingApproved || !!activationToken;
   const etsyShop = Array.isArray(shops) ? shops.find(s => s.status === 'connected') : null;
   const tabs = [
     { id: 'connections' as TabType, label: t('settings.tabs.connections'), icon: LinkIcon },
@@ -518,7 +522,7 @@ function SettingsContent() {
     { id: 'currency' as TabType, label: t('settings.tabs.currency'), icon: DollarSign },
     { id: 'messaging' as TabType, label: 'Messaging', icon: MessageSquare },
     { id: 'notifications' as TabType, label: t('settings.tabs.notifications'), icon: Bell }
-  ].filter((tab) => tab.id !== 'messaging' || messagingApproved);
+  ].filter((tab) => tab.id !== 'messaging' || showMessagingTab);
   if (user?.role === 'supplier') {
     const idx = tabs.findIndex((t) => t.id === 'currency');
     if (idx >= 0) {
@@ -1014,7 +1018,11 @@ function SettingsContent() {
         </div>
       )}
 
-      {activeTab === 'messaging' && (
+      {activeTab === 'messaging' && activationToken && (
+        <MessagingActivationWizard token={activationToken} />
+      )}
+
+      {activeTab === 'messaging' && !activationToken && messagingApproved && (
         <div className="space-y-6">
           <DashboardCard>
             <div className="flex items-center gap-3 mb-4">
@@ -1095,6 +1103,16 @@ function SettingsContent() {
             )}
           </DashboardCard>
         </div>
+      )}
+
+      {activeTab === 'messaging' && !activationToken && !messagingApproved && (
+        <DashboardCard>
+          <div className="py-8 text-center text-[var(--text-muted)] text-sm">
+            You don&apos;t have messaging access yet. Contact support at{' '}
+            <a href="mailto:support@etsyauto.com" className="text-[var(--primary)] font-medium">support@etsyauto.com</a>{' '}
+            to request access.
+          </div>
+        </DashboardCard>
       )}
 
       {activeTab === 'notifications' && <DashboardCard><div className="text-center py-12"><Bell className="w-12 h-12 text-[var(--text-muted)] mx-auto mb-4" /><p className="text-[var(--text-muted)]">{t('settings.comingSoon')}</p></div></DashboardCard>}

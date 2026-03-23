@@ -14,6 +14,7 @@ BYPASS_PATHS = [
     "/api/auth/",
     "/api/oauth/",
     "/api/admin/",
+    "/api/messaging/",
 ]
 
 INTERNAL_IP_PREFIXES = ("172.", "10.", "192.168.", "127.")

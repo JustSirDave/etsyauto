@@ -6,7 +6,7 @@ import { logout } from '@/lib/auth'
 const navItems = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/tenants', label: 'Tenants' },
-  { href: '/messaging-requests', label: 'Messaging Requests' },
+  { href: '/message-access', label: 'Message Access' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

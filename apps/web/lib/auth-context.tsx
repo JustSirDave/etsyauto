@@ -14,7 +14,7 @@ interface AuthContextType {
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean, redirectAfter?: string) => Promise<void>;
   register: (email: string, password: string, name: string, tenantName: string) => Promise<void>;
   googleLogin: (googleToken: string, tenantName?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -23,6 +23,8 @@ interface AuthContextType {
   error: string | null;
   clearError: () => void;
   getRoleDashboardPath: (roleOverride?: string) => string;
+  /** Re-fetch /api/auth/me (e.g. after messaging activation) */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -106,7 +108,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string, rememberMe: boolean = false) => {
+  const refreshUser = async () => {
+    try {
+      const currentUser = await authApi.getCurrentUser();
+      setUser(currentUser);
+    } catch {
+      setUser(null);
+    }
+  };
+
+  const login = async (
+    email: string,
+    password: string,
+    rememberMe: boolean = false,
+    redirectAfter?: string
+  ) => {
     try {
       setError(null);
       setIsLoading(true);
@@ -129,8 +145,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Cookies are set by the backend response — just update React state
       setUser(nextUser);
 
-      // Redirect to role-specific dashboard
-      router.push(getRoleDashboardPath(nextUser.role));
+      if (redirectAfter && redirectAfter.startsWith('/')) {
+        router.push(redirectAfter);
+      } else {
+        router.push(getRoleDashboardPath(nextUser.role));
+      }
     } catch (err: any) {
       setError(getSafeAuthError(err, 'Login failed. Please try again.'));
       throw err;
@@ -323,6 +342,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     error,
     clearError,
     getRoleDashboardPath,
+    refreshUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -347,6 +367,7 @@ export function useAuth() {
         error: null,
         clearError: () => {},
         getRoleDashboardPath: () => '/dashboard',
+        refreshUser: async () => {},
       };
     }
     throw new Error('useAuth must be used within an AuthProvider');

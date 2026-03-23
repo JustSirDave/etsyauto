@@ -34,6 +34,7 @@ import {
   DollarSign,
   Clock,
   TrendingDown as TrendingDownIcon,
+  AlertTriangle,
 } from 'lucide-react';
 
 // Welcome Handler Component
@@ -107,7 +108,7 @@ function ConnectionItem({
   connectLabel,
 }: {
   name: string;
-  status: 'connected' | 'disconnected';
+  status: 'connected' | 'disconnected' | 'revoked';
   storeName?: string;
   onConnect?: () => void;
   connectedLabel: string;
@@ -115,14 +116,17 @@ function ConnectionItem({
   connectLabel: string;
 }) {
   const isConnected = status === 'connected';
+  const isRevoked = status === 'revoked';
 
   return (
-    <div className="flex-1 p-4 bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] min-w-0">
+    <div className={`flex-1 p-4 bg-[var(--card-bg)] rounded-xl border min-w-0 ${isRevoked ? 'border-amber-500/50' : 'border-[var(--border-color)]'}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-[var(--primary-bg)]`}>
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isRevoked ? 'bg-amber-500/10' : 'bg-[var(--primary-bg)]'}`}>
             {isConnected ? (
               <CheckCircle className="w-5 h-5 text-[var(--text-primary)]" />
+            ) : isRevoked ? (
+              <AlertTriangle className="w-5 h-5 text-amber-400" />
             ) : (
               <XCircle className="w-5 h-5 text-[var(--text-muted)]" />
             )}
@@ -131,6 +135,8 @@ function ConnectionItem({
             <p className="text-[var(--text-primary)] font-medium truncate text-sm">{name}</p>
             {isConnected ? (
               <p className="text-[var(--text-secondary)] text-xs truncate">{storeName || connectedLabel}</p>
+            ) : isRevoked ? (
+              <p className="text-amber-400 text-xs">API access revoked — reconnect to restore</p>
             ) : (
               <p className="text-[var(--text-muted)] text-xs">{notConnectedLabel}</p>
             )}
@@ -141,7 +147,7 @@ function ConnectionItem({
             onClick={onConnect}
             className="px-3 py-1.5 bg-[var(--primary)] hover:bg-[var(--primary)]/80 text-white text-xs font-medium rounded-lg transition-colors flex-shrink-0"
           >
-            {connectLabel}
+            {isRevoked ? 'Reconnect' : connectLabel}
           </button>
         )}
       </div>
@@ -338,7 +344,7 @@ function OwnerDashboardContent() {
                   <ConnectionItem
                     key={shop.id}
                     name={shop.display_name || `Shop ${shop.id}`}
-                    status={shop.status === 'connected' ? 'connected' : 'disconnected'}
+                    status={shop.status === 'connected' ? 'connected' : shop.status === 'revoked' ? 'revoked' : 'disconnected'}
                     storeName={shop.etsy_shop_id}
                     onConnect={shop.status !== 'connected' ? handleConnectEtsy : undefined}
                     connectedLabel={t('dashboard.connected')}

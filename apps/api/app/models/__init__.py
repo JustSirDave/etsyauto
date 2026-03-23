@@ -12,6 +12,7 @@ from app.models.listings import (
 )
 from app.models.notifications import Notification, NotificationType
 from app.models.ingestion import IngestionBatch
+from app.models.messaging_access_token import MessagingAccessToken
 
 # Make models available at package level
 __all__ = [
@@ -38,5 +39,6 @@ __all__ = [
     "NotificationType",
     # Ingestion models
     "IngestionBatch",
+    "MessagingAccessToken",
 ]
 

@@ -52,6 +52,18 @@ class EtsyClient:
         # Initialize circuit breaker
         self.circuit_breaker = get_circuit_breaker()
 
+    def _mark_shop_revoked(self, shop_id: int) -> None:
+        """Mark a shop as revoked when its OAuth token is permanently invalid."""
+        try:
+            shop = self.db.query(Shop).filter(Shop.id == shop_id).first()
+            if shop and shop.status != "revoked":
+                shop.status = "revoked"
+                self.db.commit()
+                logger.warning(f"Shop {shop_id} ({shop.display_name}) marked as revoked — token refresh permanently failed")
+        except Exception as e:
+            logger.error(f"Failed to mark shop {shop_id} as revoked: {e}")
+            self.db.rollback()
+
     async def _get_access_token(self, shop_id: int, tenant_id: int) -> str:
         """
         Get valid access token for a shop, automatically refreshing if needed.
@@ -83,11 +95,13 @@ class EtsyClient:
             
         except TokenRefreshError as e:
             logger.error(f"Token refresh failed for shop {shop_id}: {e}")
+            self._mark_shop_revoked(shop_id)
             raise EtsyAPIError("Reconnect your Etsy shop to restore access.")
         except Exception as e:
             logger.error(f"Failed to get access token for shop {shop_id}: {e}")
             err_msg = str(e).lower()
             if "token" in err_msg or "reconnect" in err_msg or "401" in err_msg or "expired" in err_msg:
+                self._mark_shop_revoked(shop_id)
                 raise EtsyAPIError("Reconnect your Etsy shop to restore access.")
             raise EtsyAPIError(f"Token retrieval failed: {str(e)}")
 

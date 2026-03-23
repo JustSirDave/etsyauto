@@ -182,7 +182,7 @@ async function apiRequest<T>(
       response = await doFetch();
     } else {
       if (typeof window !== 'undefined') {
-        const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/accept-invitation', '/'];
+        const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/accept-invitation', '/messaging/activate', '/'];
         const isPublicPage = publicPaths.includes(window.location.pathname);
         if (!isPublicPage) {
           window.location.href = '/login';
@@ -288,6 +288,37 @@ export const authApi = {
   deleteProfilePicture: async (): Promise<{ message: string }> => {
     return apiRequest<{ message: string }>('/api/auth/profile/delete-picture', {
       method: 'DELETE',
+    });
+  },
+};
+
+export type MessagingActivationValidateResponse =
+  | { valid: true; tenant_name: string; email: string }
+  | { valid: false; reason: 'expired' | 'used' | 'not_found' };
+
+/**
+ * Public GET + authenticated POST for token-based messaging activation.
+ */
+export const messagingActivationApi = {
+  validateToken: async (token: string): Promise<MessagingActivationValidateResponse> => {
+    const res = await fetch(
+      `${API_BASE_URL}/api/messaging/activate?token=${encodeURIComponent(token)}`,
+      { credentials: 'omit' }
+    );
+    return res.json();
+  },
+
+  activate: async (body: {
+    token: string;
+    imap_host: string;
+    imap_email: string;
+    imap_password: string;
+    adspower_profile_id: string;
+    accepted_terms: boolean;
+  }): Promise<{ success: boolean }> => {
+    return apiRequest<{ success: boolean }>('/api/messaging/activate', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
   },
 };

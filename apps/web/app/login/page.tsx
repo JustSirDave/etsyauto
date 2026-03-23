@@ -94,7 +94,13 @@ function LoginContent() {
     }
 
     try {
-      await login(formData.email, formData.password, formData.rememberMe);
+      const redirect = searchParams.get('redirect');
+      await login(
+        formData.email,
+        formData.password,
+        formData.rememberMe,
+        redirect && redirect.startsWith('/') ? redirect : undefined
+      );
     } catch (err) {
       // Error handled by context
     }

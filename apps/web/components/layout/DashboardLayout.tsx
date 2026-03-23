@@ -24,7 +24,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/login');
+      const path =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/';
+      router.replace(`/login?redirect=${encodeURIComponent(path)}`);
     }
   }, [isAuthenticated, isLoading, router]);
 

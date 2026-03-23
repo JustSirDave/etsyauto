@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import AdminLayout from '@/components/AdminLayout'
-import { getTenants, type Tenant } from '@/lib/api'
+import { getTenants, type TenantMessageAccess as Tenant } from '@/lib/api'
 
 const MESSAGING_BADGE: Record<string, string> = {
   none: 'bg-gray-800 text-gray-400',
