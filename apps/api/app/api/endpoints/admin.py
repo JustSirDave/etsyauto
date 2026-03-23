@@ -282,6 +282,9 @@ LIMIT 1
         used_at=None,
     )
     db.add(mat)
+    # Set tenant to pending if currently 'none' (link issued, awaiting activation)
+    if tenant.messaging_access == "none":
+        tenant.messaging_access = "pending"
     db.commit()
     db.refresh(mat)
     return {
