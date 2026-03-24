@@ -19,8 +19,9 @@ eggs/
 .eggs/
 lib/
 lib64/
-# But allow Next.js lib directory
+# But allow Next.js lib directories
 !apps/web/lib/
+!apps/admin/lib/
 parts/
 sdist/
 var/
