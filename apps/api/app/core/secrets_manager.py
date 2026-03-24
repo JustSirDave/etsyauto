@@ -126,10 +126,6 @@ class SecretsManager:
         """Get Google OAuth client secret"""
         return self.get_secret('GOOGLE_CLIENT_SECRET', required=False)
     
-    def get_openai_api_key(self) -> str:
-        """Get OpenAI API key"""
-        return self.get_secret('OPENAI_API_KEY', required=False)
-    
     def rotate_encryption_key(self, new_key: str) -> None:
         """
         Rotate encryption key

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Calendar, RefreshCw, Zap, Clock } from 'lucide-react';
+import { X, Calendar, RefreshCw, Clock } from 'lucide-react';
 import { schedulesApi, ScheduleCreate, shopsApi, Shop } from '@/lib/api';
 
 interface NewScheduleModalProps {
@@ -101,7 +101,6 @@ export function NewScheduleModal({ isOpen, onClose, onSuccess, showToast, defaul
 
   const scheduleTypes = [
     { value: 'sync', label: 'Sync', icon: RefreshCw, description: 'Synchronize data from Etsy' },
-    { value: 'generate', label: 'Generate', icon: Zap, description: 'AI content generation tasks' },
     { value: 'backup', label: 'Backup', icon: Clock, description: 'Data backup and archival' },
     { value: 'report', label: 'Report', icon: Calendar, description: 'Generate reports and analytics' },
   ];

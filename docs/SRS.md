@@ -343,25 +343,9 @@ def take_token(shop_id: int, capacity: int, refill_per_sec: float) -> bool:
 **CSV Columns (baseline)**
 - `title, description, tags (| separated), image_urls (|), variants_json`
 
-**AI Generation**
-- `POST /api/products/{id}/generate`
-  - `{ "model":"gpt-4o-mini", "style":"neutral", "tone":"helpful" }`
-- Response:
-```json
-{
-  "ai_generation_id": 555,
-  "title": "...",
-  "description": "...",
-  "tags": ["...","..."],
-  "policy_flags": {"handmade_ok": true, "prohibited_terms": []},
-  "cost": {"tokens": 642, "usd_cents": 3}
-}
-```
-- `GET /api/ai/{id}` → payload + flags + cost
-
 **Listing Jobs**
 - `POST /api/shops/{shop_id}/listings`
-  - `{ "product_id":123, "ai_generation_id":555, "publish": true }`
+  - `{ "product_id":123, "publish": true }`
   - Response: `{ "listing_job_id": 987 }`
 - `GET /api/listing-jobs/{id}`
   - `{ "state":"publishing","attempts":2,"etsy_listing_id":null,"error":null }`
@@ -518,24 +502,7 @@ Timeline buffer (Weeks 15–16) for polish & beta feedback.
 **Chaos**
 - Redis kill during publish; Etsy 429/500 ramp; network partitions.
 
-## 14) Cost & Model Switching (AI)
-
-**Provider Abstraction**
-```python
-class AiProvider(Protocol):
-    def generate(self, prompt: dict) -> dict: ...
-```
-
-Implementations: OpenAI, Anthropic, Gemini, (optional) OpenRouter.
-
-Per-tier model map:
-- Starter → gpt-4o-mini / “sonnet-lite”
-- Pro → higher quality default
-- Enterprise → BYO key
-
-**Cost Logging**
-- Each call writes `ai_generations.cost_tokens` and `cost_usd_cents`.
-- Nightly rollups → `usage_costs (tenant_id, date)`.
+## 14) Infrastructure Budget
 
 **Budget Fit (Typical)**
 - VM: $40–$120 (Hetzner/DigitalOcean).
@@ -549,7 +516,7 @@ Per-tier model map:
 
 - Rate-limit saturation → adaptive token buckets; dynamic refill; preflight quota checks.
 - OAuth expiry/revocation → preemptive refresh, single-flight, user notice.
-- AI compliance drift → regression set & thresholds; auto-rewrite; block/allow lists.
+- Policy compliance drift → regression set & thresholds; block/allow lists.
 - CSV variance → mapping UI; schema inference; clear reject reports.
 - Long-tail publish failures → stepwise retries; partial success; human review queue.
 - Infra constraints → no K8s; scale VM vertically; add worker process first.

@@ -8,8 +8,7 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { 
-  Sparkles, 
-  BarChart3, 
+  BarChart3,
   Zap, 
   Shield, 
   Package, 
@@ -119,8 +118,8 @@ export default function LandingPage() {
             transition={{ duration: 0.8, delay: 0.2 }}
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/60 backdrop-blur-sm rounded-full text-blue-700 text-sm font-medium mb-6">
-              <Sparkles className="w-4 h-4" />
-              AI-Powered Etsy Automation
+              <Zap className="w-4 h-4" />
+              Smart Etsy Automation
             </div>
           </motion.div>
 
@@ -143,7 +142,7 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
-            Transform your Etsy shop with AI-powered automation. Manage listings, generate compelling content, 
+            Transform your Etsy shop with smart automation. Manage listings, generate compelling content,
             and track orders—all in one beautiful platform designed for modern sellers.
           </motion.p>
 
@@ -285,9 +284,9 @@ export default function LandingPage() {
           >
             {[
               {
-                icon: Sparkles,
-                title: 'AI Content Generation',
-                description: 'Generate compelling product descriptions and titles with advanced AI that understands your brand voice.',
+                icon: Users,
+                title: 'Team Collaboration',
+                description: 'Invite team members with role-based access control. Manage multiple shops from one dashboard.',
                 gradient: 'from-blue-500 to-cyan-500'
               },
               {
@@ -469,7 +468,7 @@ export default function LandingPage() {
           >
             {[
               {
-                quote: "This platform transformed how I manage my Etsy shop. The AI content generation alone saves me hours every week.",
+                quote: "This platform transformed how I manage my Etsy shop. The automation alone saves me hours every week.",
                 author: "Sarah Johnson",
                 role: "Jewelry Shop Owner",
                 rating: 5,
@@ -551,7 +550,7 @@ export default function LandingPage() {
                 name: 'Pro',
                 price: '$29',
                 period: '/month',
-                features: ['3 Etsy Shops', '500 Products', 'AI Content Generation', 'Advanced Analytics', 'Priority Support'],
+                features: ['3 Etsy Shops', '500 Products', 'Team Collaboration', 'Advanced Analytics', 'Priority Support'],
                 highlighted: false
               },
               {
@@ -634,10 +633,6 @@ export default function LandingPage() {
 
           <div className="space-y-4">
             {[
-              {
-                q: 'How does the AI content generation work?',
-                a: 'Our AI analyzes your product images and generates SEO-optimized titles and descriptions that align with Etsy best practices and your brand voice.'
-              },
               {
                 q: 'Can I manage multiple Etsy shops?',
                 a: 'Yes! You can connect and manage multiple Etsy shops from a single dashboard, with per-shop analytics and team access controls.'
@@ -729,7 +724,7 @@ export default function LandingPage() {
                 <span className="text-lg font-bold text-gray-900">Etsy Auto</span>
               </div>
               <p className="text-gray-600 text-sm">
-                AI-powered automation for modern Etsy sellers.
+                Smart automation for modern Etsy sellers.
               </p>
             </div>
             <div>

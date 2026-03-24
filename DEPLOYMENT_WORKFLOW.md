@@ -278,9 +278,6 @@ ETSY_CLIENT_ID=your-client-id
 ETSY_CLIENT_SECRET=your-client-secret
 ETSY_REDIRECT_URI=https://etsyauto.bigbotdrivers.com/api/etsy/callback
 
-# OpenAI (optional)
-OPENAI_API_KEY=your-openai-key
-
 # Redis
 REDIS_URL=redis://redis:6379/0
 ```

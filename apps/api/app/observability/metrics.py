@@ -214,39 +214,6 @@ listing_jobs_policy_blocked_total = Counter(
     ['tenant_id', 'shop_id', 'policy_flag']
 )
 
-# ==================== AI Generation Metrics ====================
-
-ai_generation_requests_total = Counter(
-    'ai_generation_requests_total',
-    'Total AI generation requests',
-    ['tenant_id', 'provider']  # provider: openai, anthropic
-)
-
-ai_generation_duration_seconds = Histogram(
-    'ai_generation_duration_seconds',
-    'AI generation latency',
-    ['tenant_id', 'provider'],
-    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0]
-)
-
-ai_generation_tokens_used = Counter(
-    'ai_generation_tokens_used',
-    'Total AI tokens used',
-    ['tenant_id', 'provider', 'model']
-)
-
-ai_generation_failures_total = Counter(
-    'ai_generation_failures_total',
-    'Total AI generation failures',
-    ['tenant_id', 'provider', 'error_type']
-)
-
-ai_generation_policy_violations_total = Counter(
-    'ai_generation_policy_violations_total',
-    'Total AI generations with policy violations',
-    ['tenant_id', 'violation_type']
-)
-
 # ==================== Product Ingestion Metrics ====================
 
 product_ingestion_batches_total = Counter(

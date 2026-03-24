@@ -166,9 +166,6 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=https://etsyauto.yourdomain.com/api/auth/callback/google
 
-# AI Provider (at least one required)
-OPENAI_API_KEY=sk-...
-
 # Email (Resend recommended)
 RESEND_API_KEY=re_...
 USE_RESEND=true
@@ -511,9 +508,8 @@ Use Cloudflare or AWS CloudFront for:
 | VPS (4GB RAM) | $20-40 |
 | Domain | $10-15/year |
 | SSL | $0 (Let's Encrypt) |
-| OpenAI API | $10-50 (usage-based) |
 | Resend Email | $0-20 (usage-based) |
-| **Total** | **$30-90/month** |
+| **Total** | **$30-60/month** |
 
 ---
 

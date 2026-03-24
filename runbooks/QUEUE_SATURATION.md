@@ -269,7 +269,7 @@ docker exec etsy-redis redis-cli INFO memory
    ```
 
 5. **Investigate why tasks are slow:**
-   - Check external API latency (Etsy, OpenAI)
+   - Check external API latency (Etsy)
    - Check database query performance
    - Check for N+1 queries
    - Review Sentry performance monitoring

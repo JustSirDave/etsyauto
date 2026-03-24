@@ -135,23 +135,6 @@ class TestActionsRecorded:
         assert log.tenant_id == test_tenant.id
         assert log.request_metadata["sku"] == "TEST-SKU-123"
     
-    def test_ai_generation_action_recorded(self, audit_service, test_user, test_tenant):
-        """Test AI generation action is logged"""
-        log = audit_service.log_ai_generation(
-            action=AuditAction.AI_GENERATE,
-            product_id=123,
-            generation_id=456,
-            user_id=test_user.id,
-            tenant_id=test_tenant.id,
-            status=AuditStatus.SUCCESS,
-            latency_ms=1250
-        )
-        
-        assert log.action == AuditAction.AI_GENERATE
-        assert log.target_type == "ai_generation"
-        assert log.target_id == "456"
-        assert log.latency_ms == 1250
-    
     def test_listing_publish_action_recorded(self, audit_service, test_user, test_tenant):
         """Test listing publish action is logged"""
         log = audit_service.log_listing_event(

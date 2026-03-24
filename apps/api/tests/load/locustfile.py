@@ -99,24 +99,6 @@ class EtsyAutomationUser(HttpUser):
         )
 
     @task(1)
-    def generate_ai_content(self):
-        """Generate AI content for a product"""
-        idempotency_key = f"load-ai-{self.environment.runner.user_count}-{datetime.utcnow().timestamp()}"
-        
-        self.client.post(
-            "/api/ai/generate",
-            json={
-                "product_id": random.randint(1, 100),
-                "shop_id": self.shop_id,
-                "mode": "enhance",
-                "style": "professional"
-            },
-            headers={**self.headers, "Idempotency-Key": idempotency_key},
-            name="/api/ai/generate",
-            catch_response=True  # Don't fail on 404 if product doesn't exist
-        )
-
-    @task(1)
     def sync_orders(self):
         """Trigger order sync"""
         idempotency_key = f"load-sync-{self.environment.runner.user_count}-{datetime.utcnow().timestamp()}"
@@ -190,7 +172,7 @@ def on_test_start(environment, **kwargs):
     print("="*60)
     print(f"Target: {environment.host}")
     print(f"Test users: {environment.runner.target_user_count if hasattr(environment.runner, 'target_user_count') else 'N/A'}")
-    print("Scenarios: Product creation, AI generation, order sync, listing jobs")
+    print("Scenarios: Product creation, order sync, listing jobs")
     print("="*60 + "\n")
 
 

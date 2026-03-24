@@ -98,7 +98,7 @@ _SENSITIVE_KEY_PATTERN = re.compile(
     r'(?i)\b(' + "|".join(re.escape(k) for k in SENSITIVE_KEYS) + r')\b\s*[:=]\s*([^\s,;]+)'
 )
 _BEARER_PATTERN = re.compile(r'(?i)\bBearer\s+[A-Za-z0-9._-]+')
-_OPENAI_PATTERN = re.compile(r'\bsk-[A-Za-z0-9]{10,}\b')
+_SK_TOKEN_PATTERN = re.compile(r'\bsk-[A-Za-z0-9]{10,}\b')
 
 
 def scrub_string(value: str) -> str:
@@ -107,5 +107,5 @@ def scrub_string(value: str) -> str:
     """
     redacted = _SENSITIVE_KEY_PATTERN.sub(lambda m: f"{m.group(1)}=[REDACTED]", value)
     redacted = _BEARER_PATTERN.sub("Bearer [REDACTED]", redacted)
-    redacted = _OPENAI_PATTERN.sub("[REDACTED]", redacted)
+    redacted = _SK_TOKEN_PATTERN.sub("[REDACTED]", redacted)
     return redacted

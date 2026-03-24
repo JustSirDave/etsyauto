@@ -318,7 +318,6 @@ export default function AuditLogsPage() {
                   <option value="auth.logout">Auth - Logout</option>
                   <option value="product.create">Product - Create</option>
                   <option value="product.update">Product - Update</option>
-                  <option value="ai.generate">AI - Generate</option>
                   <option value="listing.publish">Listing - Publish</option>
                   <option value="listing.sync">Listing - Sync</option>
                   <option value="ingestion.start">Ingestion - Start</option>

@@ -55,28 +55,6 @@ export const policyApi = {
   },
 
   /**
-   * Remediate AI generation content and re-check
-   */
-  remediateGeneration: async (
-    generationId: number,
-    title: string,
-    description: string,
-    tags: string[]
-  ): Promise<any> => {
-    const response = await fetch(`${API_URL}/api/policy/generation/${generationId}/remediate`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ title, description, tags }),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to remediate');
-    }
-    
-    return response.json();
-  },
-
-  /**
    * Get policy status for a listing job
    */
   getJobPolicyStatus: async (jobId: number): Promise<any> => {

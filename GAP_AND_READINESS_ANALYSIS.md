@@ -74,10 +74,7 @@
 |---|---|---|---|---|---|
 | **PRODUCT-001** | CSV/JSON ingestion | S7 | `app/api/endpoints/products.py`, `app/api/endpoints/ingestion.py`, `app/services/csv_validator.py` | ✅ Implemented | **FIXED (2026-02-11):** CSV schema validation added — formula injection stripping, HTML sanitization, required column enforcement, numeric field validation. |
 | **PRODUCT-002** | Product sync from Etsy | S5 | `app/worker/tasks/product_sync_tasks.py` | ✅ Implemented | All listing states (active/inactive/draft/sold_out) |
-| **AI-001** | AI generation service | S7 | `app/api/endpoints/ai.py` | ✅ Implemented | OpenAI provider |
-| **AI-002** | Policy compliance checker | S7 | `app/api/endpoints/policy.py` | ✅ Implemented | `PolicyChecker`, banned terms list |
-| **AI-003** | Cost tracking (tokens/$) | S14 | `ai_generations.cost_tokens/cost_usd_cents` | ✅ Implemented | Nightly rollups to `usage_costs` |
-| **AI-004** | Multi-provider support (Anthropic/Gemini) | S14 | Provider abstraction exists, OpenAI only | ⚠️ Partial | Only OpenAI implemented |
+| **POLICY-001** | Policy compliance checker | S7 | `app/api/endpoints/policy.py` | ✅ Implemented | `PolicyChecker`, banned terms list |
 
 **Overall: ✅ MOSTLY COMPLIANT** — CSV validation gap is non-blocking for beta.
 
@@ -254,7 +251,6 @@
 | Key rotation automation (90-day) | S11 | Risk: compromised keys require manual response | ❌ Still missing |
 | Least privilege DB roles | S11 | Risk: compromised service gets full DB | ❌ Still missing |
 | SLO tracking/visualization | S10 | Risk: can't prove availability | ❌ Still missing |
-| Multi-provider AI (Anthropic, Gemini) | S14 | Impact: OpenAI-only dependency | ❌ Still missing |
 | Order CSV export | PRD | Impact: missing nice-to-have | ❌ Still missing |
 | Usage/cost UI page | PRD | Impact: backend exists, frontend missing | ❌ Still missing |
 
@@ -540,8 +536,7 @@ The previous GAP_AND_READINESS_ANALYSIS.md (dated 2026-02-09) contained **signif
 | **MED-8** | Integrate Playwright E2E in CI properly | 0.5 days | E2E tests don't gate deploys |
 | **MED-9** | Fix frontend CI test gate (`\|\| true`) | 0.5 days | Frontend failures don't block CI |
 | **MED-10** | Standardize index naming | 0.5 days | Consistency |
-| **MED-11** | Multi-provider AI (Anthropic/Gemini) | 2 days | OpenAI-only dependency |
-| **MED-12** | Add order CSV export | 1 day | Missing PRD feature |
+| **MED-11** | Add order CSV export | 1 day | Missing PRD feature |
 
 **Total P2 Effort:** ~10 days
 
@@ -593,8 +588,7 @@ The previous GAP_AND_READINESS_ANALYSIS.md (dated 2026-02-09) contained **signif
 16. Add usage/cost UI page
 17. Fix CI gates (Playwright in CI, frontend test gate)
 18. Consolidate duplicate runbooks
-19. Multi-provider AI (Anthropic/Gemini)
-20. Order CSV export
+19. Order CSV export
 
 ---
 
@@ -617,7 +611,7 @@ The previous GAP_AND_READINESS_ANALYSIS.md (dated 2026-02-09) contained **signif
 | 11. Security & Compliance | ⚠️ Partial | 85% | JWT fixed, CSV validated; key rotation & DB roles remain |
 | 12. Resilience & DR | ⚠️ Partial | 75% | Circuit breaker implemented; DR drills still missing |
 | 13. Testing Strategy | ⚠️ Partial | 40% | **Test files exist, coverage unverified, CI gates porous** |
-| 14. Cost & Model Switching | ✅ Complete | 85% | OpenAI complete, others partial |
+| 14. Infrastructure Budget | ✅ Complete | 85% | Cost tracking operational |
 | 15. Risks & Mitigations | ⚠️ Partial | 60% | Several risks unmitigated |
 | 16. Acceptance & Exit Criteria | ⚠️ Partial | 55% | **Load tests unverified, security tests incomplete, no drills** |
 

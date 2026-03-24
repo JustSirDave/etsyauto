@@ -149,34 +149,6 @@ class AuditService:
             request_id=request_id
         )
     
-    def log_ai_generation(
-        self,
-        action: str,
-        product_id: int,
-        generation_id: int,
-        user_id: int,
-        tenant_id: int,
-        status: str,
-        request_metadata: Optional[Dict] = None,
-        response_metadata: Optional[Dict] = None,
-        latency_ms: Optional[int] = None,
-        error_message: Optional[str] = None,
-        request_id: Optional[str] = None
-    ) -> AuditLog:
-        """Log AI generation events"""
-        return self.log_action(
-            action=action,
-            status=status,
-            actor_user_id=user_id,
-            tenant_id=tenant_id,
-            target_type="ai_generation",
-            target_id=str(generation_id),
-            request_metadata=request_metadata,
-            response_metadata=response_metadata,
-            latency_ms=latency_ms,
-            error_message=error_message,
-            request_id=request_id
-        )
     
     def log_listing_event(
         self,

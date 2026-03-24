@@ -89,12 +89,6 @@ export default function StatusOverview() {
       message: '1,234 products imported'
     },
     {
-      id: 'ai-generation',
-      name: 'AI Content Generation',
-      status: 'processing',
-      message: '45 of 100 products processed'
-    },
-    {
       id: 'schedule',
       name: 'Publishing Schedule',
       status: 'completed',
@@ -104,7 +98,7 @@ export default function StatusOverview() {
       id: 'listing-publish',
       name: 'Listing Publication',
       status: 'pending',
-      message: 'Waiting for AI generation to complete'
+      message: 'Waiting for schedule to trigger'
     },
     {
       id: 'order-sync',

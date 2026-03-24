@@ -950,7 +950,7 @@ export interface UserPermissions {
   can_remove_members: boolean;
   can_manage_settings: boolean;
   can_create_products: boolean;
-  can_generate_ai: boolean;
+
   can_publish_listings: boolean;
   can_assign_orders?: boolean;
   can_update_fulfillment?: boolean;

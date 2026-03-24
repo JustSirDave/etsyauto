@@ -117,16 +117,16 @@
 ### External Services
 
 ```
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Etsy API   │  │  Google API  │  │  OpenAI API  │  │   Sentry     │
-│              │  │              │  │              │  │              │
-│ • OAuth 2.0  │  │ • OAuth 2.0  │  │ • GPT-4o-mini│  │ • Error      │
-│   (PKCE)     │  │   (login)    │  │ • Titles/    │  │   tracking   │
-│ • Listings   │  │ • ID token   │  │   Descriptions│  │ • PII        │
-│ • Orders     │  │   verify     │  │ • Tags       │  │   scrubbing  │
-│ • Receipts   │  │              │  │              │  │              │
-│              │  │              │  │              │  │              │
-│ Circuit      │  └──────────────┘  └──────────────┘  └──────────────┘
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│   Etsy API   │  │  Google API  │  │   Sentry     │
+│              │  │              │  │              │
+│ • OAuth 2.0  │  │ • OAuth 2.0  │  │ • Error      │
+│   (PKCE)     │  │   (login)    │  │   tracking   │
+│ • Listings   │  │ • ID token   │  │ • PII        │
+│ • Orders     │  │   verify     │  │   scrubbing  │
+│ • Receipts   │  │              │  │              │
+│              │  │              │  │              │
+│ Circuit      │  └──────────────┘  └──────────────┘
 │ breaker:     │
 │ closed/open/ │  ┌──────────────────────────────────────────────────┐
 │ half-open    │  │           OBSERVABILITY STACK                    │
@@ -242,7 +242,7 @@ Admin    → Review → POST /orders/{id}/fulfill → Submit to Etsy API
 │  Database   │  PostgreSQL 16, SQLAlchemy 2.0, Alembic              │
 │  Cache      │  Redis 7 (Lua scripting for rate limiter)            │
 │  Queue      │  Celery 5.3 + Redis broker + Beat scheduler         │
-│  AI         │  OpenAI (GPT-4o-mini) — provider abstraction ready  │
+│  Messaging  │  IMAP listener, Etsy conversations API              │
 │  Security   │  AES-GCM encryption, RBAC (5 roles, 30+ perms)      │
 │  Resilience │  Circuit breaker, atomic rate limiter, idempotency   │
 │  Monitoring │  Prometheus, Grafana (4 dashboards), Alertmanager    │

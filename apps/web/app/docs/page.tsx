@@ -6,7 +6,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { Book, Zap, Package, ShoppingCart, Sparkles, Settings, Calendar, Users } from 'lucide-react';
+import { Book, Zap, Package, ShoppingCart, Settings, Calendar, Users } from 'lucide-react';
 
 function DocSection({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
@@ -49,10 +49,7 @@ export default function DocsPage() {
               <strong className="text-[var(--text-primary)]">Import Products:</strong> Navigate to the Products page and use the "Import CSV" button to bulk upload your product data, or click "Add Product" to add individual items.
             </li>
             <li className="leading-relaxed">
-              <strong className="text-[var(--text-primary)]">Generate AI Content:</strong> Visit the AI Generation page, select a product, and click "Generate Now" to create optimized titles, descriptions, and tags.
-            </li>
-            <li className="leading-relaxed">
-              <strong className="text-[var(--text-primary)]">Publish to Etsy:</strong> Go to the Listings page to create and manage your Etsy listings with the generated content.
+              <strong className="text-[var(--text-primary)]">Publish to Etsy:</strong> Go to the Listings page to create and manage your Etsy listings.
             </li>
           </ol>
         </DashboardCard>
@@ -68,31 +65,13 @@ export default function DocsPage() {
                 <strong className="text-[var(--text-primary)]">CSV Import Format:</strong> Your CSV file should include columns for SKU, title, description, price, and quantity. Download the sample CSV template for reference.
               </p>
               <p>
-                <strong className="text-[var(--text-primary)]">Product Details:</strong> Click on any product to view full details, including images, variants, pricing, and metadata. You can also delete products or generate AI content from the detail page.
-              </p>
-            </DocSection>
-
-            <DocSection icon={Sparkles} title="AI Content Generation">
-              <p>
-                The AI Generation feature uses advanced language models to create SEO-optimized product titles, compelling descriptions, and relevant tags for your products.
-              </p>
-              <p>
-                <strong className="text-[var(--text-primary)]">How it works:</strong>
-              </p>
-              <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>Select a product from the dropdown</li>
-                <li>Click "Generate Now" to create content</li>
-                <li>Review the generated title, description, and tags</li>
-                <li>Edit if needed and apply to your listing</li>
-              </ul>
-              <p>
-                <strong className="text-[var(--text-primary)]">Cost Tracking:</strong> Each generation shows the token usage and cost in USD cents. Monitor your AI usage on the Usage & Costs page.
+                <strong className="text-[var(--text-primary)]">Product Details:</strong> Click on any product to view full details, including images, variants, pricing, and metadata. You can also delete products or edit details from the detail page.
               </p>
             </DocSection>
 
             <DocSection icon={Zap} title="Listings Management">
               <p>
-                The Listings page shows all jobs for publishing products to Etsy. Each listing job includes the product information, AI-generated content, and publication status.
+                The Listings page shows all jobs for publishing products to Etsy. Each listing job includes the product information and publication status.
               </p>
               <p>
                 <strong className="text-[var(--text-primary)]">Job Statuses:</strong>
@@ -125,14 +104,13 @@ export default function DocsPage() {
 
             <DocSection icon={Calendar} title="Schedules">
               <p>
-                Automate repetitive tasks with scheduled jobs. Create schedules for syncing products, generating AI content, backing up data, and creating reports.
+                Automate repetitive tasks with scheduled jobs. Create schedules for syncing products, backing up data, and creating reports.
               </p>
               <p>
                 <strong className="text-[var(--text-primary)]">Schedule Types:</strong>
               </p>
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li><strong>Sync:</strong> Automatically sync products, orders, or shop data</li>
-                <li><strong>Generate:</strong> Batch AI content generation for products</li>
                 <li><strong>Backup:</strong> Create data backups at regular intervals</li>
                 <li><strong>Report:</strong> Generate sales and performance reports</li>
               </ul>

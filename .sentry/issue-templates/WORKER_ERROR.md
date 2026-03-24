@@ -87,7 +87,7 @@ docker exec etsy-redis redis-cli DEL celery:failed
 - [ ] Check database connection count
 - [ ] Check Redis memory usage
 - [ ] Review recent task deployments
-- [ ] Check external API availability (Etsy, OpenAI)
+- [ ] Check external API availability (Etsy)
 - [ ] Verify environment variables set
 
 ## 📞 Escalation

@@ -7,7 +7,7 @@ const fontClass = 'font-sans';
 
 export const metadata: Metadata = {
   title: 'Etsy Automation Platform',
-  description: 'AI-powered automation exclusively for Etsy sellers - Manage listings, generate content, and sync orders',
+  description: 'Smart automation exclusively for Etsy sellers - Manage listings, sync orders, and grow your shop',
 };
 
 export default function RootLayout({

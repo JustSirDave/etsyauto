@@ -1,6 +1,6 @@
 /**
  * Products E2E Tests
- * Critical path: List products, create product, AI generation
+ * Critical path: List products, create product
  */
 
 import { test, expect } from '@playwright/test';
@@ -111,37 +111,6 @@ test.describe('Product Creation', () => {
       
       // Should show validation error
       await expect(page.getByText(/invalid|must be positive/i)).toBeVisible();
-    }
-  });
-});
-
-test.describe('AI Content Generation', () => {
-  
-  test('should open AI generation panel', async ({ page }) => {
-    // Navigate to AI page
-    await page.getByRole('link', { name: /ai|content/i }).click();
-    
-    // Should show AI interface
-    await expect(page.getByText(/generate|ai|content/i)).toBeVisible();
-  });
-
-  test('should generate content for product', async ({ page }) => {
-    // Go to AI page
-    await page.goto('/ai');
-    
-    // Fill AI generation form
-    const productSelect = page.locator('select, input').filter({ hasText: /product/i }).first();
-    
-    if (await productSelect.isVisible()) {
-      // Select a product
-      await productSelect.click();
-      
-      // Choose generation mode
-      const generateButton = page.getByRole('button', { name: /generate/i });
-      await generateButton.click();
-      
-      // Should show loading or result
-      await expect(page.getByText(/generating|generated/i)).toBeVisible({ timeout: 10000 });
     }
   });
 });

@@ -98,7 +98,7 @@ export default function OnboardingModal({
               <ul className="text-sm text-[var(--text-muted)] space-y-1">
                 <li>• Personalize your workspace and make it your own</li>
                 <li>• Help team members identify and understand your business</li>
-                <li>• Get better recommendations from our AI assistant</li>
+                <li>• Get better recommendations tailored to your shop</li>
               </ul>
             </div>
           </div>

@@ -25,11 +25,6 @@ class AuditAction:
     PRODUCT_DELETE = "product.delete"
     PRODUCT_IMPORT = "product.import"
     
-    # AI generation
-    AI_GENERATE = "ai.generate"
-    AI_APPROVE = "ai.approve"
-    AI_REJECT = "ai.reject"
-    
     # Listing operations
     LISTING_PUBLISH = "listing.publish"
     LISTING_UPDATE = "listing.update"

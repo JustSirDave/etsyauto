@@ -24,10 +24,9 @@ Empower Etsy sellers to scale their creativity, not their workload — automatin
 
 Sellers struggle to:
 - Publish listings in bulk without hitting Etsy rate limits (HTTP 429).
-- Maintain policy-compliant AI content — especially when using ChatGPT-style tools that ignore Etsy’s “handmade” clauses.
-- Track AI costs, audit trails, and supplier syncs.
+- Track audit trails and supplier syncs.
 
-The platform closes this gap by combining structured product ingestion, controlled AI generation, and rate-limited publishing pipelines.
+The platform closes this gap by combining structured product ingestion, policy compliance checks, and rate-limited publishing pipelines.
 
 ## 🌟 Product Vision
 

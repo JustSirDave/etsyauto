@@ -37,7 +37,6 @@ NEXTAUTH_SECRET=your_random_secret_here
 # Optional (can add later):
 # ETSY_CLIENT_ID=
 # ETSY_CLIENT_SECRET=
-# OPENAI_API_KEY=
 ```
 
 ---
@@ -310,8 +309,6 @@ Add these to `.env` when ready:
 ETSY_CLIENT_ID=your_etsy_app_key
 ETSY_CLIENT_SECRET=your_etsy_app_secret
 
-# OpenAI (Phase 2)
-OPENAI_API_KEY=sk-...
 ```
 
 ### 2. Read Documentation

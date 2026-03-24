@@ -24,7 +24,7 @@ const heroSlides = [
   {
     image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=800&q=80',
     tagline: 'Work Smarter, Not Harder',
-    subtitle: 'AI-Powered Automation',
+    subtitle: 'Smart Automation',
   },
   {
     image: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80',

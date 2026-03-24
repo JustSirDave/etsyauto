@@ -55,49 +55,42 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">5. AI-Generated Content</h2>
-              <p className="text-[var(--text-muted)] leading-relaxed">
-                The Service may use AI to generate product titles, descriptions, and tags. While we strive for accuracy, you are responsible for reviewing and approving all AI-generated content before publishing. We do not guarantee the accuracy or suitability of AI-generated content for your specific needs.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold mb-4">6. Disclaimer</h2>
+              <h2 className="text-2xl font-semibold mb-4">5. Disclaimer</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 The materials on the Service are provided on an 'as is' basis. We make no warranties, expressed or implied, and hereby disclaim and negate all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">7. Limitations</h2>
+              <h2 className="text-2xl font-semibold mb-4">6. Limitations</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 In no event shall the Etsy Automation Platform or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the Service.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">8. Pricing and Payment</h2>
+              <h2 className="text-2xl font-semibold mb-4">7. Pricing and Payment</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 Certain features of the Service may require payment. You agree to provide current, complete, and accurate purchase and account information for all purchases made via the Service. Pricing is subject to change with notice.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">9. Termination</h2>
+              <h2 className="text-2xl font-semibold mb-4">8. Termination</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 We may terminate or suspend your account immediately, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms. Upon termination, your right to use the Service will immediately cease.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">10. Changes to Terms</h2>
+              <h2 className="text-2xl font-semibold mb-4">9. Changes to Terms</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 We reserve the right to update these Terms at any time. We will notify you of any changes by posting the new Terms on this page. You are advised to review these Terms periodically for any changes.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">11. Contact Information</h2>
+              <h2 className="text-2xl font-semibold mb-4">10. Contact Information</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 If you have any questions about these Terms, please contact us through the support channels provided in the application.
               </p>

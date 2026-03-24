@@ -65,7 +65,7 @@ npx playwright test --project=chromium
 - Create product with validation
 - Filter by shop
 - Pagination
-- AI content generation
+
 - View/edit product details
 
 ## Test Structure

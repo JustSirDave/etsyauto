@@ -41,7 +41,7 @@ export default function PrivacyPage() {
               <ul className="list-disc list-inside text-[var(--text-muted)] space-y-2 ml-4">
                 <li>Provide, maintain, and improve our Service</li>
                 <li>Process your Etsy data and automate your shop tasks</li>
-                <li>Generate AI content for your products</li>
+
                 <li>Send you technical notices, updates, and support messages</li>
                 <li>Respond to your comments and questions</li>
                 <li>Monitor and analyze trends, usage, and activities</li>
@@ -56,7 +56,7 @@ export default function PrivacyPage() {
               </p>
               <ul className="list-disc list-inside text-[var(--text-muted)] space-y-2 mt-3 ml-4">
                 <li><strong>Etsy:</strong> We access your Etsy shop data through their API with your authorization</li>
-                <li><strong>AI Providers:</strong> Product data may be sent to AI services (OpenAI) for content generation</li>
+                
                 <li><strong>Service Providers:</strong> We may share data with trusted third parties who assist us in operating our Service</li>
                 <li><strong>Legal Requirements:</strong> We may disclose information if required by law or to protect our rights</li>
               </ul>
@@ -87,14 +87,7 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">6. AI and Machine Learning</h2>
-              <p className="text-[var(--text-muted)] leading-relaxed">
-                We use AI services to generate product titles, descriptions, and tags. Your product data (title, description, images) may be sent to third-party AI providers (OpenAI) for processing. These providers have their own privacy policies and data handling practices. Generated content is stored in our database and associated with your account.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-2xl font-semibold mb-4">7. Cookies and Tracking</h2>
+              <h2 className="text-2xl font-semibold mb-4">6. Cookies and Tracking</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 We use cookies and similar tracking technologies to:
               </p>
@@ -109,7 +102,7 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">8. Your Rights</h2>
+              <h2 className="text-2xl font-semibold mb-4">7. Your Rights</h2>
               <p className="text-[var(--text-muted)] leading-relaxed mb-4">
                 You have the right to:
               </p>
@@ -124,35 +117,36 @@ export default function PrivacyPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">9. Data Retention</h2>
+              <h2 className="text-2xl font-semibold mb-4">8. Data Retention</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 We retain your information for as long as your account is active or as needed to provide you services. If you delete your account, we will delete or anonymize your personal data within 30 days, except where we are required to retain it for legal or regulatory purposes.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">10. Children's Privacy</h2>
+              <h2 className="text-2xl font-semibold mb-4">9. Children's Privacy</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 Our Service is not directed to children under 13. We do not knowingly collect personal information from children under 13. If you become aware that a child has provided us with personal information, please contact us.
               </p>
             </section>
 
+
             <section>
-              <h2 className="text-2xl font-semibold mb-4">11. International Data Transfers</h2>
+              <h2 className="text-2xl font-semibold mb-4">10. International Data Transfers</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 Your information may be transferred to and maintained on computers located outside of your state, province, country, or other governmental jurisdiction where data protection laws may differ. By using the Service, you consent to this transfer.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">12. Changes to This Policy</h2>
+              <h2 className="text-2xl font-semibold mb-4">11. Changes to This Policy</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last updated" date. You are advised to review this Privacy Policy periodically for any changes.
               </p>
             </section>
 
             <section>
-              <h2 className="text-2xl font-semibold mb-4">13. Contact Us</h2>
+              <h2 className="text-2xl font-semibold mb-4">12. Contact Us</h2>
               <p className="text-[var(--text-muted)] leading-relaxed">
                 If you have any questions about this Privacy Policy, please contact us through the support channels provided in the application.
               </p>
