@@ -17,7 +17,6 @@ import {
   LifeBuoy,
   X,
   BookOpen,
-  Users,
   BarChart3,
   Wallet,
   MessageCircle,
@@ -58,12 +57,6 @@ const ownerNavigation: NavSection[] = [
       { name: 'nav.products', href: '/products', icon: Package },
       { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
       { name: 'nav.messages', href: '/dashboard/messages', icon: MessageCircle, badgeKey: 'messages' },
-    ],
-  },
-  {
-    title: 'nav.team',
-    items: [
-      { name: 'nav.teamMembers', href: '/team', icon: Users },
     ],
   },
   {
