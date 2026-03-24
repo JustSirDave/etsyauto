@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { AlertCircle, AlertTriangle, Info, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { AlertCircle, AlertTriangle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 
 interface ErrorAction {
@@ -15,8 +15,6 @@ interface ActionableErrorMessageProps {
   errorCode: string;
   errorMessage?: string;
   context?: {
-    jobId?: number;
-    listingId?: string;
     productId?: number;
     shopId?: number;
   };
@@ -72,85 +70,8 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
     severity: 'warning',
     icon: AlertTriangle,
     actions: [
-      { labelKey: 'errors.rateLimitStorm.adjustSchedule', href: '/schedules', variant: 'primary' },
+      { labelKey: 'errors.rateLimitStorm.adjustSchedule', href: '/settings', variant: 'primary' },
       { labelKey: 'errors.rateLimitStorm.viewGuidelines', href: '/docs/best-practices', variant: 'secondary' }
-    ]
-  },
-  'POLICY_BLOCKED': {
-    titleKey: 'errors.policyBlocked.title',
-    descriptionKey: 'errors.policyBlocked.description',
-    severity: 'error',
-    icon: AlertCircle,
-    actions: [
-      { labelKey: 'errors.policyBlocked.reviewFix', variant: 'primary' },
-      { labelKey: 'errors.policyBlocked.viewPolicies', href: '/docs/policies', variant: 'secondary' }
-    ],
-    documentation: '/docs/policies'
-  },
-  'PROHIBITED_TERMS': {
-    titleKey: 'errors.prohibitedTerms.title',
-    descriptionKey: 'errors.prohibitedTerms.description',
-    severity: 'error',
-    icon: AlertCircle,
-    actions: [
-      { labelKey: 'errors.prohibitedTerms.editListing', variant: 'primary' },
-      { labelKey: 'errors.prohibitedTerms.viewTerms', href: '/docs/prohibited-terms', variant: 'secondary' }
-    ]
-  },
-  'HANDMADE_REQUIRED': {
-    titleKey: 'errors.handmadeRequired.title',
-    descriptionKey: 'errors.handmadeRequired.description',
-    severity: 'error',
-    icon: AlertCircle,
-    actions: [
-      { labelKey: 'errors.handmadeRequired.updateProduct', variant: 'primary' }
-    ]
-  },
-  'ETSY_404': {
-    titleKey: 'errors.etsy404.title',
-    descriptionKey: 'errors.etsy404.description',
-    severity: 'warning',
-    icon: Info,
-    actions: [
-      { labelKey: 'errors.etsy404.republish', variant: 'primary' },
-      { labelKey: 'errors.etsy404.viewOnEtsy', href: '#', variant: 'secondary' }
-    ]
-  },
-  'LISTING_DELETED': {
-    titleKey: 'errors.listingDeleted.title',
-    descriptionKey: 'errors.listingDeleted.description',
-    severity: 'info',
-    icon: Info,
-    actions: [
-      { labelKey: 'errors.listingDeleted.createNew', variant: 'primary' }
-    ]
-  },
-  'LISTING_EXPIRED': {
-    titleKey: 'errors.listingExpired.title',
-    descriptionKey: 'errors.listingExpired.description',
-    severity: 'warning',
-    icon: AlertTriangle,
-    actions: [
-      { labelKey: 'errors.listingExpired.renewListing', variant: 'primary' },
-      { labelKey: 'errors.listingExpired.learnRenewals', href: '/docs/listing-management', variant: 'secondary' }
-    ]
-  },
-  'ETSY_STATE_INACTIVE': {
-    titleKey: 'errors.etsyStateInactive.title',
-    descriptionKey: 'errors.etsyStateInactive.description',
-    severity: 'warning',
-    icon: AlertTriangle,
-    actions: [
-      { labelKey: 'errors.etsyStateInactive.reactivate', variant: 'primary' }
-    ]
-  },
-  'ETSY_STATE_SOLD_OUT': {
-    titleKey: 'errors.etsyStateSoldOut.title',
-    descriptionKey: 'errors.etsyStateSoldOut.description',
-    severity: 'info',
-    icon: Info,
-    actions: [
-      { labelKey: 'errors.etsyStateSoldOut.updateQuantity', variant: 'primary' }
     ]
   },
   'IMAGE_TOO_LARGE': {
@@ -211,16 +132,6 @@ const ERROR_CONFIGS: Record<string, ErrorConfig> = {
       { labelKey: 'errors.invalidTaxonomy.browseCategories', href: '/docs/categories', variant: 'secondary' }
     ]
   },
-  'MISSING_SHIPPING_PROFILE': {
-    titleKey: 'errors.missingShippingProfile.title',
-    descriptionKey: 'errors.missingShippingProfile.description',
-    severity: 'error',
-    icon: XCircle,
-    actions: [
-      { labelKey: 'errors.missingShippingProfile.configureShipping', href: '/shops', variant: 'primary' },
-      { labelKey: 'errors.missingShippingProfile.guide', href: 'https://help.etsy.com/hc/en-us/articles/115015672808', variant: 'secondary' }
-    ]
-  },
   'UNKNOWN': {
     titleKey: 'errors.unknown.title',
     descriptionKey: 'errors.unknown.description',
@@ -238,9 +149,6 @@ const RETRY_KEYS = new Set([
 ]);
 
 const NAVIGATE_ACTIONS: Record<string, (ctx?: ActionableErrorMessageProps['context']) => string | undefined> = {
-  'errors.policyBlocked.reviewFix': (ctx) => ctx?.productId ? `/products/${ctx.productId}` : undefined,
-  'errors.prohibitedTerms.editListing': (ctx) => ctx?.productId ? `/products/${ctx.productId}/edit` : undefined,
-  'errors.handmadeRequired.updateProduct': (ctx) => ctx?.productId ? `/products/${ctx.productId}` : undefined,
   'errors.etsy401.reconnectShop': () => '/settings?tab=shops',
 };
 
@@ -344,8 +252,6 @@ const ActionableErrorMessage: React.FC<ActionableErrorMessageProps> = ({
 
           <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
             <span>{t('errors.code')} {errorCode}</span>
-            {context?.jobId && <span>{t('errors.job')} #{context.jobId}</span>}
-            {context?.listingId && <span>{t('errors.listing')} {context.listingId}</span>}
           </div>
 
           {config.actions.length > 0 && (

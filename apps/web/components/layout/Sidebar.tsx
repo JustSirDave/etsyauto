@@ -10,18 +10,14 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Package,
-  FileText,
   ShoppingCart,
-  Calendar,
   Settings,
   ChevronLeft,
   ChevronRight,
   LifeBuoy,
   X,
   BookOpen,
-  Shield,
   Users,
-  TruckIcon,
   BarChart3,
   Wallet,
   MessageCircle,
@@ -60,29 +56,20 @@ const ownerNavigation: NavSection[] = [
     title: 'nav.shopManagement',
     items: [
       { name: 'nav.products', href: '/products', icon: Package },
-      { name: 'nav.listings', href: '/listings', icon: FileText },
       { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
       { name: 'nav.messages', href: '/dashboard/messages', icon: MessageCircle, badgeKey: 'messages' },
-    ],
-  },
-  {
-    title: 'nav.automation',
-    items: [
-      { name: 'nav.schedules', href: '/schedules', icon: Calendar },
     ],
   },
   {
     title: 'nav.team',
     items: [
       { name: 'nav.teamMembers', href: '/team', icon: Users },
-      { name: 'nav.suppliers', href: '/suppliers', icon: TruckIcon },
     ],
   },
   {
     title: 'nav.settingsSection',
     items: [
       { name: 'nav.settings', href: '/settings', icon: Settings },
-      { name: 'nav.auditLogs', href: '/audit', icon: Shield },
     ],
   },
 ];
@@ -105,47 +92,29 @@ const adminNavigation: NavSection[] = [
     title: 'nav.shopManagement',
     items: [
       { name: 'nav.products', href: '/products', icon: Package },
-      { name: 'nav.listings', href: '/listings', icon: FileText },
       { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
-    ],
-  },
-  {
-    title: 'nav.automation',
-    items: [
-      { name: 'nav.schedules', href: '/schedules', icon: Calendar },
-    ],
-  },
-  {
-    title: 'nav.team',
-    items: [
-      { name: 'nav.suppliers', href: '/suppliers', icon: TruckIcon },
     ],
   },
 ];
 
-// Supplier navigation: Fulfillment, products, and supplier profile settings
-const supplierNavigation: NavSection[] = [
+// Member navigation: Products and orders
+const memberNavigation: NavSection[] = [
   {
     items: [
-      { name: 'nav.dashboard', href: '/dashboard/supplier', icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: 'nav.fulfillment',
-    items: [
-      { name: 'nav.assignedOrders', href: '/orders', icon: ShoppingCart },
+      { name: 'nav.dashboard', href: '/dashboard', icon: LayoutDashboard },
     ],
   },
   {
     title: 'nav.shopManagement',
     items: [
       { name: 'nav.products', href: '/products', icon: Package },
+      { name: 'nav.orders', href: '/orders', icon: ShoppingCart },
     ],
   },
   {
-    title: 'nav.account',
+    title: 'nav.settingsSection',
     items: [
-      { name: 'nav.settings', href: '/settings?tab=supplier_profile', icon: Settings },
+      { name: 'nav.settings', href: '/settings', icon: Settings },
     ],
   },
 ];
@@ -175,8 +144,8 @@ function getNavigationForRole(role: string | undefined): NavSection[] {
       return ownerNavigation;
     case 'admin':
       return adminNavigation;
-    case 'supplier':
-      return supplierNavigation;
+    case 'member':
+      return memberNavigation;
     case 'viewer':
       return viewerNavigation;
     default:

@@ -15,16 +15,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Install dependencies
 COPY package.json ./
-RUN npm install
+RUN npm install --prefer-offline --no-audit --maxsockets=3
 
 # Copy application code
 COPY . .
 
 # Build application
-
+RUN npm run build
 
 # Expose port
 EXPOSE 3000
 
 # Start application
-CMD ["npm", "run", "dev"]
+CMD ["npm", "start"]

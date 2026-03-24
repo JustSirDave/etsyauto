@@ -6,7 +6,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
-import { Book, Zap, Package, ShoppingCart, Settings, Calendar, Users } from 'lucide-react';
+import { Book, Package, ShoppingCart, Settings, Users } from 'lucide-react';
 
 function DocSection({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
   return (
@@ -69,24 +69,6 @@ export default function DocsPage() {
               </p>
             </DocSection>
 
-            <DocSection icon={Zap} title="Listings Management">
-              <p>
-                The Listings page shows all jobs for publishing products to Etsy. Each listing job includes the product information and publication status.
-              </p>
-              <p>
-                <strong className="text-[var(--text-primary)]">Job Statuses:</strong>
-              </p>
-              <ul className="list-disc list-inside space-y-2 ml-4">
-                <li><strong>Pending:</strong> Waiting to be processed</li>
-                <li><strong>Processing:</strong> Currently being published to Etsy</li>
-                <li><strong>Completed:</strong> Successfully published</li>
-                <li><strong>Failed:</strong> Publication failed (click retry to try again)</li>
-              </ul>
-              <p>
-                The page auto-refreshes every 5 seconds to show real-time status updates.
-              </p>
-            </DocSection>
-
             <DocSection icon={ShoppingCart} title="Orders">
               <p>
                 Track and manage all your Etsy orders in one place. The Orders page syncs with your Etsy shop to show order details, customer information, and payment status.
@@ -102,23 +84,6 @@ export default function DocsPage() {
               </ul>
             </DocSection>
 
-            <DocSection icon={Calendar} title="Schedules">
-              <p>
-                Automate repetitive tasks with scheduled jobs. Create schedules for syncing products, backing up data, and creating reports.
-              </p>
-              <p>
-                <strong className="text-[var(--text-primary)]">Schedule Types:</strong>
-              </p>
-              <ul className="list-disc list-inside space-y-2 ml-4">
-                <li><strong>Sync:</strong> Automatically sync products, orders, or shop data</li>
-                <li><strong>Backup:</strong> Create data backups at regular intervals</li>
-                <li><strong>Report:</strong> Generate sales and performance reports</li>
-              </ul>
-              <p className="italic text-sm">
-                Note: Schedule functionality requires backend configuration and is currently in development.
-              </p>
-            </DocSection>
-
             <DocSection icon={Users} title="Team Management">
               <p>
                 Collaborate with your team by inviting members and assigning roles. Manage team access from the Settings page.
@@ -128,10 +93,8 @@ export default function DocsPage() {
               </p>
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li><strong>Owner:</strong> Full access to all features and settings</li>
-                <li><strong>Admin:</strong> Manage products, listings, and team members</li>
-                <li><strong>Creator:</strong> View and edit products and listings</li>
+                <li><strong>Admin:</strong> Manage products and team members</li>
                 <li><strong>Viewer:</strong> Read-only access to products and orders</li>
-                <li><strong>Supplier:</strong> Limited access to assigned orders; can update tracking only</li>
               </ul>
             </DocSection>
 

@@ -89,18 +89,6 @@ export default function StatusOverview() {
       message: '1,234 products imported'
     },
     {
-      id: 'schedule',
-      name: 'Publishing Schedule',
-      status: 'completed',
-      message: 'Daily at 9:00 AM (150/day quota)'
-    },
-    {
-      id: 'listing-publish',
-      name: 'Listing Publication',
-      status: 'pending',
-      message: 'Waiting for schedule to trigger'
-    },
-    {
       id: 'order-sync',
       name: 'Order Sync',
       status: 'completed',

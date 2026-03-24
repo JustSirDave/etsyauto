@@ -45,20 +45,6 @@ export default function OnboardingWizard({ onComplete }: OnboardingWizardProps) 
         component: <IngestProductsStep onNext={handleNext} onBack={handleBack} />
       },
       {
-        id: 'create-schedule',
-        title: 'Setup Schedule',
-        description: 'Configure automated publishing',
-        status: 'upcoming',
-        component: <CreateScheduleStep onNext={handleNext} onBack={handleBack} />
-      },
-      {
-        id: 'publish',
-        title: 'Publish Listings',
-        description: 'Publish your first listing to Etsy',
-        status: 'upcoming',
-        component: <PublishStep onNext={handleNext} onBack={handleBack} />
-      },
-      {
         id: 'complete',
         title: 'All Set!',
         description: 'Your automation is ready',

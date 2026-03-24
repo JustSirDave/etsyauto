@@ -9,8 +9,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { SearchInput, PageSizeDropdown, TableActions, Pagination, TableCheckbox } from '@/components/ui/DataTable';
-import { Package, Upload, Plus, Download, X } from 'lucide-react';
-import { productsApi, listingsApi, type Product } from '@/lib/api';
+import { Package, Upload, Plus, Download } from 'lucide-react';
+import { productsApi, type Product } from '@/lib/api';
 import { useToast } from '@/lib/toast-context';
 import { useLanguage } from '@/lib/language-context';
 import { useAuth } from '@/lib/auth-context';
@@ -26,8 +26,7 @@ function ProductsContent() {
   const { showToast } = useToast();
   const { t } = useLanguage();
   const { user } = useAuth();
-  const { shops, selectedShopId, selectedShopIds } = useShop();
-  const connectedShops = shops.filter((s) => s.status === 'connected');
+  const { selectedShopId, selectedShopIds } = useShop();
   const isSupplier = user?.role?.toLowerCase() === 'supplier';
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,12 +43,6 @@ function ProductsContent() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   // Queue of task IDs when multiple shops are selected (Bug 1).
   const [syncTaskQueue, setSyncTaskQueue] = useState<string[]>([]);
-  const [publishModalProduct, setPublishModalProduct] = useState<Product | null>(null);
-  const [publishModalShopIds, setPublishModalShopIds] = useState<number[]>([]);
-  const [publishSubmitting, setPublishSubmitting] = useState(false);
-  const [publishValidationProduct, setPublishValidationProduct] = useState<Product | null>(null);
-  const [publishValidationLoading, setPublishValidationLoading] = useState(false);
-  const [publishValidationError, setPublishValidationError] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { wasSyncedRecently } = useRecentSync('products');
   const searchParams = useSearchParams();
@@ -249,104 +242,6 @@ function ProductsContent() {
     }
   };
 
-  const openPublishModal = (product: Product) => {
-    const defaultIds =
-      product.shop_id && connectedShops.some((s) => s.id === product.shop_id)
-        ? [product.shop_id]
-        : selectedShopIds.filter((id) => connectedShops.some((s) => s.id === id)).length > 0
-        ? selectedShopIds.filter((id) => connectedShops.some((s) => s.id === id))
-        : connectedShops.length > 0
-        ? [connectedShops[0].id]
-        : [];
-    setPublishModalProduct(product);
-    setPublishModalShopIds(defaultIds.length > 0 ? defaultIds : []);
-  };
-
-  // Load freshest product details when opening the publish modal so validation uses up-to-date data.
-  useEffect(() => {
-    if (!publishModalProduct) {
-      setPublishValidationProduct(null);
-      setPublishValidationError(null);
-      setPublishValidationLoading(false);
-      return;
-    }
-    let cancelled = false;
-    const load = async () => {
-      setPublishValidationLoading(true);
-      setPublishValidationError(null);
-      try {
-        const full = await productsApi.getById(publishModalProduct.id);
-        if (!cancelled) {
-          setPublishValidationProduct(full);
-        }
-      } catch (err: any) {
-        if (!cancelled) {
-          console.error('Failed to load product for publish validation', err);
-          setPublishValidationError(err?.detail || 'Could not load latest product details.');
-        }
-      } finally {
-        if (!cancelled) {
-          setPublishValidationLoading(false);
-        }
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [publishModalProduct?.id]);
-
-  const togglePublishModalShop = (shopId: number) => {
-    setPublishModalShopIds((prev) =>
-      prev.includes(shopId) ? prev.filter((id) => id !== shopId) : [...prev, shopId]
-    );
-  };
-
-  const handlePublishToShops = async () => {
-    if (!publishModalProduct || publishModalShopIds.length === 0) return;
-    setPublishSubmitting(true);
-    try {
-      let queued = 0;
-      let failed = 0;
-      let sawUnauthorized = false;
-      for (const shopId of publishModalShopIds) {
-        try {
-          await listingsApi.create({ product_id: publishModalProduct.id, shop_id: shopId });
-          queued++;
-        } catch (err: any) {
-          failed++;
-          if (err?.status === 401) sawUnauthorized = true;
-          console.error('Failed to queue listing for shop', shopId, err);
-        }
-      }
-      if (sawUnauthorized) {
-        showToast('Session expired. Please log in again.', 'error');
-      }
-      if (queued > 0) {
-        const statusHint = ' Check the Listings page for status.';
-        showToast(
-          failed > 0
-            ? `Queued for ${queued} shop(s); ${failed} failed.${statusHint}`
-            : t('toast.publishQueued') + statusHint,
-          'success'
-        );
-      }
-      if (failed > 0 && queued === 0 && !sawUnauthorized) {
-        showToast(
-          publishModalShopIds.length === 1 ? t('toast.publishFailed') : 'Publish failed for all selected shops.',
-          'error'
-        );
-      }
-      setPublishModalProduct(null);
-      setPublishModalShopIds([]);
-    } catch (error: any) {
-      console.error('Failed to publish listing:', error);
-      showToast(error.detail || t('toast.publishFailed'), 'error');
-    } finally {
-      setPublishSubmitting(false);
-    }
-  };
-
   // Client-side search filter (shop filtering handled by backend)
   const filteredProducts = products.filter((product) => {
     if (searchQuery) {
@@ -374,21 +269,6 @@ function ProductsContent() {
     );
 
   const totalPages = Math.ceil(total / pageSize);
-
-  // Pre-publish validation: derive field presence from the freshest data we have.
-  const validationProduct = publishValidationProduct || publishModalProduct;
-  const hasTitle = !!validationProduct?.title_raw?.trim();
-  const hasDescription = !!validationProduct?.description_raw?.trim();
-  const hasPrice = validationProduct?.price != null && validationProduct.price > 0;
-  const hasWhoMade = !!validationProduct?.who_made;
-  const hasWhenMade = !!validationProduct?.when_made;
-  const hasTaxonomy = validationProduct?.taxonomy_id != null;
-  const hasTags = Array.isArray(validationProduct?.tags_raw) && validationProduct.tags_raw.length > 0;
-  const hasImages = Array.isArray(validationProduct?.images) && validationProduct.images.length > 0;
-  const hasMaterials =
-    Array.isArray(validationProduct?.materials) && (validationProduct.materials as string[]).length > 0;
-
-  const hasRequiredMissing = !!validationProduct && (!hasTitle || !hasDescription || !hasPrice || !hasWhoMade || !hasWhenMade || !hasTaxonomy);
 
   return (
     <div className="w-full min-w-0 max-w-full mx-auto space-y-6 overflow-x-hidden">
@@ -608,16 +488,6 @@ function ProductsContent() {
                       </td>
                       <td className="py-4 px-5 shrink-0">
                         <div className="flex items-center justify-end gap-2">
-                          {!isSupplier && (
-                            <button
-                              onClick={() => openPublishModal(product)}
-                              disabled={!!product.etsy_listing_id || connectedShops.length === 0}
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--primary-bg)] hover:text-[var(--primary)] disabled:opacity-60 disabled:cursor-not-allowed transition"
-                              title={product.etsy_listing_id ? t('products.alreadyOnEtsy') : t('products.publish')}
-                            >
-                              <Upload className="w-4 h-4" />
-                            </button>
-                          )}
                           <TableActions
                             onView={() => router.push(`/products/${product.id}`)}
                             onEdit={!isSupplier ? () => setEditingProduct(product) : undefined}
@@ -684,156 +554,6 @@ function ProductsContent() {
         onComplete={handleSyncTaskComplete}
       />
 
-      {/* Publish to Etsy — choose shop(s) */}
-      {publishModalProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--card-bg)] rounded-xl border border-[var(--border-color)] max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-[var(--text-primary)]">
-                {t('products.publish')} to Etsy
-              </h3>
-              <button
-                type="button"
-                onClick={() => { setPublishModalProduct(null); setPublishModalShopIds([]); }}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <p className="text-sm text-[var(--text-muted)] truncate" title={publishModalProduct.title_raw}>
-              {publishModalProduct.title_raw || 'Untitled product'}
-            </p>
-            {/* Pre-publish validation checklist */}
-            <div className="border border-[var(--border-color)] rounded-lg p-3 bg-[var(--background)] space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-[var(--text-primary)]">Listing validation</p>
-                {publishValidationLoading && (
-                  <span className="text-xs text-[var(--text-muted)]">Checking…</span>
-                )}
-              </div>
-              {publishValidationError && (
-                <p className="text-xs text-[var(--danger)]">{publishValidationError}</p>
-              )}
-              {hasRequiredMissing && (
-                <div className="flex items-start gap-2 rounded-md bg-[var(--warning-bg)] text-[var(--warning)] px-3 py-2 text-xs">
-                  <span className="mt-0.5">⚠️</span>
-                  <div className="flex-1">
-                    <p>This product has missing required fields. Publishing may fail.</p>
-                    <button
-                      type="button"
-                      className="mt-1 text-[var(--primary)] underline underline-offset-2"
-                      onClick={() => {
-                        setPublishModalProduct(null);
-                        setPublishModalShopIds([]);
-                        if (validationProduct) setEditingProduct(validationProduct);
-                      }}
-                    >
-                      Edit Product →
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="grid grid-cols-1 gap-1 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Title</span>
-                  <span className={hasTitle ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
-                    {hasTitle ? '✅ Present' : '❌ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Description</span>
-                  <span className={hasDescription ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
-                    {hasDescription ? '✅ Present' : '❌ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Price</span>
-                  <span className={hasPrice ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
-                    {hasPrice ? '✅ Present' : '❌ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Who made it</span>
-                  <span className={hasWhoMade ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
-                    {hasWhoMade ? '✅ Present' : '❌ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">When made</span>
-                  <span className={hasWhenMade ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
-                    {hasWhenMade ? '✅ Present' : '❌ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Category</span>
-                  <span className={hasTaxonomy ? 'text-[var(--success)]' : 'text-[var(--danger)]'}>
-                    {hasTaxonomy ? '✅ Present' : '❌ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Tags (recommended)</span>
-                  <span className={hasTags ? 'text-[var(--success)]' : 'text-[var(--warning)]'}>
-                    {hasTags ? '✅ Present' : '⚠️ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Images (recommended)</span>
-                  <span className={hasImages ? 'text-[var(--success)]' : 'text-[var(--warning)]'}>
-                    {hasImages ? '✅ Present' : '⚠️ Missing'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-primary)]">Materials (recommended)</span>
-                  <span className={hasMaterials ? 'text-[var(--success)]' : 'text-[var(--warning)]'}>
-                    {hasMaterials ? '✅ Present' : '⚠️ Missing'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <p className="text-sm font-medium text-[var(--text-primary)]">Select shop(s) to publish to:</p>
-            <div className="max-h-48 overflow-y-auto space-y-2 border border-[var(--border-color)] rounded-lg p-3">
-              {connectedShops.length === 0 ? (
-                <p className="text-sm text-[var(--text-muted)]">No connected shops.</p>
-              ) : (
-                connectedShops.map((shop) => (
-                  <label
-                    key={shop.id}
-                    className="flex items-center gap-3 cursor-pointer rounded-lg p-2 hover:bg-[var(--background)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={publishModalShopIds.includes(shop.id)}
-                      onChange={() => togglePublishModalShop(shop.id)}
-                      className="rounded border-[var(--border-color)]"
-                    />
-                    <span className="text-[var(--text-primary)]">{shop.display_name || `Shop ${shop.id}`}</span>
-                  </label>
-                ))
-              )}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => { setPublishModalProduct(null); setPublishModalShopIds([]); }}
-                className="px-4 py-2.5 border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] hover:bg-[var(--background)]"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={handlePublishToShops}
-                disabled={publishModalShopIds.length === 0 || publishSubmitting}
-                className="px-4 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {publishSubmitting
-                  ? 'Publishing…'
-                  : `Publish to ${publishModalShopIds.length} shop${publishModalShopIds.length !== 1 ? 's' : ''}`}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

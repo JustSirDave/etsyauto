@@ -9,19 +9,19 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { useShop } from '@/lib/shop-context';
 import { useLanguage } from '@/lib/language-context';
-import { shopsApi, teamApi, suppliersApi, userPreferencesApi, currencyApi, type Shop, type ApiError, type TeamMember, type SupplierProfile } from '@/lib/api';
+import { shopsApi, teamApi, userPreferencesApi, currencyApi, type Shop, type ApiError, type TeamMember } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DashboardCard } from '@/components/dashboard/DashboardCard';
 import { ConfirmModal } from '@/components/modals/ConfirmModal';
 import { NotificationModal } from '@/components/modals/NotificationModal';
 import {
   Settings as SettingsIcon, Store, Link as LinkIcon, Unlink, CheckCircle, CheckCircle2, XCircle,
-  AlertCircle, AlertTriangle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, Truck, DollarSign, ChevronDown, MessageSquare,
+  AlertCircle, AlertTriangle, Loader2, Building2, Users, Bell, UserPlus, Trash2, Shield, Eye, Edit, Crown, X, DollarSign, ChevronDown, MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MessagingActivationWizard } from '@/components/settings/MessagingActivationWizard';
 
-type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'supplier_profile' | 'currency' | 'messaging';
+type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'currency' | 'messaging';
 
 function SettingsContent() {
   const { user } = useAuth();
@@ -45,9 +45,6 @@ function SettingsContent() {
   const [savingShopAccess, setSavingShopAccess] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
-  const [supplierProfile, setSupplierProfile] = useState<SupplierProfile | null>(null);
-  const [loadingSupplierProfile, setLoadingSupplierProfile] = useState(false);
-  const [savingSupplierProfile, setSavingSupplierProfile] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'admin' });
   const [inviting, setInviting] = useState(false);
@@ -90,8 +87,6 @@ function SettingsContent() {
       loadMessagingConfig(selectedShopForMessaging);
     }
   }, [activeTab, selectedShopForMessaging]);
-  useEffect(() => { if (user?.role === 'supplier') loadSupplierProfile(); }, [user?.role]);
-
   // Block Messaging tab when tenant does not have admin approval (unless completing token activation)
   useEffect(() => {
     if (!user) return;
@@ -361,68 +356,6 @@ function SettingsContent() {
     catch (err) { setError((err as ApiError).detail || t('settings.loadFailed')); } finally { setLoadingTeam(false); }
   };
 
-  const loadSupplierProfile = async () => {
-    try {
-      setLoadingSupplierProfile(true);
-      setError(null);
-      const profile = await suppliersApi.getMyProfile();
-      setSupplierProfile(profile);
-    } catch (err) {
-      setError((err as ApiError).detail || t('settings.loadSupplierFailed'));
-    } finally {
-      setLoadingSupplierProfile(false);
-    }
-  };
-
-  const handleSupplierProfileChange = (field: keyof SupplierProfile, value: string) => {
-    setSupplierProfile((prev) => ({
-      ...(prev || {
-        id: 0,
-        tenant_id: 0,
-        user_id: 0,
-      }),
-      [field]: value,
-    }));
-  };
-
-  const saveSupplierProfile = async () => {
-    try {
-      setSavingSupplierProfile(true);
-      setError(null);
-      const payload: Partial<SupplierProfile> = {
-        shop_id: supplierProfile?.shop_id ?? null,
-        company_name: supplierProfile?.company_name || null,
-        contact_name: supplierProfile?.contact_name || null,
-        email: supplierProfile?.email || null,
-        phone: supplierProfile?.phone || null,
-        address_line1: supplierProfile?.address_line1 || null,
-        address_line2: supplierProfile?.address_line2 || null,
-        city: supplierProfile?.city || null,
-        state: supplierProfile?.state || null,
-        postal_code: supplierProfile?.postal_code || null,
-        country: supplierProfile?.country || null,
-        notes: supplierProfile?.notes || null,
-      };
-      const updated = await suppliersApi.updateMyProfile(payload);
-      setSupplierProfile(updated);
-      setNotification({
-        show: true,
-        type: 'success',
-        title: t('settings.profileSaved'),
-        message: t('settings.profileUpdated'),
-      });
-    } catch (err) {
-      setNotification({
-        show: true,
-        type: 'error',
-        title: t('settings.saveFailed'),
-        message: (err as ApiError).detail || t('settings.saveProfileFailed'),
-      });
-    } finally {
-      setSavingSupplierProfile(false);
-    }
-  };
-
   const handleInviteMember = async () => {
     if (!inviteForm.email || !inviteForm.name) {
       setNotification({
@@ -494,13 +427,13 @@ function SettingsContent() {
     owner: 'text-[var(--warning)] bg-[var(--warning-bg)]',
     admin: 'text-[var(--primary)] bg-[var(--primary-bg)]',
     viewer: 'text-[var(--text-muted)] bg-[var(--background)]',
-    supplier: 'text-[var(--success)] bg-[var(--success-bg)]',
+    member: 'text-[var(--success)] bg-[var(--success-bg)]',
   }[role] || 'text-[var(--text-muted)] bg-[var(--background)]');
   const getRoleIcon = (role: string) => ({
     owner: <Crown className="w-4 h-4" />,
     admin: <Shield className="w-4 h-4" />,
     viewer: <Eye className="w-4 h-4" />,
-    supplier: <Truck className="w-4 h-4" />,
+    member: <Users className="w-4 h-4" />,
   }[role] || <Users className="w-4 h-4" />);
   const getShopAccessLabel = (member: TeamMember) => {
     if (member.role === 'owner' || member.role === 'admin') return t('settings.allShops');
@@ -523,12 +456,7 @@ function SettingsContent() {
     { id: 'messaging' as TabType, label: 'Messaging', icon: MessageSquare },
     { id: 'notifications' as TabType, label: t('settings.tabs.notifications'), icon: Bell }
   ].filter((tab) => tab.id !== 'messaging' || showMessagingTab);
-  if (user?.role === 'supplier') {
-    const idx = tabs.findIndex((t) => t.id === 'currency');
-    if (idx >= 0) {
-      tabs.splice(idx, 0, { id: 'supplier_profile' as TabType, label: t('settings.tabs.supplierProfile'), icon: Truck });
-    }
-  }
+
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-6">
@@ -574,122 +502,6 @@ function SettingsContent() {
         </div>
       )}
 
-      {activeTab === 'supplier_profile' && (
-        <div className="space-y-6">
-          <DashboardCard>
-            <div className="flex items-center gap-3 mb-4">
-              <Truck className="w-5 h-5 text-[var(--primary)]" />
-              <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t('settings.supplierProfile')}</h2>
-            </div>
-            {loadingSupplierProfile ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.companyName')}</p>
-                  <input
-                    value={supplierProfile?.company_name || ''}
-                    onChange={(e) => handleSupplierProfileChange('company_name', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.contactName')}</p>
-                  <input
-                    value={supplierProfile?.contact_name || ''}
-                    onChange={(e) => handleSupplierProfileChange('contact_name', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('common.email')}</p>
-                  <input
-                    value={supplierProfile?.email || ''}
-                    onChange={(e) => handleSupplierProfileChange('email', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.phone')}</p>
-                  <input
-                    value={supplierProfile?.phone || ''}
-                    onChange={(e) => handleSupplierProfileChange('phone', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.addressLine1')}</p>
-                  <input
-                    value={supplierProfile?.address_line1 || ''}
-                    onChange={(e) => handleSupplierProfileChange('address_line1', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.addressLine2')}</p>
-                  <input
-                    value={supplierProfile?.address_line2 || ''}
-                    onChange={(e) => handleSupplierProfileChange('address_line2', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.city')}</p>
-                  <input
-                    value={supplierProfile?.city || ''}
-                    onChange={(e) => handleSupplierProfileChange('city', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.state')}</p>
-                  <input
-                    value={supplierProfile?.state || ''}
-                    onChange={(e) => handleSupplierProfileChange('state', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.postalCode')}</p>
-                  <input
-                    value={supplierProfile?.postal_code || ''}
-                    onChange={(e) => handleSupplierProfileChange('postal_code', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div>
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.country')}</p>
-                  <input
-                    value={supplierProfile?.country || ''}
-                    onChange={(e) => handleSupplierProfileChange('country', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)]"
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <p className="text-sm text-[var(--text-muted)] mb-1">{t('settings.notes')}</p>
-                  <textarea
-                    value={supplierProfile?.notes || ''}
-                    onChange={(e) => handleSupplierProfileChange('notes', e.target.value)}
-                    className="w-full px-3 py-2.5 bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-primary)] min-h-[120px]"
-                  />
-                </div>
-                <div className="md:col-span-2 flex justify-end">
-                  <button
-                    onClick={saveSupplierProfile}
-                    disabled={savingSupplierProfile}
-                    className="px-5 py-2.5 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
-                  >
-                    {savingSupplierProfile ? t('common.saving') : t('settings.saveProfile')}
-                  </button>
-                </div>
-              </div>
-            )}
-          </DashboardCard>
-        </div>
-      )}
-
       {activeTab === 'shops' && (
         <div className="space-y-6">
           <DashboardCard>
@@ -700,22 +512,7 @@ function SettingsContent() {
             {isLoading ? <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 text-[var(--primary)] animate-spin" /></div>
             : (
               <div className="space-y-4">
-                {/* Hide Connect Etsy for suppliers - they inherit shop access via organization */}
-                {user?.role === 'supplier' ? (
-                  <div className="p-4 bg-[var(--info-bg)] border border-[var(--info)]/20 rounded-lg">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-[var(--info)] flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-[var(--text-primary)] font-medium mb-1">{t('settings.shopAccessViaOrg')}</p>
-                        <p className="text-[var(--text-secondary)] text-sm">
-                          {t('settings.supplierAccessMessage')}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-[var(--text-muted)] text-sm">{t('settings.connectEtsyDescription')}</p>
+                <p className="text-[var(--text-muted)] text-sm">{t('settings.connectEtsyDescription')}</p>
                     {/* Etsy Attribution Notice - Required by Etsy API Terms */}
                     <p className="text-xs text-[var(--text-muted)] leading-relaxed mb-4">
                       The term &ldquo;Etsy&rdquo; is a trademark of Etsy, Inc. This application
@@ -732,8 +529,6 @@ function SettingsContent() {
                         {connectingEtsy ? <><Loader2 className="w-4 h-4 animate-spin" />{t('settings.generating')}</> : <><LinkIcon className="w-4 h-4" />{t('settings.createConnectionLink')}</>}
                       </button>
                     </div>
-                  </>
-                )}
               </div>
             )}
           </DashboardCard>
@@ -812,8 +607,7 @@ function SettingsContent() {
                           </div>
                         </div>
                       </div>
-                      {/* Hide Disconnect for suppliers - policy compliance */}
-                      {user?.role !== 'supplier' && (
+                      {user?.role !== 'member' && user?.role !== 'viewer' && (
                         <div className="flex items-center gap-2">
                           {shop.status === 'connected' ? (
                             <button onClick={() => handleDisconnectShop(shop.id, shop.display_name)} className="flex items-center gap-2 px-4 py-2.5 bg-[var(--danger-bg)] text-[var(--danger)] rounded-lg hover:bg-[var(--danger)]/20">
@@ -874,7 +668,7 @@ function SettingsContent() {
                       <span className="px-2 py-1 rounded-full text-xs bg-[var(--background)] text-[var(--text-muted)] border border-[var(--border-color)]">
                         {getShopAccessLabel(member)}
                       </span>
-                      {canManageTeam && member.user_id !== user?.id && (member.role === 'viewer' || member.role === 'supplier') && (
+                      {canManageTeam && member.user_id !== user?.id && (member.role === 'viewer' || member.role === 'member') && (
                         <button
                           onClick={() => openShopAccessModal(member)}
                           className="px-3 py-1.5 text-xs bg-[var(--background)] border border-[var(--border-color)] rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
@@ -939,15 +733,15 @@ function SettingsContent() {
                 </div>
               </div>
               <div className="flex gap-4 p-4 bg-[var(--background)] rounded-xl border border-[var(--border-color)]">
-                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('supplier'))}>
-                  {getRoleIcon('supplier')}
+                <div className={cn('flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0', getRoleColor('member'))}>
+                  {getRoleIcon('member')}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-[var(--text-primary)]">{t('settings.roles.supplier')}</h3>
+                    <h3 className="font-semibold text-[var(--text-primary)]">{t('settings.roles.member')}</h3>
                   </div>
                   <p className="text-sm text-[var(--text-muted)]">
-                    {t('settings.roles.supplierDescription')}
+                    {t('settings.roles.memberDescription')}
                   </p>
                 </div>
               </div>
@@ -1143,7 +937,7 @@ function SettingsContent() {
                 >
                   <option value="admin">{t('settings.roles.admin')}</option>
                   <option value="viewer">{t('settings.roles.viewer')}</option>
-                  <option value="supplier">{t('settings.roles.supplier')}</option>
+                  <option value="member">{t('settings.roles.member')}</option>
                 </select>
               </div>
             </div>

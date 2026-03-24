@@ -545,53 +545,6 @@ export const productsApi = {
 };
 
 /**
- * Listings API
- */
-export const listingsApi = {
-  getAll: async (page: number = 1, limit: number = 20, status?: string, options: ShopQueryOptions = {}) => {
-    const params = new URLSearchParams({
-      skip: String((page - 1) * limit),
-      limit: String(limit),
-    });
-
-    if (status) {
-      params.append('status', status);
-    }
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
-
-    return apiRequest<{
-      jobs: any[];
-      total: number;
-    }>(`/api/listings/?${params.toString()}`);
-  },
-
-  getById: async (id: number) => {
-    return apiRequest<any>(`/api/listings/${id}`);
-  },
-
-  create: async (data: { product_id: number; shop_id: number }) => {
-    return apiRequest<any>('/api/listings/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  retry: async (jobId: number) => {
-    return apiRequest<any>(`/api/listings/${jobId}/retry`, {
-      method: 'POST',
-    });
-  },
-
-  cancel: async (jobId: number) => {
-    return apiRequest<void>(`/api/listings/${jobId}`, {
-      method: 'DELETE',
-    });
-  },
-};
-
-/**
  * Orders API
  */
 export interface Order {
@@ -792,138 +745,6 @@ export const tasksApi = {
 };
 
 /**
- * Schedules API
- */
-export interface Schedule {
-  id: number;
-  name: string;
-  description: string | null;
-  type: 'sync' | 'generate' | 'backup' | 'report';
-  cron_expr: string;
-  daily_quota: number;
-  status: 'active' | 'paused' | 'error';
-  shop_id: number | null;
-  last_run_at: string | null;
-  next_run_at: string | null;
-  last_error: string | null;
-  execution_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ScheduleStats {
-  total: number;
-  active: number;
-  paused: number;
-  executions_today: number;
-}
-
-export interface ScheduleCreate {
-  name: string;
-  description?: string;
-  type: 'sync' | 'generate' | 'backup' | 'report';
-  cron_expr: string;
-  daily_quota?: number;
-  shop_id?: number;
-}
-
-export interface ScheduleUpdate {
-  name?: string;
-  description?: string;
-  type?: 'sync' | 'generate' | 'backup' | 'report';
-  cron_expr?: string;
-  daily_quota?: number;
-  shop_id?: number;
-  status?: 'active' | 'paused' | 'error';
-}
-
-export const schedulesApi = {
-  getAll: async (status?: string, options: ShopQueryOptions = {}): Promise<{ schedules: Schedule[]; stats: ScheduleStats }> => {
-    const params = new URLSearchParams();
-    if (status) {
-      params.append('status', status);
-    }
-    if (options.shopId) {
-      params.append('shop_id', String(options.shopId));
-    }
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return apiRequest<{ schedules: Schedule[]; stats: ScheduleStats }>(`/api/schedules/${query}`);
-  },
-
-  getById: async (id: number): Promise<Schedule> => {
-    return apiRequest<Schedule>(`/api/schedules/${id}`);
-  },
-
-  create: async (data: ScheduleCreate): Promise<{ id: number; name: string; message: string }> => {
-    return apiRequest<{ id: number; name: string; message: string }>('/api/schedules/', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  },
-
-  update: async (id: number, data: ScheduleUpdate): Promise<{ id: number; message: string }> => {
-    return apiRequest<{ id: number; message: string }>(`/api/schedules/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  },
-
-  delete: async (id: number): Promise<{ message: string }> => {
-    return apiRequest<{ message: string }>(`/api/schedules/${id}`, {
-      method: 'DELETE',
-    });
-  },
-
-  toggle: async (id: number): Promise<{ id: number; status: string; message: string }> => {
-    return apiRequest<{ id: number; status: string; message: string }>(`/api/schedules/${id}/toggle`, {
-      method: 'POST',
-    });
-  },
-
-  pauseAll: async (): Promise<{ message: string }> => {
-    return apiRequest<{ message: string }>('/api/schedules/pause-all', {
-      method: 'POST',
-    });
-  },
-
-  resumeAll: async (): Promise<{ message: string }> => {
-    return apiRequest<{ message: string }>('/api/schedules/resume-all', {
-      method: 'POST',
-    });
-  },
-
-  runAllSyncs: async (): Promise<{ message: string; triggered_count: number }> => {
-    return apiRequest<{ message: string; triggered_count: number }>('/api/schedules/run-all-syncs', {
-      method: 'POST',
-    });
-  },
-
-  // Quota Management
-  getQuota: async (scheduleId: number): Promise<any> => {
-    return apiRequest(`/api/schedules/${scheduleId}/quota`);
-  },
-
-  updateQuota: async (scheduleId: number, dailyQuota: number, weeklyQuota: number | null): Promise<any> => {
-    return apiRequest(`/api/schedules/${scheduleId}/quota`, {
-      method: 'PUT',
-      body: JSON.stringify({ daily_quota: dailyQuota, weekly_quota: weeklyQuota }),
-    });
-  },
-
-  resetQuota: async (scheduleId: number, resetDaily: boolean = true, resetWeekly: boolean = false): Promise<any> => {
-    return apiRequest(`/api/schedules/${scheduleId}/quota/reset`, {
-      method: 'POST',
-      body: JSON.stringify({ reset_daily: resetDaily, reset_weekly: resetWeekly }),
-    });
-  },
-
-  getQuotaSummary: async (): Promise<any> => {
-    return apiRequest('/api/schedules/quota/summary');
-  },
-};
-
-
-/**
  * Team Management API
  */
 export interface TeamMember {
@@ -955,24 +776,6 @@ export interface UserPermissions {
   can_assign_orders?: boolean;
   can_update_fulfillment?: boolean;
   is_owner: boolean;
-}
-
-export interface SupplierProfile {
-  id: number;
-  tenant_id: number;
-  user_id: number;
-  shop_id?: number | null;
-  company_name?: string | null;
-  contact_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  address_line1?: string | null;
-  address_line2?: string | null;
-  city?: string | null;
-  state?: string | null;
-  postal_code?: string | null;
-  country?: string | null;
-  notes?: string | null;
 }
 
 export const teamApi = {
@@ -1014,21 +817,6 @@ export const teamApi = {
     permissions: UserPermissions;
   }> => {
     return apiRequest('/api/team/me/role');
-  },
-};
-
-export const suppliersApi = {
-  getMyProfile: async (): Promise<SupplierProfile | null> => {
-    return apiRequest<SupplierProfile | null>('/api/suppliers/me');
-  },
-  updateMyProfile: async (payload: Partial<SupplierProfile>) => {
-    return apiRequest<SupplierProfile>('/api/suppliers/me', {
-      method: 'PUT',
-      body: JSON.stringify(payload),
-    });
-  },
-  list: async (): Promise<SupplierProfile[]> => {
-    return apiRequest<SupplierProfile[]>('/api/suppliers');
   },
 };
 

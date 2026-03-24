@@ -21,7 +21,7 @@ from app.core.sentry_config import initialize_sentry
 from app.core.logging_redaction import setup_log_redaction
 from app.core.database import engine, Base
 import app.models  # noqa: F401 — register all models on Base.metadata for create_all
-from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, schedules, listings, audit, google_oauth, ingestion, audit_logs, webhooks, listing_errors, suppliers, analytics, financials, user_preferences, currency
+from app.api.endpoints import auth, shops, products, team, onboarding, dashboard, orders, notifications, audit, google_oauth, ingestion, audit_logs, webhooks, analytics, financials, user_preferences, currency
 from app.api.endpoints import admin as admin_endpoint
 from app.api.endpoints import messaging_activation as messaging_activation_endpoint
 from app.api.endpoints import metrics as metrics_endpoint
@@ -214,11 +214,7 @@ app.include_router(team.router, prefix="/api/team", tags=["Team Management"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(orders.router, prefix="/api/orders", tags=["Orders"])
-app.include_router(suppliers.router, prefix="/api/suppliers", tags=["Suppliers"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
-app.include_router(schedules.router, prefix="/api/schedules", tags=["Schedules"])
-app.include_router(listings.router, prefix="/api/listings", tags=["Listings"])
-app.include_router(listing_errors.router, prefix="/api/listings", tags=["Listing Errors"])
 app.include_router(audit.router, prefix="/api/audit", tags=["Audit Logs"])
 app.include_router(audit_logs.router, prefix="/api/audit/logs", tags=["Audit Logs"])
 app.include_router(metrics_endpoint.router, prefix="/api", tags=["Observability"])

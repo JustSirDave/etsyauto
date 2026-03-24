@@ -19,13 +19,9 @@ celery_app = Celery(
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
-        "app.worker.tasks.listing_tasks",
         "app.worker.tasks.order_tasks",
-        "app.worker.tasks.schedule_tasks",
         "app.worker.tasks.token_tasks",
         "app.worker.tasks.ingestion_tasks",
-        "app.worker.tasks.scheduled_publishing",
-        "app.worker.tasks.audit_cleanup",
         "app.worker.tasks.product_sync_tasks",
         "app.worker.tasks.financial_tasks",
         "app.worker.tasks.exchange_rate_tasks",
@@ -74,26 +70,6 @@ celery_app.conf.beat_schedule = {
     "refresh-tokens-every-hour": {
         "task": "app.worker.tasks.token_tasks.refresh_expiring_tokens",
         "schedule": 3600.0,  # Every hour
-    },
-    "run-scheduled-listings-every-5-minutes": {
-        "task": "app.worker.tasks.schedule_tasks.process_scheduled_listings",
-        "schedule": 300.0,  # Every 5 minutes
-    },
-    "process-schedules-every-minute": {
-        "task": "scheduled_publishing.process_schedules",
-        "schedule": 60.0,  # Every minute
-    },
-    "reset-quota-statuses-hourly": {
-        "task": "scheduled_publishing.reset_quota_statuses",
-        "schedule": 3600.0,  # Every hour
-    },
-    "cleanup-old-audit-logs-daily": {
-        "task": "audit.cleanup_old_logs",
-        "schedule": 86400.0,  # Every 24 hours (daily at midnight UTC)
-    },
-    "sync-all-shop-defaults-daily": {
-        "task": "app.worker.tasks.schedule_tasks.sync_all_shop_defaults",
-        "schedule": 86400.0,  # Every 24 hours (daily)
     },
     "sync-products-every-6-hours": {
         "task": "app.worker.tasks.product_sync_tasks.sync_all_shops_products",

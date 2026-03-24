@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, FileText, Package, ShoppingCart, Settings, X, Calendar, BarChart3 } from 'lucide-react';
+import { Search, Package, ShoppingCart, Settings, X, BarChart3 } from 'lucide-react';
 import { useLanguage } from '@/lib/language-context';
 
 interface SearchModalProps {
@@ -40,24 +40,10 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
       category: t('search.categories.pages'),
     },
     {
-      title: t('search.pages.listings'),
-      description: t('search.pages.listingsDesc'),
-      icon: FileText,
-      href: '/listings',
-      category: t('search.categories.pages'),
-    },
-    {
       title: t('search.pages.orders'),
       description: t('search.pages.ordersDesc'),
       icon: ShoppingCart,
       href: '/orders',
-      category: t('search.categories.pages'),
-    },
-    {
-      title: t('search.pages.schedules'),
-      description: t('search.pages.schedulesDesc'),
-      icon: Calendar,
-      href: '/schedules',
       category: t('search.categories.pages'),
     },
     {

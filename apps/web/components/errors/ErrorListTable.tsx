@@ -251,10 +251,8 @@ const ErrorListTable: React.FC<ErrorListTableProps> = ({
                           errorCode={error.errorCode}
                           errorMessage={error.errorMessage}
                           context={{
-                            jobId: error.jobId,
                             productId: error.productId,
                             shopId: error.shopId,
-                            listingId: error.listingId
                           }}
                           onRetry={onRetry ? () => onRetry(error.jobId) : undefined}
                           onDismiss={() => setExpandedError(null)}
