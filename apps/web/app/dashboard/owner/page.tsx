@@ -257,7 +257,8 @@ function OwnerDashboardContent() {
     }
   }, [selectedShopIds, showOnboarding, showToast]);
 
-  const handleCompleteOnboarding = async () => {
+  const handleCompleteOnboarding = async (shopName: string, description: string | null) => {
+    await onboardingApi.complete(shopName, description);
     setShowOnboarding(false);
     setLoading(true);
     // Reload data
@@ -277,6 +278,7 @@ function OwnerDashboardContent() {
   };
 
   const handleSkipOnboarding = async () => {
+    await onboardingApi.skip();
     setShowOnboarding(false);
   };
 

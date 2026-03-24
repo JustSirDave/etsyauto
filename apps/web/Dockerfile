@@ -23,8 +23,12 @@ COPY . .
 # Build application
 RUN npm run build
 
+# Copy standalone output and static files
+RUN cp -r .next/static .next/standalone/.next/static
+RUN cp -r public .next/standalone/public 2>/dev/null || true
+
 # Expose port
 EXPOSE 3000
 
-# Start application
-CMD ["npm", "start"]
+# Start standalone server
+CMD ["node", ".next/standalone/server.js"]

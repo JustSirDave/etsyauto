@@ -209,6 +209,7 @@ services:
         API_INTERNAL_URL: http://api:8080
     container_name: etsy-web
     environment:
+      HOSTNAME: "0.0.0.0"
       NODE_OPTIONS: "--max-old-space-size=1024"
       NEXT_PUBLIC_API_URL: ""
       API_INTERNAL_URL: http://api:8080

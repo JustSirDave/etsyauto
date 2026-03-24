@@ -11,8 +11,6 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response as StarletteResponse
 
 from app.core.config import settings
 
@@ -111,10 +109,12 @@ app = FastAPI(
     title="Etsy Automation Platform API",
     description="Etsy listing and order automation for sellers",
     version="1.0.0",
+    redirect_slashes=False,
     docs_url=None if _is_production else "/docs",
     redoc_url=None if _is_production else "/redoc",
     lifespan=lifespan,
 )
+
 
 class CustomCORSMiddleware:
     """
@@ -174,6 +174,7 @@ class CustomCORSMiddleware:
 
         await self.app(scope, receive, send_with_cors)
 
+
 # CORS Middleware - Explicitly configured for all endpoints including OPTIONS
 # Only allow all origins in development; staging and production use explicit allowlist
 cors_allow_all = settings.ENVIRONMENT == "development"
@@ -197,6 +198,43 @@ app.add_middleware(IdempotencyMiddleware)  # HTTP idempotency enforcement
 # Content-Length fix MUST be outermost (added last) to strip Content-Length
 # after all BaseHTTPMiddleware layers have re-added it.
 app.add_middleware(ContentLengthFixMiddleware)
+
+
+class SlashNormalizerMiddleware:
+    """
+    Pure-ASGI middleware that appends a trailing slash when the request path
+    matches a router prefix that has a root-``/`` handler.  Only exact prefix
+    matches are rewritten (e.g. ``/api/shops`` -> ``/api/shops/``), so named
+    sub-routes like ``/api/auth/me`` are never touched.
+
+    This avoids 404s caused by reverse-proxies (Next.js rewrites) stripping
+    trailing slashes, without the redirect-loop risk of ``redirect_slashes``.
+    """
+
+    _PREFIXES: set[str] | None = None
+
+    def __init__(self, asgi_app) -> None:
+        self.app = asgi_app
+
+    @staticmethod
+    def _build_prefixes(fastapi_app: FastAPI) -> set[str]:
+        """Collect all prefixed route paths (without trailing slash)."""
+        prefixes: set[str] = set()
+        for route in fastapi_app.routes:
+            path = getattr(route, "path", "")
+            if path and path.endswith("/") and path != "/":
+                prefixes.add(path.rstrip("/"))
+        return prefixes
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            if SlashNormalizerMiddleware._PREFIXES is None:
+                SlashNormalizerMiddleware._PREFIXES = self._build_prefixes(app)
+            path: str = scope.get("path", "")
+            if path in SlashNormalizerMiddleware._PREFIXES:
+                scope = {**scope, "path": path + "/"}
+        await self.app(scope, receive, send)
+
 
 # Include API routers
 app.include_router(admin_endpoint.router, prefix="/api/admin", tags=["admin"])
@@ -300,6 +338,10 @@ async def global_exception_handler(request, exc):
         },
     )
 
+
+# Slash normaliser must be added AFTER all routes so it can discover prefixes.
+# Last-added = outermost in the ASGI stack.
+app.add_middleware(SlashNormalizerMiddleware)
 
 if __name__ == "__main__":
     import uvicorn
