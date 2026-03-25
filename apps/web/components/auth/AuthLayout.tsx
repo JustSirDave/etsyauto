@@ -78,7 +78,7 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
                 <span className="text-[var(--primary)] font-bold text-xl">E</span>
               </div>
               <span className="text-white font-bold text-xl tracking-tight">
-                Etsy Auto
+                Profitly
               </span>
             </Link>
             <Link
@@ -142,7 +142,7 @@ export default function AuthLayout({ children, mode }: AuthLayoutProps) {
             <div className="w-10 h-10 rounded-xl bg-[var(--primary)] flex items-center justify-center">
               <span className="text-white font-bold text-xl">E</span>
             </div>
-            <span className="text-[var(--text-primary)] font-bold text-xl">Etsy Auto</span>
+            <span className="text-[var(--text-primary)] font-bold text-xl">Profitly</span>
           </div>
 
           {/* Header with mode toggle */}

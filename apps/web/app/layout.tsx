@@ -5,8 +5,14 @@ import { Providers } from './providers';
 const fontClass = 'font-sans';
 
 export const metadata: Metadata = {
-  title: 'Etsy Automation Platform',
+  title: 'Profitly',
   description: 'Smart automation exclusively for Etsy sellers - Manage listings, sync orders, and grow your shop',
+  openGraph: {
+    title: 'Profitly',
+    siteName: 'Profitly',
+    description:
+      'Smart automation exclusively for Etsy sellers - Manage listings, sync orders, and grow your shop',
+  },
 };
 
 export default function RootLayout({

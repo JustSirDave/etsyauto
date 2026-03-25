@@ -60,7 +60,7 @@ def send_verification_email(email: str, name: str, verification_token: str) -> b
     </head>
     <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="color: white; margin: 0;">Welcome to ETSY Automation Platform!</h1>
+            <h1 style="color: white; margin: 0;">Welcome to Profitly!</h1>
         </div>
 
         <div style="background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -85,7 +85,7 @@ def send_verification_email(email: str, name: str, verification_token: str) -> b
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
 
             <p style="font-size: 12px; color: #999; text-align: center;">
-                © 2025 ETSY Automation Platform. All rights reserved.
+                © 2025 Profitly. All rights reserved.
             </p>
         </div>
     </body>
@@ -104,7 +104,7 @@ def send_verification_email(email: str, name: str, verification_token: str) -> b
 
     If you didn't create an account, you can safely ignore this email.
 
-    © 2025 Etsy Automation Platform
+    © 2025 Profitly
     """
 
     return send_email(email, subject, html_content, text_content)
@@ -160,7 +160,7 @@ def send_password_reset_email(email: str, name: str, reset_token: str) -> bool:
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
 
             <p style="font-size: 12px; color: #999; text-align: center;">
-                © 2025 ETSY Automation Platform. All rights reserved.
+                © 2025 Profitly. All rights reserved.
             </p>
         </div>
     </body>
@@ -177,7 +177,7 @@ def send_password_reset_email(email: str, name: str, reset_token: str) -> bool:
 
     If you didn't request a password reset, please ignore this email and ensure your account is secure.
 
-    © 2025 Etsy Automation Platform
+    © 2025 Profitly
     """
 
     return send_email(email, subject, html_content, text_content)
@@ -225,7 +225,7 @@ def send_password_changed_notification(email: str, name: str) -> bool:
             <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
 
             <p style="font-size: 12px; color: #999; text-align: center;">
-                © 2025 ETSY Automation Platform. All rights reserved.
+                © 2025 Profitly. All rights reserved.
             </p>
         </div>
     </body>
@@ -239,7 +239,7 @@ def send_password_changed_notification(email: str, name: str) -> bool:
 
     If you didn't make this change, please contact support immediately.
 
-    © 2025 Etsy Automation Platform
+    © 2025 Profitly
     """
 
     return send_email(email, subject, html_content, text_content)

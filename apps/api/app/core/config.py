@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Application
-    APP_NAME: str = "Etsy Automation Platform"
+    APP_NAME: str = "Profitly"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
 
@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = ""
-    SMTP_FROM_NAME: str = "Etsy Automation Platform"
+    SMTP_FROM_NAME: str = "Profitly"
     FRONTEND_URL: str = "http://localhost:3000"
 
     # Resend Configuration (Recommended)

@@ -98,7 +98,7 @@ class EmailService:
         """
         accept_url = f"{self.frontend_url}/accept-invitation?token={invitation_token}"
 
-        subject = f"{inviter_name} invited you to join {organization_name} on Etsy Auto"
+        subject = f"{inviter_name} invited you to join {organization_name} on Profitly"
 
         html_content = f"""
 <!DOCTYPE html>
@@ -122,12 +122,11 @@ class EmailService:
 
             <p style="margin: 0 0 16px; color: #e2e8f0; font-size: 16px;">
                 <strong style="color: #14b8a6;">{inviter_name}</strong> has invited you to join
-                <strong style="color: #14b8a6;">{organization_name}</strong> on Etsy Auto as a <strong>{role.title()}</strong>.
+                <strong style="color: #14b8a6;">{organization_name}</strong> on Profitly as a <strong>{role.title()}</strong>.
             </p>
 
             <p style="margin: 0 0 24px; color: #cbd5e1; font-size: 14px;">
-                Etsy Auto is a powerful platform for automating your Etsy shop management with AI-assisted listing creation,
-                policy compliance checking, and automated publishing.
+                Profitly helps you manage your Etsy shop in one place—orders, inventory, analytics, and team collaboration.
             </p>
 
             <!-- CTA Button -->
@@ -151,7 +150,7 @@ class EmailService:
         <!-- Footer -->
         <div style="background-color: #0f172a; padding: 20px 24px; text-align: center; border-top: 1px solid #334155;">
             <p style="margin: 0; color: #64748b; font-size: 12px;">
-                Etsy Automation Platform | Automate your Etsy shop with confidence
+                Profitly | Manage your Etsy shop with confidence
             </p>
         </div>
     </div>
@@ -164,7 +163,7 @@ Team Invitation
 
 Hi {to_name},
 
-{inviter_name} has invited you to join {organization_name} on Etsy Auto as a {role.title()}.
+{inviter_name} has invited you to join {organization_name} on Profitly as a {role.title()}.
 
 To accept this invitation, click the link below or copy it to your browser:
 {accept_url}
@@ -172,7 +171,7 @@ To accept this invitation, click the link below or copy it to your browser:
 This invitation will expire in 7 days.
 
 ---
-Etsy Automation Platform
+Profitly
 """
 
         # Use unified email service (Resend when USE_RESEND=true, else SMTP)

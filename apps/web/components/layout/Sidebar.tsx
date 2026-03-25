@@ -241,7 +241,7 @@ export function Sidebar() {
             </div>
             {!isCollapsed && (
               <span className="text-[var(--text-inverse)] font-bold text-xl tracking-tight">
-                Etsy Auto
+                Profitly
               </span>
             )}
           </Link>
@@ -365,7 +365,7 @@ export function Sidebar() {
         isCollapsed ? 'px-2 text-center' : 'px-6'
       )}>
         <p className="text-xs text-[var(--text-inverse-muted)]">
-          {isCollapsed ? 'v1.0' : 'Etsy Auto v1.0.0'}
+          {isCollapsed ? 'v1.0' : 'Profitly v1.0.0'}
         </p>
       </div>
       </div>

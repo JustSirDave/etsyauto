@@ -85,7 +85,7 @@ export default function LandingPage() {
         <div className="flex items-center gap-2">
           <Package className="w-8 h-8 text-blue-600" />
           <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            Etsy Auto
+            Profitly
           </span>
         </div>
         <div className="flex items-center gap-6">
@@ -721,7 +721,7 @@ export default function LandingPage() {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Package className="w-6 h-6 text-blue-600" />
-                <span className="text-lg font-bold text-gray-900">Etsy Auto</span>
+                <span className="text-lg font-bold text-gray-900">Profitly</span>
               </div>
               <p className="text-gray-600 text-sm">
                 The all-in-one platform for Etsy sellers.
@@ -750,7 +750,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="pt-8 border-t border-gray-200/50 text-center text-sm text-gray-500">
-            © 2026 Etsy Auto. All rights reserved.
+            © 2026 Profitly. All rights reserved.
           </div>
         </div>
       </footer>

@@ -1,5 +1,5 @@
 """
-Etsy Automation Platform - FastAPI Backend
+Profitly - FastAPI Backend
 Main application entry point
 """
 import json
@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
     # Startup — validate environment first
     _validate_env()
 
-    logger.info("Starting Etsy Automation Platform API...")
+    logger.info("Starting Profitly API...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"JWT Issuer: {settings.JWT_ISSUER}")
 
@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
 # Create FastAPI app — disable API docs in production
 _is_production = settings.ENVIRONMENT == "production"
 app = FastAPI(
-    title="Etsy Automation Platform API",
+    title="Profitly API",
     description="Etsy listing and order automation for sellers",
     version="1.0.0",
     redirect_slashes=False,
@@ -316,7 +316,7 @@ async def health_check():
 async def root():
     """Root endpoint"""
     return {
-        "message": "Etsy Automation Platform API",
+        "message": "Profitly API",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/healthz",

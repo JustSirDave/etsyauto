@@ -17,7 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Sidebar */}
       <aside className="w-56 bg-gray-900 border-r border-gray-800 flex flex-col">
         <div className="px-6 py-5 border-b border-gray-800">
-          <p className="text-white font-bold text-lg">EtsyAuto</p>
+          <p className="text-white font-bold text-lg">Profitly</p>
           <p className="text-gray-500 text-xs mt-0.5">Admin Portal</p>
         </div>
 
