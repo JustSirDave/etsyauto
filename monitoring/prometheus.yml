@@ -3,7 +3,9 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # App exposes Prometheus text at /api/metrics (see apps/api/app/api/endpoints/metrics.py).
   - job_name: 'etsy-api'
+    metrics_path: /api/metrics
     static_configs:
       - targets: ['api:8080']
         labels:

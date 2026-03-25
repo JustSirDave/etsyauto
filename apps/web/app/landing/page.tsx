@@ -119,7 +119,7 @@ export default function LandingPage() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100/60 backdrop-blur-sm rounded-full text-blue-700 text-sm font-medium mb-6">
               <Zap className="w-4 h-4" />
-              Smart Etsy Automation
+              Etsy Shop Management
             </div>
           </motion.div>
 
@@ -129,10 +129,10 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.3 }}
           >
-            Empower Your Business
+            Manage Your Etsy Shops
             <br />
             <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-              With Smarter Insights
+              All in One Place
             </span>
           </motion.h1>
 
@@ -142,8 +142,8 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.4 }}
           >
-            Transform your Etsy shop with smart automation. Manage listings, generate compelling content,
-            and track orders—all in one beautiful platform designed for modern sellers.
+            Manage products, track orders, and analyze performance—all in one
+            beautiful platform designed for modern Etsy sellers.
           </motion.p>
 
           <motion.div
@@ -267,11 +267,11 @@ export default function LandingPage() {
             variants={fadeInUp}
           >
             <h2 className="text-5xl font-bold text-gray-900 mb-4">
-              Everything You Need to Build a
-              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> SaaS Product</span>
+              Everything You Need to Grow Your
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"> Etsy Business</span>
             </h2>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-              Powerful features designed to help you sell smarter, faster, and more efficiently on Etsy.
+              Powerful features designed to help you manage and grow your Etsy business efficiently.
             </p>
           </motion.div>
 
@@ -298,13 +298,13 @@ export default function LandingPage() {
               {
                 icon: Package,
                 title: 'Bulk Management',
-                description: 'Manage thousands of listings at once with intelligent bulk operations and CSV imports.',
+                description: 'Manage thousands of listings at once with bulk operations and CSV imports.',
                 gradient: 'from-green-500 to-emerald-500'
               },
               {
                 icon: Clock,
-                title: 'Smart Scheduling',
-                description: 'Schedule listings to publish at optimal times based on your audience and market trends.',
+                title: 'Order Tracking',
+                description: 'Stay on top of every order with real-time status updates, fulfillment tracking, and customer details.',
                 gradient: 'from-orange-500 to-red-500'
               },
               {
@@ -314,9 +314,9 @@ export default function LandingPage() {
                 gradient: 'from-indigo-500 to-blue-500'
               },
               {
-                icon: Users,
-                title: 'Team Collaboration',
-                description: 'Invite team members with granular permissions and role-based access control.',
+                icon: TrendingUp,
+                title: 'Financial Insights',
+                description: 'Track revenue, fees, profit margins, and payouts with detailed financial reports.',
                 gradient: 'from-violet-500 to-purple-500'
               }
             ].map((feature, index) => (
@@ -468,7 +468,7 @@ export default function LandingPage() {
           >
             {[
               {
-                quote: "This platform transformed how I manage my Etsy shop. The automation alone saves me hours every week.",
+                quote: "This platform transformed how I manage my Etsy shop. Having everything in one dashboard saves me hours every week.",
                 author: "Sarah Johnson",
                 role: "Jewelry Shop Owner",
                 rating: 5,
@@ -695,7 +695,7 @@ export default function LandingPage() {
             Ready to Scale Your Etsy Business?
           </h2>
           <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Join thousands of sellers who have transformed their Etsy shops with intelligent automation.
+            Join thousands of sellers who have transformed their Etsy shops with powerful management tools.
           </p>
           <div className="flex items-center justify-center gap-4">
             <button
@@ -724,7 +724,7 @@ export default function LandingPage() {
                 <span className="text-lg font-bold text-gray-900">Etsy Auto</span>
               </div>
               <p className="text-gray-600 text-sm">
-                Smart automation for modern Etsy sellers.
+                The all-in-one platform for Etsy sellers.
               </p>
             </div>
             <div>
