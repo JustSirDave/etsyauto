@@ -21,43 +21,29 @@ class Permission(str, Enum):
     DELETE_TENANT = "delete_tenant"
     MANAGE_TEAM = "manage_team"
     UPDATE_TENANT_SETTINGS = "update_tenant_settings"
-    
+
     # Shop-level permissions
     CONNECT_SHOP = "connect_shop"
     DISCONNECT_SHOP = "disconnect_shop"
     MANAGE_SHOP_SETTINGS = "manage_shop_settings"
-    
+
     # Product permissions
     CREATE_PRODUCT = "create_product"
     READ_PRODUCT = "read_product"
     UPDATE_PRODUCT = "update_product"
     DELETE_PRODUCT = "delete_product"
-    
-    # Listing permissions
-    CREATE_LISTING = "create_listing"
-    READ_LISTING = "read_listing"
-    UPDATE_LISTING = "update_listing"
-    DELETE_LISTING = "delete_listing"
-    PUBLISH_LISTING = "publish_listing"
-    
+
     # Order permissions
     READ_ORDER = "read_order"
     SYNC_ORDER = "sync_order"
     ASSIGN_ORDER = "assign_order"
     UPDATE_FULFILLMENT = "update_fulfillment"
-    
-    # Schedule permissions
-    CREATE_SCHEDULE = "create_schedule"
-    READ_SCHEDULE = "read_schedule"
-    UPDATE_SCHEDULE = "update_schedule"
-    DELETE_SCHEDULE = "delete_schedule"
-    PAUSE_SCHEDULE = "pause_schedule"
-    
+
     # Audit Log permissions
     READ_AUDIT_LOG = "read_audit_log"
     READ_AUDIT_LOGS = "read_audit_logs"
     MANAGE_AUDIT_LOGS = "manage_audit_logs"  # For cleanup/admin tasks
-    
+
     # Analytics permissions (Owner/Admin only)
     VIEW_ANALYTICS = "view_analytics"
     VIEW_REVENUE = "view_revenue"
@@ -81,23 +67,11 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.READ_PRODUCT,
         Permission.UPDATE_PRODUCT,
         Permission.DELETE_PRODUCT,
-        # Listing
-        Permission.CREATE_LISTING,
-        Permission.READ_LISTING,
-        Permission.UPDATE_LISTING,
-        Permission.DELETE_LISTING,
-        Permission.PUBLISH_LISTING,
         # Order
         Permission.READ_ORDER,
         Permission.SYNC_ORDER,
         Permission.ASSIGN_ORDER,
         Permission.UPDATE_FULFILLMENT,
-        # Schedule
-        Permission.CREATE_SCHEDULE,
-        Permission.READ_SCHEDULE,
-        Permission.UPDATE_SCHEDULE,
-        Permission.DELETE_SCHEDULE,
-        Permission.PAUSE_SCHEDULE,
         # Audit
         Permission.READ_AUDIT_LOG,
         Permission.READ_AUDIT_LOGS,
@@ -120,23 +94,11 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
         Permission.READ_PRODUCT,
         Permission.UPDATE_PRODUCT,
         Permission.DELETE_PRODUCT,
-        # Listing
-        Permission.CREATE_LISTING,
-        Permission.READ_LISTING,
-        Permission.UPDATE_LISTING,
-        Permission.DELETE_LISTING,
-        Permission.PUBLISH_LISTING,
         # Order
         Permission.READ_ORDER,
         Permission.SYNC_ORDER,
         Permission.ASSIGN_ORDER,
         Permission.UPDATE_FULFILLMENT,
-        # Schedule
-        Permission.CREATE_SCHEDULE,
-        Permission.READ_SCHEDULE,
-        Permission.UPDATE_SCHEDULE,
-        Permission.DELETE_SCHEDULE,
-        Permission.PAUSE_SCHEDULE,
         # Audit
         Permission.READ_AUDIT_LOG,
         Permission.READ_AUDIT_LOGS,
@@ -147,9 +109,7 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
     Role.VIEWER: {
         # Read-only access (including analytics)
         Permission.READ_PRODUCT,
-        Permission.READ_LISTING,
         Permission.READ_ORDER,
-        Permission.READ_SCHEDULE,
         Permission.READ_AUDIT_LOG,
         Permission.VIEW_ANALYTICS,
         Permission.VIEW_REVENUE,
@@ -166,11 +126,11 @@ ROLE_PERMISSIONS: dict[Role, Set[Permission]] = {
 def has_permission(role: str, permission: Permission) -> bool:
     """
     Check if a role has a specific permission
-    
+
     Args:
         role: User role (owner, admin, viewer, supplier)
         permission: Permission to check
-        
+
     Returns:
         True if role has permission, False otherwise
     """
@@ -185,11 +145,11 @@ def has_permission(role: str, permission: Permission) -> bool:
 def has_any_permission(role: str, permissions: List[Permission]) -> bool:
     """
     Check if a role has any of the specified permissions
-    
+
     Args:
         role: User role
         permissions: List of permissions to check
-        
+
     Returns:
         True if role has at least one permission
     """
@@ -199,11 +159,11 @@ def has_any_permission(role: str, permissions: List[Permission]) -> bool:
 def has_all_permissions(role: str, permissions: List[Permission]) -> bool:
     """
     Check if a role has all of the specified permissions
-    
+
     Args:
         role: User role
         permissions: List of permissions to check
-        
+
     Returns:
         True if role has all permissions
     """
@@ -213,21 +173,21 @@ def has_all_permissions(role: str, permissions: List[Permission]) -> bool:
 def can_access_shop(role: str, shop_id: int, allowed_shop_ids: List[int]) -> bool:
     """
     Check if user can access a specific shop
-    
+
     Args:
         role: User role
         shop_id: Shop ID to check
         allowed_shop_ids: List of shop IDs user can access
-        
+
     Returns:
         True if user can access shop
-        
+
     Notes:
         - Owner/Admin: Can access all shops in tenant (empty list = all)
         - Viewer/Supplier: Can only access shops in allowed_shop_ids
     """
     role_enum = Role(role.lower()) if role else None
-    
+
     # If explicit shop links exist, enforce them for all roles
     if allowed_shop_ids:
         return shop_id in allowed_shop_ids
@@ -243,18 +203,18 @@ def can_access_shop(role: str, shop_id: int, allowed_shop_ids: List[int]) -> boo
 def get_accessible_shop_ids(role: str, tenant_id: int, allowed_shop_ids: List[int], db) -> List[int]:
     """
     Get list of shop IDs user can access
-    
+
     Args:
         role: User role
         tenant_id: Tenant ID
         allowed_shop_ids: Explicitly allowed shop IDs from membership
         db: Database session
-        
+
     Returns:
         List of accessible shop IDs (empty list = all shops in tenant)
     """
     role_enum = Role(role.lower()) if role else None
-    
+
     # If explicit links exist, return them for any role
     if allowed_shop_ids:
         return allowed_shop_ids
@@ -267,4 +227,3 @@ def get_accessible_shop_ids(role: str, tenant_id: int, allowed_shop_ids: List[in
 
     # Viewer and Supplier are restricted to explicitly allowed shops
     return []
-

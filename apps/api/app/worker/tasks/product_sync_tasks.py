@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import Product
+from app.models.products import Product
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
 from app.services.notification_service import notify_tenant_admins

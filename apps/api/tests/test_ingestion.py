@@ -14,7 +14,7 @@ from app.services.error_report_service import ErrorReportService
 from app.services.asset_service import AssetService
 from app.schemas.ingestion import ProductRowSchema, IngestionErrorReport
 from app.models.ingestion import IngestionBatch
-from app.models.listings import Product
+from app.models.products import Product
 
 
 # ==================== Fixtures ====================

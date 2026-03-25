@@ -19,25 +19,22 @@ class APIKeyScope:
     """API key permission scopes"""
     # Read-only scopes
     READ_PRODUCTS = "products:read"
-    READ_LISTINGS = "listings:read"
     READ_ORDERS = "orders:read"
     READ_AUDIT = "audit:read"
-    
+
     # Write scopes
     WRITE_PRODUCTS = "products:write"
-    WRITE_LISTINGS = "listings:write"
-    PUBLISH_LISTINGS = "listings:publish"
-    
+
     # Admin scopes
     MANAGE_SHOPS = "shops:manage"
     MANAGE_TEAM = "team:manage"
-    
+
     # System scopes
     SYSTEM_ADMIN = "system:admin"
-    
+
     ALL_SCOPES = [
-        READ_PRODUCTS, READ_LISTINGS, READ_ORDERS, READ_AUDIT,
-        WRITE_PRODUCTS, WRITE_LISTINGS, PUBLISH_LISTINGS,
+        READ_PRODUCTS, READ_ORDERS, READ_AUDIT,
+        WRITE_PRODUCTS,
         MANAGE_SHOPS, MANAGE_TEAM, SYSTEM_ADMIN
     ]
 

@@ -13,7 +13,7 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access
-from app.models.listings import AuditLog
+from app.models.audit import AuditLog
 
 router = APIRouter()
 

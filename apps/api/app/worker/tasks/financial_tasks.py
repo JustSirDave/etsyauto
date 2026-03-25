@@ -10,11 +10,11 @@ from typing import Dict, Any, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import (
+from app.models.orders import Order
+from app.models.financials import (
     LedgerEntry,
     LedgerEntryTypeRegistry,
     PaymentDetail,
-    Order,
     FinancialSyncStatus,
     ShopFinancialState,
 )

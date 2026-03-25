@@ -11,7 +11,7 @@ import os
 
 from app.core.database import Base, get_db
 from app.models.tenancy import Tenant, User, Membership, Shop, OAuthToken
-from app.models.listings import Product, ListingJob, Schedule
+from app.models.products import Product
 from app.services.encryption import token_encryptor
 from app.core.jwt_manager import get_jwt_manager
 from main import app
@@ -380,26 +380,6 @@ def expired_access_token(owner_user: User, tenant: Tenant, shop: Shop) -> str:
     jwt_manager.ACCESS_TOKEN_LIFETIME = original_lifetime
     
     return token
-
-
-# ==================== Schedule Fixtures ====================
-
-@pytest.fixture
-def schedule(db: Session, tenant: Tenant, shop: Shop) -> Schedule:
-    """Create a test schedule"""
-    schedule = Schedule(
-        tenant_id=tenant.id,
-        shop_id=shop.id,
-        name="Test Schedule",
-        cron_expr="0 9 * * *",  # Daily at 9 AM
-        status="active",
-        daily_quota=150,
-        created_at=datetime.utcnow()
-    )
-    db.add(schedule)
-    db.commit()
-    db.refresh(schedule)
-    return schedule
 
 
 # ==================== Helper Functions ====================

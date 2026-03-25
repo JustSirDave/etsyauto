@@ -35,12 +35,6 @@ class AuditAction:
     ORDER_SYNC = "order.sync"
     ORDER_UPDATE = "order.update"
     
-    # Schedule operations
-    SCHEDULE_CREATE = "schedule.create"
-    SCHEDULE_UPDATE = "schedule.update"
-    SCHEDULE_DELETE = "schedule.delete"
-    SCHEDULE_PAUSE = "schedule.pause"
-    SCHEDULE_RESUME = "schedule.resume"
     
     # Ingestion
     INGESTION_START = "ingestion.start"

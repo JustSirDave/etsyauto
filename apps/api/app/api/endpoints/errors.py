@@ -106,13 +106,10 @@ async def retry_error(
     db.commit()
     
     # Trigger retry based on item type
-    from app.worker.tasks.listing_tasks import retry_listing_publish
     from app.worker.tasks.order_tasks import retry_order_sync
     from app.worker.tasks.ingestion_tasks import retry_ingestion_row
-    
-    if error.item_type == 'listing':
-        retry_listing_publish.delay(error.item_id, error_id=error.id)
-    elif error.item_type == 'order':
+
+    if error.item_type == 'order':
         retry_order_sync.delay(error.item_id, error_id=error.id)
     elif error.item_type == 'ingestion':
         retry_ingestion_row.delay(error.item_id, error_id=error.id)

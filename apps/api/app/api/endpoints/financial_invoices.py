@@ -19,7 +19,7 @@ from sqlalchemy import and_
 from app.api.dependencies import get_user_context, UserContext, require_revenue_access
 from app.core.database import get_db
 from app.core.query_helpers import ensure_shop_access
-from app.models.listings import ExpenseInvoice, ExpenseLineItem
+from app.models.financials import ExpenseInvoice, ExpenseLineItem
 
 logger = logging.getLogger(__name__)
 

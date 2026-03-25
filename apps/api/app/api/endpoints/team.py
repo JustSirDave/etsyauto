@@ -636,8 +636,6 @@ async def get_my_role(
             "can_remove_members": has_permission(context.role, Permission.MANAGE_TEAM),
             "can_manage_settings": has_permission(context.role, Permission.UPDATE_TENANT_SETTINGS),
             "can_create_products": has_permission(context.role, Permission.CREATE_PRODUCT),
-            "can_generate_ai": has_permission(context.role, Permission.GENERATE_CONTENT),
-            "can_publish_listings": has_permission(context.role, Permission.PUBLISH_LISTING),
             "can_assign_orders": has_permission(context.role, Permission.ASSIGN_ORDER),
             "can_update_fulfillment": has_permission(context.role, Permission.UPDATE_FULFILLMENT),
             "is_owner": context.role == "owner",

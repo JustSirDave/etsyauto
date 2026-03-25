@@ -41,7 +41,7 @@ def test_connect_link_unused():
 
 def test_expense_invoice_status_default():
     """Verify invoice defaults to pending status."""
-    from app.models.listings import ExpenseInvoice
+    from app.models.financials import ExpenseInvoice
 
     inv = ExpenseInvoice(
         tenant_id=1,
@@ -55,7 +55,7 @@ def test_expense_invoice_status_default():
 
 def test_expense_line_item_creation():
     """Verify line item can be created with amount in cents."""
-    from app.models.listings import ExpenseLineItem
+    from app.models.financials import ExpenseLineItem
 
     li = ExpenseLineItem(
         invoice_id=1,
@@ -73,7 +73,7 @@ def test_expense_line_item_creation():
 def test_csv_parse_line_items():
     """Test that CSV content is parsed into line items."""
     from app.api.endpoints.financial_invoices import _parse_csv
-    from app.models.listings import ExpenseInvoice
+    from app.models.financials import ExpenseInvoice
 
     csv_content = (
         b"description,amount,category,quantity\n"
@@ -100,7 +100,7 @@ def test_csv_parse_line_items():
 def test_csv_parse_handles_dollar_signs():
     """Test that CSV parser handles $ in amounts."""
     from app.api.endpoints.financial_invoices import _parse_csv
-    from app.models.listings import ExpenseInvoice
+    from app.models.financials import ExpenseInvoice
 
     csv_content = b"Description,Amount\nTest,$25.99\n"
     invoice = ExpenseInvoice(
@@ -120,7 +120,7 @@ def test_csv_parse_handles_dollar_signs():
 def test_csv_parse_empty_content():
     """Test that CSV parser handles empty content gracefully."""
     from app.api.endpoints.financial_invoices import _parse_csv
-    from app.models.listings import ExpenseInvoice
+    from app.models.financials import ExpenseInvoice
 
     csv_content = b"description,amount\n"
     invoice = ExpenseInvoice(

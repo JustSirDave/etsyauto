@@ -16,7 +16,7 @@ from prometheus_client import Counter, Histogram
 from app.worker.celery_app import celery_app as app  # type: ignore
 from app.core.database import SessionLocal  # type: ignore
 from app.services import adspower  # type: ignore
-from app.models.listings import AuditLog  # type: ignore
+from app.models.audit import AuditLog  # type: ignore
 from app.models.messaging import MessageThread  # type: ignore
 from app.models.tenancy import Shop  # type: ignore
 from app.services.notification_service import notify_tenant_admins  # type: ignore

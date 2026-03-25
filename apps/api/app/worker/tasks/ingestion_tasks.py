@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
 from app.models.ingestion import IngestionBatch
-from app.models.listings import Product
+from app.models.products import Product
 from app.services.ingestion_service import IngestionService
 from app.services.error_report_service import ErrorReportService
 from app.services.notification_service import notify_tenant_admins

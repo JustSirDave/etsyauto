@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from app.worker.tasks.financial_tasks import _normalize_etsy_money, _sync_shop_payment_account
 from app.services.financial_service import FinancialService
-from app.models.listings import ShopFinancialState, LedgerEntry, LedgerEntryTypeRegistry
+from app.models.financials import ShopFinancialState, LedgerEntry, LedgerEntryTypeRegistry
 from app.models.tenancy import Shop
 
 

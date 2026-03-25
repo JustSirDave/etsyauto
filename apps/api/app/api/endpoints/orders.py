@@ -17,7 +17,8 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access, ensure_tenant_access
-from app.models.listings import Order, ShipmentEvent, AuditLog
+from app.models.orders import Order, ShipmentEvent
+from app.models.audit import AuditLog
 from app.models.user_preferences import UserPreference
 from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENCIES
 from app.models.tenancy import Shop, Membership, User

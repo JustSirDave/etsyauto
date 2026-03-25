@@ -44,9 +44,3 @@ class ProductResponse(BaseModel):
     
     class Config:
         from_attributes = True
-
-
-class KeywordResearchRequest(BaseModel):
-    """Request to start keyword research"""
-    seed_keyword: str
-    shop_id: Optional[int] = None  # Optional; uses first connected shop if not provided

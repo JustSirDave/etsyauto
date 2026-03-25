@@ -12,7 +12,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.models.listings import WebhookEvent, ListingJob
+from app.models.webhooks import WebhookEvent
 from app.models.tenancy import Shop
 from app.services.audit_service import AuditService
 from app.worker.tasks.webhook_tasks import process_webhook_event

@@ -8,7 +8,7 @@ from typing import Optional, Dict, Any
 import uuid
 import time
 
-from app.models.listings import AuditLog
+from app.models.audit import AuditLog
 from app.models.audit_constants import AuditAction, AuditStatus
 
 

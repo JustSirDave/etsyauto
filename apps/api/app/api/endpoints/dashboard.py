@@ -12,7 +12,8 @@ from app.api.dependencies import get_user_context, UserContext, require_permissi
 from app.core.database import get_db
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_shop_access
-from app.models.listings import Product, ListingJob, Order
+from app.models.products import Product
+from app.models.orders import Order
 from app.models.tenancy import Membership
 from app.models.user_preferences import UserPreference
 from app.services.exchange_rate_service import convert_amount, SUPPORTED_CURRENCIES
@@ -63,17 +64,8 @@ async def get_dashboard_stats(
     total_products = products_query.count()
     published_products = products_query.filter(Product.etsy_listing_id.isnot(None)).count()
 
-    # Count active/completed listings (filtered by tenant)
-    listings_query = filter_by_tenant(
-        db.query(ListingJob),
-        context.tenant_id,
-        ListingJob.tenant_id
-    ).filter(
-        ListingJob.status.in_(['completed', 'processing', 'pending']) if hasattr(ListingJob, 'status') else ListingJob.state.in_(['done', 'processing', 'queued'])
-    )
-    if parsed_shop_ids:
-        listings_query = listings_query.filter(ListingJob.shop_id.in_(parsed_shop_ids))
-    active_listings = listings_query.count()
+    # Active listings = products that have been published to Etsy
+    active_listings = published_products
 
     # Count total orders (filtered by tenant)
     orders_query = filter_by_tenant(

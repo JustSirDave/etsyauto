@@ -25,18 +25,16 @@ from app.api.dependencies import (
 )
 from app.core.rbac import Permission
 from app.core.query_helpers import filter_by_tenant, ensure_tenant_access, ensure_shop_access
-from app.models.listings import Product, KeywordResearch
+from app.models.products import Product
 from app.models.tenancy import Shop
 from app.schemas.products import (
-    ProductImportRequest, 
+    ProductImportRequest,
     ProductImportBatchRequest,
     ProductResponse,
-    KeywordResearchRequest,
 )
 from app.core.redis import get_redis_client
 from app.services.token_manager import TokenManager
 from app.worker.tasks.product_sync_tasks import sync_products_from_etsy
-from app.worker.tasks.keyword_tasks import run_keyword_research
 
 logger = logging.getLogger(__name__)
 
@@ -465,87 +463,6 @@ async def get_product(
         "source": product.source,
         "batch_id": product.ingest_batch_id,
         "created_at": product.created_at.isoformat(),
-    }
-
-
-@router.post("/{product_id}/keyword-research", tags=["Products"])
-async def start_keyword_research(
-    product_id: int,
-    body: KeywordResearchRequest,
-    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
-    db: Session = Depends(get_db)
-):
-    """
-    Start keyword research for a product.
-    Poll GET /products/{product_id}/keyword-research/{research_id} for results.
-    Requires: GENERATE_CONTENT permission
-    """
-    product = db.query(Product).filter(
-        Product.id == product_id,
-        Product.tenant_id == context.tenant_id
-    ).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    ensure_tenant_access(product.tenant_id, context)
-
-    etsy_token = None
-    shop_id = body.shop_id
-    if not shop_id:
-        shop = db.query(Shop).filter(Shop.tenant_id == context.tenant_id).first()
-        shop_id = shop.id if shop else None
-    if shop_id:
-        ensure_shop_access(shop_id, context, db)
-        try:
-            redis_client = get_redis_client()
-            token_manager = TokenManager(db, redis_client)
-            etsy_token = await token_manager.get_token(context.tenant_id, shop_id, "etsy")
-        except Exception as e:
-            logger.warning("Could not get Etsy token for keyword research: %s", e)
-    # If no token, keyword research uses API key from config (public Etsy endpoint)
-
-    rec = KeywordResearch(
-        tenant_id=context.tenant_id,
-        product_id=product_id,
-        seed_keyword=body.seed_keyword,
-        status="pending",
-    )
-    db.add(rec)
-    db.commit()
-    db.refresh(rec)
-
-    run_keyword_research.delay(rec.id, body.seed_keyword, etsy_token)
-    return {"research_id": rec.id, "status": "pending"}
-
-
-@router.get("/{product_id}/keyword-research/{research_id}", tags=["Products"])
-async def get_keyword_research(
-    product_id: int,
-    research_id: int,
-    context: UserContext = Depends(require_permission(Permission.READ_PRODUCT)),
-    db: Session = Depends(get_db)
-):
-    """
-    Get keyword research result. Poll every 2s until status is completed or failed.
-    """
-    rec = db.query(KeywordResearch).filter(
-        KeywordResearch.id == research_id,
-        KeywordResearch.product_id == product_id,
-        KeywordResearch.tenant_id == context.tenant_id,
-    ).first()
-    if not rec:
-        raise HTTPException(status_code=404, detail="Keyword research not found")
-    return {
-        "id": rec.id,
-        "product_id": rec.product_id,
-        "seed_keyword": rec.seed_keyword,
-        "primary_keyword": rec.primary_keyword,
-        "longtail_keywords": rec.longtail_keywords,
-        "top_tags": rec.top_tags,
-        "raw_scores": rec.raw_scores,
-        "status": rec.status,
-        "error_message": rec.error_message,
-        "created_at": rec.created_at.isoformat() if rec.created_at else None,
-        "updated_at": rec.updated_at.isoformat() if rec.updated_at else None,
     }
 
 

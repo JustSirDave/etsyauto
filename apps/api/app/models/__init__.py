@@ -6,10 +6,14 @@ Import all models to ensure they're registered with Base.metadata
 from app.models.tenancy import Tenant, User, Membership, SupplierProfile, Shop, OAuthToken
 from app.models.user_preferences import UserPreference
 from app.models.exchange_rates import ExchangeRate
-from app.models.listings import (
-    Product, ListingJob, Schedule, Order,
-    UsageCost, AuditLog, WebhookEvent, KeywordResearch
+from app.models.products import Product
+from app.models.orders import Order, ShipmentEvent, UsageCost
+from app.models.financials import (
+    LedgerEntryTypeRegistry, LedgerEntry, ShopFinancialState,
+    PaymentDetail, ExpenseInvoice, ExpenseLineItem, FinancialSyncStatus,
 )
+from app.models.audit import AuditLog
+from app.models.webhooks import WebhookEvent
 from app.models.notifications import Notification, NotificationType
 from app.models.ingestion import IngestionBatch
 from app.models.messaging_access_token import MessagingAccessToken
@@ -25,15 +29,24 @@ __all__ = [
     "SupplierProfile",
     "Shop",
     "OAuthToken",
-    # Listing models
+    # Product models
     "Product",
-    "ListingJob",
-    "Schedule",
+    # Order models
     "Order",
+    "ShipmentEvent",
     "UsageCost",
+    # Financial models
+    "LedgerEntryTypeRegistry",
+    "LedgerEntry",
+    "ShopFinancialState",
+    "PaymentDetail",
+    "ExpenseInvoice",
+    "ExpenseLineItem",
+    "FinancialSyncStatus",
+    # Audit models
     "AuditLog",
+    # Webhook models
     "WebhookEvent",
-    "KeywordResearch",
     # Notification models
     "Notification",
     "NotificationType",
@@ -41,4 +54,3 @@ __all__ = [
     "IngestionBatch",
     "MessagingAccessToken",
 ]
-

@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.schemas.ingestion import ProductRowSchema, IngestionErrorReport
-from app.models.listings import Product
+from app.models.products import Product
 from app.models.ingestion import IngestionBatch
 
 logger = logging.getLogger(__name__)

@@ -25,7 +25,6 @@ celery_app = Celery(
         "app.worker.tasks.product_sync_tasks",
         "app.worker.tasks.financial_tasks",
         "app.worker.tasks.exchange_rate_tasks",
-        "app.worker.tasks.keyword_tasks",
         "app.worker.tasks.messaging",
     ]
 )

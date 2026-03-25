@@ -199,25 +199,6 @@ class TestRateLimiterMetrics:
             assert metric in content, f"Rate limiter metric {metric} not found"
 
 
-class TestListingJobMetrics:
-    """Test listing job metrics"""
-    
-    def test_listing_job_metrics_exist(self):
-        """Test that listing job metrics are defined"""
-        response = client.get("/api/metrics")
-        content = response.text
-        
-        expected_listing_metrics = [
-            "listing_jobs_created_total",
-            "listing_jobs_completed_total",
-            "listing_jobs_duration_seconds",
-            "listing_jobs_policy_blocked_total"
-        ]
-        
-        for metric in expected_listing_metrics:
-            assert metric in content, f"Listing job metric {metric} not found"
-
-
 class TestProductIngestionMetrics:
     """Test product ingestion metrics"""
     

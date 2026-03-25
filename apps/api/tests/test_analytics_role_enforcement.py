@@ -8,7 +8,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.tenancy import Tenant, Membership, User
-from app.models.listings import Order, ShipmentEvent, Product
+from app.models.products import Product
+from app.models.orders import Order, ShipmentEvent
 from datetime import datetime, timezone
 import jwt
 from app.core.config import settings

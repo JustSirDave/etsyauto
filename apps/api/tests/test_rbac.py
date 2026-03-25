@@ -119,7 +119,6 @@ class TestPermissionMatrix:
             Permission.CONNECT_SHOP,
             Permission.CREATE_PRODUCT,
             Permission.DELETE_PRODUCT,
-            Permission.PUBLISH_LISTING,
             Permission.SYNC_ORDER,
         ]
         
@@ -130,23 +129,12 @@ class TestPermissionMatrix:
         """Verify Admin has most permissions (except billing/delete tenant)"""
         assert has_permission("admin", Permission.MANAGE_TEAM)
         assert has_permission("admin", Permission.CREATE_PRODUCT)
-        assert has_permission("admin", Permission.PUBLISH_LISTING)
         assert not has_permission("admin", Permission.MANAGE_BILLING)
         assert not has_permission("admin", Permission.DELETE_TENANT)
-    
-    def test_creator_has_create_permissions(self):
-        """Verify Creator has create permissions"""
-        assert has_permission("creator", Permission.CREATE_PRODUCT)
-        assert has_permission("creator", Permission.CREATE_LISTING)
-        assert has_permission("creator", Permission.CREATE_SCHEDULE)
-        assert has_permission("creator", Permission.GENERATE_CONTENT)
-        assert not has_permission("creator", Permission.DELETE_PRODUCT)
-        assert not has_permission("creator", Permission.MANAGE_TEAM)
     
     def test_viewer_is_read_only(self):
         """Verify Viewer only has read permissions"""
         assert has_permission("viewer", Permission.READ_PRODUCT)
-        assert has_permission("viewer", Permission.READ_LISTING)
         assert has_permission("viewer", Permission.READ_ORDER)
         assert has_permission("viewer", Permission.READ_AUDIT_LOG)
         assert not has_permission("viewer", Permission.CREATE_PRODUCT)
@@ -313,12 +301,6 @@ class TestRoleContracts:
             Permission.CREATE_PRODUCT,
             Permission.UPDATE_PRODUCT,
             Permission.DELETE_PRODUCT,
-            Permission.CREATE_LISTING,
-            Permission.UPDATE_LISTING,
-            Permission.DELETE_LISTING,
-            Permission.CREATE_SCHEDULE,
-            Permission.UPDATE_SCHEDULE,
-            Permission.DELETE_SCHEDULE,
             Permission.SYNC_ORDER,
             Permission.MANAGE_TEAM,
         ]
@@ -329,9 +311,6 @@ class TestRoleContracts:
     
     def test_creator_can_create_within_scope(self):
         """Creator can create items but not delete/manage team"""
-        assert has_permission("creator", Permission.CREATE_PRODUCT)
-        assert has_permission("creator", Permission.CREATE_LISTING)
-        assert has_permission("creator", Permission.CREATE_SCHEDULE)
         assert not has_permission("creator", Permission.DELETE_PRODUCT)
         assert not has_permission("creator", Permission.MANAGE_TEAM)
     
@@ -343,8 +322,6 @@ class TestRoleContracts:
             Permission.READ_PRODUCT,
             Permission.UPDATE_PRODUCT,
             Permission.DELETE_PRODUCT,
-            Permission.CREATE_LISTING,
-            Permission.PUBLISH_LISTING,
         ]
         
         for perm in creator_perms:

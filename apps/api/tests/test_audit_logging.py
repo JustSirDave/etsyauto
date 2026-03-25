@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.listings import AuditLog
+from app.models.audit import AuditLog
 from app.models.audit_constants import AuditAction, AuditStatus
 from app.models.tenancy import Tenant, User, Membership
 from app.services.audit_service import AuditService

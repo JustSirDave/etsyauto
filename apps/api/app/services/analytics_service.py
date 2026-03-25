@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, case
 import json
 
-from app.models.listings import Order, ShipmentEvent, Product, ListingJob
+from app.models.products import Product
+from app.models.orders import Order, ShipmentEvent
 from app.core.redis import get_redis_client
 
 
@@ -353,11 +354,9 @@ class AnalyticsService:
         """
         if start_date and end_date:
             date_filter = [Product.created_at >= start_date, Product.created_at <= end_date]
-            job_date_filter = [ListingJob.created_at >= start_date, ListingJob.created_at <= end_date]
             date_suffix = f":{start_date.date()}:{end_date.date()}"
         else:
             date_filter = []
-            job_date_filter = []
             date_suffix = ""
 
         cache_key = self._cache_key(tenant_id, shop_id, f"products{date_suffix}", shop_ids)
@@ -380,30 +379,10 @@ class AnalyticsService:
         published_products = product_query.filter(Product.etsy_listing_id.isnot(None)).count()
         draft_products = product_query.filter(Product.etsy_listing_id.is_(None)).count()
         
-        # Listing job stats (listing jobs always have shop_id)
-        job_query = self.db.query(ListingJob).filter(ListingJob.tenant_id == tenant_id)
-        if shop_ids:
-            job_query = job_query.filter(ListingJob.shop_id.in_(shop_ids))
-        elif shop_id:
-            job_query = job_query.filter(ListingJob.shop_id == shop_id)
-        for f in job_date_filter:
-            job_query = job_query.filter(f)
-        
-        total_jobs = job_query.count()
-        successful_jobs = job_query.filter(ListingJob.status == "completed").count()
-        failed_jobs = job_query.filter(ListingJob.status == "failed").count()
-        pending_jobs = job_query.filter(ListingJob.status.in_(["pending", "processing"])).count()
-        
         result = {
             "total_products": total_products,
             "published_products": published_products,
             "draft_products": draft_products,
-            "listing_jobs": {
-                "total": total_jobs,
-                "successful": successful_jobs,
-                "failed": failed_jobs,
-                "pending": pending_jobs,
-            },
             "computed_at": datetime.now(timezone.utc).isoformat(),
         }
         

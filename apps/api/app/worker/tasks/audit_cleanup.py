@@ -8,7 +8,7 @@ from sqlalchemy import delete
 
 from app.worker.celery_app import celery_app
 from app.core.database import get_db
-from app.models.listings import AuditLog
+from app.models.audit import AuditLog
 
 logger = logging.getLogger(__name__)
 

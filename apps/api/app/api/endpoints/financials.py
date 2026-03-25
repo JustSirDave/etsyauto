@@ -18,7 +18,7 @@ from app.services.financial_service import FinancialService
 from app.services.currency_conversion import enrich_financial_response
 from app.models.tenancy import OAuthToken, Shop
 from app.models.user_preferences import UserPreference
-from app.models.listings import FinancialSyncStatus, LedgerEntryTypeRegistry
+from app.models.financials import FinancialSyncStatus, LedgerEntryTypeRegistry
 from app.worker.tasks.financial_tasks import sync_ledger_entries, sync_payment_details
 
 logger = logging.getLogger(__name__)

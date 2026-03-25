@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-from app.models.listings import Order
+from app.models.orders import Order
 
 
 def derive_payment_status(order: Order) -> str:

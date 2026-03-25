@@ -38,7 +38,7 @@ def filter_by_shops(
     
     Args:
         query: SQLAlchemy query
-        shop_id_column: Column to filter on (e.g., ListingJob.shop_id)
+        shop_id_column: Column to filter on (e.g., Product.shop_id)
         context: User context with role and allowed_shop_ids
         db: Database session
         

@@ -10,7 +10,8 @@ from typing import Dict, Any, List, Optional
 
 from app.worker.celery_app import celery_app
 from app.core.database import SessionLocal
-from app.models.listings import Order, AuditLog
+from app.models.orders import Order
+from app.models.audit import AuditLog
 from app.models.tenancy import Shop
 from app.services.etsy_client import EtsyClient, EtsyAPIError
 from app.services.notification_service import notify_tenant_admins
@@ -287,7 +288,7 @@ async def _sync_shop_orders(
                         previous_fulfillment_status != "delivered"
                         and order_data.get("fulfillment_status") == "delivered"
                     ):
-                        from app.models.listings import ShipmentEvent
+                        from app.models.orders import ShipmentEvent
                         from datetime import datetime, timezone
                         
                         # Find the delivered shipment
