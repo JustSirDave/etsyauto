@@ -23,7 +23,7 @@ import { MessagingActivationWizard } from '@/components/settings/MessagingActiva
 
 type TabType = 'connections' | 'shops' | 'team' | 'notifications' | 'currency' | 'messaging';
 
-function SettingsContent() {
+export function SettingsContent() {
   const { user } = useAuth();
   const { refreshShops } = useShop();
   const { t } = useLanguage();
@@ -91,18 +91,6 @@ function SettingsContent() {
       loadMessagingConfig(selectedShopForMessaging);
     }
   }, [activeTab, selectedShopForMessaging]);
-  // Block Messaging tab when tenant does not have admin approval (unless completing token activation)
-  useEffect(() => {
-    if (!user) return;
-    if (user.messaging_access === 'approved') return;
-    if (searchParams.get('token')) return;
-    const tab = searchParams.get('tab');
-    if (tab === 'messaging' || activeTab === 'messaging') {
-      setActiveTab('connections');
-      router.replace('/settings?tab=connections');
-    }
-  }, [user, searchParams, activeTab, router]);
-
   useEffect(() => {
     if (searchParams.get('etsy') === 'connected') {
       setNotification({

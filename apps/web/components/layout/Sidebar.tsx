@@ -364,6 +364,11 @@ export function Sidebar() {
         'py-3 border-t border-[var(--border-color)]',
         isCollapsed ? 'px-2 text-center' : 'px-6'
       )}>
+        {!isCollapsed && user?.name && (
+          <p className="text-xs text-[var(--text-inverse)] font-medium truncate mb-1" data-testid="sidebar-user-name">
+            {user.name}
+          </p>
+        )}
         <p className="text-xs text-[var(--text-inverse-muted)]">
           {isCollapsed ? 'v1.0' : 'Profitly v1.0.0'}
         </p>

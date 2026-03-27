@@ -131,6 +131,12 @@ function generateIdempotencyKey(): string {
 let isRefreshing = false;
 let refreshPromise: Promise<boolean> | null = null;
 
+/** Clears refresh mutex between Vitest tests (avoids stuck state after 401 scenarios). */
+export function resetApiClientStateForTests(): void {
+  isRefreshing = false;
+  refreshPromise = null;
+}
+
 async function tryRefreshToken(): Promise<boolean> {
   if (isRefreshing && refreshPromise) return refreshPromise;
   isRefreshing = true;
@@ -159,7 +165,7 @@ const AUTH_ESTABLISH_ENDPOINTS = ['/api/auth/login', '/api/auth/register', '/api
  * Generic API request handler
  * Auth tokens are sent automatically via HttpOnly cookies (credentials: 'include').
  */
-async function apiRequest<T>(
+export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit & { skipRefreshOn401?: boolean } = {}
 ): Promise<T> {

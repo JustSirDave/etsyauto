@@ -205,7 +205,9 @@ function LoginContent() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isLoading}
+          disabled={
+            isLoading || !formData.email.trim() || !formData.password.trim()
+          }
           className="w-full py-3 px-4 bg-[var(--primary)] text-white font-semibold rounded-lg hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
