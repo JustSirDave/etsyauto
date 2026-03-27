@@ -18,6 +18,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     networks:
       - etsy-network
 
@@ -35,6 +39,10 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     networks:
       - etsy-network
 
@@ -44,6 +52,7 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: etsy-api
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       TEST_DATABASE_URL: ${TEST_DATABASE_URL:-postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform}
@@ -103,6 +112,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     networks:
       - etsy-network
 
@@ -112,6 +126,8 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: etsy-worker
+    user: "nobody"
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
@@ -137,6 +153,11 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
     networks:
       - etsy-network
 
@@ -146,6 +167,8 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: etsy-imap-listener
+    user: "nobody"
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
@@ -160,7 +183,10 @@ services:
     volumes:
       - ./apps/api:/app
     command: python -m app.worker.services.imap_manager
-    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     networks:
       - etsy-network
 
@@ -170,20 +196,26 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: etsy-beat
+    user: "nobody"
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/etsy_platform
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
     depends_on:
       - redis
       - worker
     command: celery -A app.worker.celery_app beat --loglevel=info
+    deploy:
+      resources:
+        limits:
+          memory: 128M
     networks:
       - etsy-network
 
-  # Database Admin Tool (Adminer)
-  # Accessible via nginx at /adminer
+  # Database Admin Tool (Adminer) — dev/local; bound to 127.0.0.1:8081 only
   adminer:
     image: adminer:latest
     container_name: etsy-adminer
@@ -194,6 +226,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 64M
     networks:
       - etsy-network
 
@@ -208,6 +244,7 @@ services:
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
         API_INTERNAL_URL: http://api:8080
     container_name: etsy-web
+    restart: unless-stopped
     environment:
       HOSTNAME: "0.0.0.0"
       NODE_OPTIONS: "--max-old-space-size=1024"
@@ -220,6 +257,10 @@ services:
       - "3000:3000"
     depends_on:
       - api
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     networks:
       - etsy-network
 
@@ -229,6 +270,7 @@ services:
       context: ./apps/admin
       dockerfile: Dockerfile
     container_name: etsy-admin
+    restart: unless-stopped
     environment:
       NODE_OPTIONS: "--max-old-space-size=512"
       API_INTERNAL_URL: http://api:8080
@@ -237,6 +279,10 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     networks:
       - etsy-network
 
@@ -252,6 +298,10 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     networks:
       - etsy-network
 
@@ -268,6 +318,10 @@ services:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     networks:
       - etsy-network
 

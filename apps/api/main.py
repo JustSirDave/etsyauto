@@ -7,7 +7,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
@@ -280,25 +280,10 @@ if not os.path.exists(uploads_dir):
 
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
+if settings.ENVIRONMENT != "production":
+    from app.api.endpoints import debug_log as debug_log_endpoint
 
-# Debug log endpoint for client-side instrumentation (dev only)
-DEBUG_LOG_PATH = os.environ.get("DEBUG_LOG_PATH", "/debug-logs/debug.log")
-
-
-@app.post("/api/debug/log", tags=["Debug"])
-async def debug_log(request: Request):
-    """Accept client debug logs and append to file (NDJSON). Used for debugging."""
-    if settings.ENVIRONMENT == "production":
-        raise HTTPException(status_code=404, detail="Not found")
-    try:
-        body = await request.json()
-        line = (body if isinstance(body, str) else json.dumps(body)) + "\n"
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(line)
-        return {"ok": True}
-    except Exception as e:
-        logger.warning("debug_log failed: %s", e)
-        return {"ok": False, "error": str(e)}
+    app.include_router(debug_log_endpoint.router, prefix="/api/debug", tags=["Debug"])
 
 
 @app.get("/healthz", tags=["Health"])

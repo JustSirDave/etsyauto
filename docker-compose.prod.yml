@@ -139,18 +139,6 @@ services:
       - NODE_ENV=production
       - API_INTERNAL_URL=http://api:8080
 
-  adminer:
-    image: adminer:latest
-    container_name: etsy-adminer
-    restart: always
-    environment:
-      ADMINER_DEFAULT_SERVER: db
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - etsy-network
-
   nginx:
     image: nginx:alpine
     container_name: etsy-nginx
@@ -165,7 +153,6 @@ services:
       - api
       - web
       - admin
-      - adminer
     networks:
       - etsy-network
 
